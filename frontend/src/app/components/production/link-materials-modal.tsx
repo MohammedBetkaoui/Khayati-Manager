@@ -1,10 +1,24 @@
-import { useState } from "react";
-import { palette, prodText, materialOptions } from "../../pages/production-data";
+import { useEffect, useState } from "react";
+import { palette, prodText, type Bilingual } from "../../pages/production-data";
 import { useLanguage } from "../../language-context";
 import { Button, Field, Select, TextInput } from "../kit";
 import { ModalShell, Textarea } from "./modal-shell";
 
-export function LinkMaterialsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+type MaterialOption = {
+  name: Bilingual;
+  unit: Bilingual;
+  unitCost: number;
+};
+
+export function LinkMaterialsModal({
+  open,
+  onClose,
+  materials,
+}: {
+  open: boolean;
+  onClose: () => void;
+  materials: MaterialOption[];
+}) {
   const { lang } = useLanguage();
   const t = prodText[lang].linkModal;
   const cur = prodText[lang].currency;
@@ -15,16 +29,28 @@ export function LinkMaterialsModal({ open, onClose }: { open: boolean; onClose: 
     notes: "",
   });
 
-  const material = materialOptions[form.materialIndex];
-  const qty = parseFloat(form.qty) || 0;
-  const total = qty * material.unitCost;
+  useEffect(() => {
+    if (!open) return;
+    setForm((current) => ({
+      ...current,
+      materialIndex: Math.min(current.materialIndex, Math.max(0, materials.length - 1)),
+    }));
+  }, [materials, open]);
+
+  const material = materials[form.materialIndex] ?? {
+    name: { ar: lang === "ar" ? "لا توجد مواد" : "Aucune matiere", fr: lang === "ar" ? "لا توجد مواد" : "Aucune matiere" },
+    unit: { ar: "-", fr: "-" },
+    unitCost: 0,
+  };
+  const quantity = parseFloat(form.qty) || 0;
+  const total = quantity * material.unitCost;
 
   return (
     <ModalShell open={open} onClose={onClose} title={t.title} maxWidth={520}>
       <form
         className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2"
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
           onClose();
         }}
       >
@@ -32,13 +58,17 @@ export function LinkMaterialsModal({ open, onClose }: { open: boolean; onClose: 
           <Field label={t.material}>
             <Select
               value={String(form.materialIndex)}
-              onChange={(e) => setForm({ ...form, materialIndex: Number(e.target.value) })}
+              onChange={(event) => setForm({ ...form, materialIndex: Number(event.target.value) })}
             >
-              {materialOptions.map((m, i) => (
-                <option key={m.name.ar} value={i}>
-                  {m.name[lang]}
-                </option>
-              ))}
+              {materials.length === 0 ? (
+                <option value="0">{lang === "ar" ? "لا توجد مواد" : "Aucune matiere"}</option>
+              ) : (
+                materials.map((option, index) => (
+                  <option key={`${option.name.ar}-${index}`} value={index}>
+                    {option.name[lang]}
+                  </option>
+                ))
+              )}
             </Select>
           </Field>
         </div>
@@ -47,7 +77,7 @@ export function LinkMaterialsModal({ open, onClose }: { open: boolean; onClose: 
           <TextInput
             type="number"
             value={form.qty}
-            onChange={(e) => setForm({ ...form, qty: e.target.value })}
+            onChange={(event) => setForm({ ...form, qty: event.target.value })}
             placeholder="0"
           />
         </Field>
@@ -74,7 +104,7 @@ export function LinkMaterialsModal({ open, onClose }: { open: boolean; onClose: 
 
         <div className="sm:col-span-2">
           <Field label={t.notes}>
-            <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <Textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </Field>
         </div>
 

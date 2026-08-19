@@ -64,6 +64,12 @@ type ApiStats = {
   movementsCount: number;
 };
 
+type ApiConsumptionAnalysis = {
+  mostConsumedMaterial: string;
+  monthlyCost: number;
+  averageOrderCost: number;
+};
+
 const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:3000";
@@ -236,6 +242,7 @@ export function StockPage() {
   const [allMovements, setAllMovements] = useState<Movement[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<ApiSupplier[]>([]);
   const [stats, setStats] = useState<ApiStats>({ totalItems: 0, lowStock: 0, stockValue: 0, movementsCount: 0 });
+  const [consumptionAnalysis, setConsumptionAnalysis] = useState<ApiConsumptionAnalysis>({ mostConsumedMaterial: "", monthlyCost: 0, averageOrderCost: 0 });
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -252,21 +259,24 @@ export function StockPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const [itemsRes, statsRes, movementsRes, suppliersRes] = await Promise.all([
+        const [itemsRes, statsRes, movementsRes, suppliersRes, costRes] = await Promise.all([
           fetchJson<{ data: ApiItem[] }>("/inventory?limit=200"),
           fetchJson<ApiStats>("/inventory/stats"),
           fetchJson<{ data: ApiMovement[] }>("/inventory/movements?limit=200"),
           fetchJson<ApiSupplier[]>("/inventory/suppliers"),
+          fetchJson<ApiConsumptionAnalysis>("/inventory/consumption-analysis"),
         ]);
         if (ctrl.signal.aborted) return;
         setAllMaterials(itemsRes.data.map(mapApiItem));
         setStats(statsRes);
         setAllMovements(movementsRes.data.map(mapApiMovement));
         setAllSuppliers(suppliersRes);
+        setConsumptionAnalysis(costRes);
       } catch (err) {
         if (ctrl.signal.aborted) return;
         setAllMaterials([]);
         setApiError(err instanceof Error ? err.message : "Unable to load inventory");
+        setConsumptionAnalysis({ mostConsumedMaterial: "", monthlyCost: 0, averageOrderCost: 0 });
       } finally {
         if (!ctrl.signal.aborted) setLoading(false);
       }
@@ -291,6 +301,33 @@ export function StockPage() {
   const totalCount = stats.totalItems;
   const lowCount = stats.lowStock;
   const stockValue = stats.stockValue.toLocaleString() + " " + t.currency;
+  const materialById = useMemo(
+    () => new Map(allMaterials.map((material) => [material.id, material])),
+    [allMaterials],
+  );
+  const costRows = useMemo(() => {
+    const usage = new Map<string, { material: Material; used: number; cost: number }>();
+
+    for (const movement of allMovements) {
+      if (movement.type !== "out") continue;
+      const material = materialById.get(movement.materialId);
+      if (!material) continue;
+
+      const current = usage.get(material.id) ?? { material, used: 0, cost: 0 };
+      current.used += movement.quantity;
+      current.cost += movement.quantity * material.unitPrice;
+      usage.set(material.id, current);
+    }
+
+    return [...usage.values()].sort((a, b) => b.cost - a.cost).slice(0, 8);
+  }, [allMovements, materialById]);
+  const fallbackMonthCost = costRows.reduce((sum, row) => sum + row.cost, 0);
+  const linkedOrdersCount = new Set(allMovements.filter((movement) => movement.type === "out" && movement.order).map((movement) => movement.order)).size;
+  const monthCostValue = consumptionAnalysis.monthlyCost || fallbackMonthCost;
+  const topMaterialName = consumptionAnalysis.mostConsumedMaterial || costRows[0]?.material.name[lang] || "";
+  const averageOrderCostValue =
+    consumptionAnalysis.averageOrderCost ||
+    (linkedOrdersCount > 0 ? Math.round(monthCostValue / linkedOrdersCount) : 0);
 
   const selected = allMaterials.find((m) => m.id === selectedId) ?? null;
   const editingMaterial = allMaterials.find((m) => m.id === editingMaterialId) ?? null;
@@ -368,7 +405,7 @@ export function StockPage() {
   if (tab === "low") activeListLength = lowRows.length;
   if (tab === "movements") activeListLength = allMovements.length;
   if (tab === "suppliers") activeListLength = allSuppliers.length;
-  if (tab === "cost") activeListLength = allMaterials.length;
+  if (tab === "cost") activeListLength = costRows.length;
 
   const totalPages = Math.ceil(activeListLength / itemsPerPage) || 1;
   const startIndex = (page - 1) * itemsPerPage;
@@ -378,6 +415,7 @@ export function StockPage() {
   const paginatedLowRows = lowRows.slice(startIndex, endIndex);
   const paginatedMovements = allMovements.slice(startIndex, endIndex);
   const paginatedSuppliers = allSuppliers.slice(startIndex, endIndex);
+  const paginatedCostRows = costRows.slice(startIndex, endIndex);
 
   return (
     <PageBackground>
@@ -419,7 +457,11 @@ export function StockPage() {
       </div>
 
       <div className="mt-5">
-        <MaterialCostCard />
+        <MaterialCostCard
+          monthCost={monthCostValue}
+          topMaterial={topMaterialName}
+          averageOrderCost={averageOrderCostValue}
+        />
       </div>
 
       {/* Action bar */}
@@ -505,7 +547,14 @@ export function StockPage() {
                   />
                 )}
                 {tab === "suppliers" && <SuppliersTable rows={paginatedSuppliers} />}
-                {tab === "cost" && <CostBreakdown />}
+                {tab === "cost" && (
+                  <CostBreakdown
+                    rows={paginatedCostRows}
+                    monthCost={monthCostValue}
+                    topMaterial={topMaterialName}
+                    averageOrderCost={averageOrderCostValue}
+                  />
+                )}
               </>
             )}
           </div>
@@ -754,19 +803,20 @@ function SuppliersTable({ rows }: { rows: ApiSupplier[] }) {
 
 /* -------------------------------- Tab: Cost -------------------------------- */
 
-function CostBreakdown() {
+function CostBreakdown({
+  rows,
+  monthCost,
+  topMaterial,
+  averageOrderCost,
+}: {
+  rows: { material: Material; used: number; cost: number }[];
+  monthCost: number;
+  topMaterial: string;
+  averageOrderCost: number;
+}) {
   const { lang } = useLanguage();
   const t = stockText[lang];
   const cur = t.currency;
-
-  // Estimated consumption cost per material (mock, based on unit price).
-  const rows: { material: Material; used: number; cost: number }[] = materials
-    .map((m, i) => {
-      const used = [12, 30, 6, 8, 4, 60, 15, 25, 25, 10, 40, 40, 2, 4][i] ?? 5;
-      return { material: m, used, cost: used * m.unitPrice };
-    })
-    .sort((a, b) => b.cost - a.cost)
-    .slice(0, 8);
 
   const headStyle: React.CSSProperties = {
     fontSize: 12,
@@ -785,15 +835,27 @@ function CostBreakdown() {
   };
 
   const summary = [
-    { icon: Coins, label: t.cost.monthCost, value: `38,420 ${cur}`, color: "#a87d3c", tint: "rgba(195,154,91,0.16)" },
+    {
+      icon: Coins,
+      label: t.cost.monthCost,
+      value: `${monthCost.toLocaleString()} ${cur}`,
+      color: "#a87d3c",
+      tint: "rgba(195,154,91,0.16)",
+    },
     {
       icon: TrendingUp,
       label: t.cost.topMaterial,
-      value: lang === "ar" ? "خيط أسود" : "Fil noir",
+      value: topMaterial || (lang === "ar" ? "لا توجد بيانات" : "Aucune donnee"),
       color: "#4d8a6a",
       tint: "rgba(77,138,106,0.12)",
     },
-    { icon: Receipt, label: t.cost.avgOrder, value: `1,240 ${cur}`, color: palette.primary, tint: "rgba(18,60,74,0.08)" },
+    {
+      icon: Receipt,
+      label: t.cost.avgOrder,
+      value: `${averageOrderCost.toLocaleString()} ${cur}`,
+      color: palette.primary,
+      tint: "rgba(18,60,74,0.08)",
+    },
   ];
 
   return (
@@ -832,17 +894,27 @@ function CostBreakdown() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.material.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
-                <td style={{ ...cellStyle, fontWeight: 600 }}>{r.material.name[lang]}</td>
-                <td style={{ ...cellStyle, color: palette.muted }}>
-                  {r.used} {unitLabels[r.material.unit][lang]}
-                </td>
-                <td style={{ ...cellStyle, fontWeight: 700, color: palette.primary }}>
-                  {r.cost.toLocaleString()} {cur}
+            {rows.length > 0 ? (
+              rows.map((r) => (
+                <tr key={r.material.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
+                  <td style={{ ...cellStyle, fontWeight: 600 }}>{r.material.name[lang]}</td>
+                  <td style={{ ...cellStyle, color: palette.muted }}>
+                    {r.used} {unitLabels[r.material.unit][lang]}
+                  </td>
+                  <td style={{ ...cellStyle, fontWeight: 700, color: palette.primary }}>
+                    {r.cost.toLocaleString()} {cur}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={3} style={{ ...cellStyle, color: palette.muted, textAlign: "center", padding: "24px 14px" }}>
+                  {lang === "ar"
+                    ? "لا توجد حركات استهلاك فعلية لعرض تكلفة المواد بعد."
+                    : "Aucun mouvement de consommation reel a afficher pour le moment."}
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

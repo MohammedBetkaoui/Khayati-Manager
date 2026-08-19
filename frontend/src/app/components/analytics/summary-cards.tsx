@@ -1,7 +1,16 @@
-import { useLanguage } from "../../language-context";
-import { palette, analyticsText } from "../../pages/analytics-data";
 import { TrendingUp, Wallet, Receipt, Clock, UserCheck, ShoppingBag } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useLanguage } from "../../language-context";
+import { palette, analyticsText } from "../../pages/analytics-data";
+
+export type AnalyticsSummaryMetrics = {
+  sales: number;
+  profits: number;
+  expenses: number;
+  delayed: number;
+  topWorker: string;
+  topProduct: string;
+};
 
 type CardProps = {
   title: string;
@@ -44,17 +53,18 @@ function Card({ title, subtitle, value, icon: Icon, color, tint }: CardProps) {
   );
 }
 
-export function SummaryCards() {
+export function SummaryCards({ metrics }: { metrics: AnalyticsSummaryMetrics }) {
   const { lang } = useLanguage();
   const t = analyticsText[lang].summary;
   const cur = analyticsText[lang].currency;
+  const noDataText = lang === "ar" ? "لا توجد بيانات" : "Aucune donnee";
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <Card
         title={t.sales}
         subtitle={t.salesHelp}
-        value={`840K ${cur}`}
+        value={`${metrics.sales.toLocaleString()} ${cur}`}
         icon={TrendingUp}
         color={palette.primary}
         tint="rgba(18, 60, 74, 0.08)"
@@ -62,7 +72,7 @@ export function SummaryCards() {
       <Card
         title={t.profits}
         subtitle={t.profitsHelp}
-        value={`310K ${cur}`}
+        value={`${metrics.profits.toLocaleString()} ${cur}`}
         icon={Wallet}
         color="#4d8a6a"
         tint="rgba(77, 138, 106, 0.12)"
@@ -70,7 +80,7 @@ export function SummaryCards() {
       <Card
         title={t.expenses}
         subtitle={t.expensesHelp}
-        value={`530K ${cur}`}
+        value={`${metrics.expenses.toLocaleString()} ${cur}`}
         icon={Receipt}
         color="#b46a66"
         tint="rgba(180, 106, 102, 0.12)"
@@ -78,7 +88,7 @@ export function SummaryCards() {
       <Card
         title={t.delayed}
         subtitle={t.delayedHelp}
-        value="4"
+        value={String(metrics.delayed)}
         icon={Clock}
         color="#a87d3c"
         tint="rgba(168, 125, 60, 0.12)"
@@ -86,7 +96,7 @@ export function SummaryCards() {
       <Card
         title={t.topWorker}
         subtitle={t.topWorkerHelp}
-        value={lang === "ar" ? "أحمد. ب" : "Ahmed. B"}
+        value={metrics.topWorker || noDataText}
         icon={UserCheck}
         color="#6b8aa0"
         tint="rgba(107, 138, 160, 0.12)"
@@ -94,7 +104,7 @@ export function SummaryCards() {
       <Card
         title={t.topProduct}
         subtitle={t.topProductHelp}
-        value={lang === "ar" ? "فستان سهرة" : "Robe soirée"}
+        value={metrics.topProduct || noDataText}
         icon={ShoppingBag}
         color={palette.accent}
         tint="rgba(195, 154, 91, 0.12)"

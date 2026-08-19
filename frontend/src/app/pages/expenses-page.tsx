@@ -1,16 +1,75 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router";
-
-
 import { PageBackground } from "../components/page-background";
 import { useLanguage } from "../language-context";
-
-import { palette, expensesText, mockExpenses } from "./expenses-data";
+import {
+  categoryLabels,
+  palette,
+  expensesText,
+  type ExpenseCategory,
+  type ExpenseRecord,
+  type ExpenseType,
+  type LinkedTo,
+  type PaymentMethod,
+} from "./expenses-data";
 import { SummaryCards } from "../components/expenses/summary-cards";
 import { ExpensesTable } from "../components/expenses/expenses-table";
 import { ExpenseDetailsBar } from "../components/expenses/expense-details-bar";
 import { AddExpenseModal, RecurringExpenseModal } from "../components/expenses/expense-modals";
+import { asRecord, fetchJson, getArrayFromPayload, getBoolean, getNumber, getText } from "../lib/api";
+
+const categoryMap: Record<string, ExpenseCategory> = {
+  fabric: "fabric",
+  thread: "thread",
+  rent: "rent",
+  utilities: "utilities",
+  maintenance: "maintenance",
+  salaries: "salaries",
+  transport: "transport",
+  other: "other",
+};
+
+const typeMap: Record<string, ExpenseType> = {
+  fixed: "fixed",
+  variable: "variable",
+  recurring: "recurring",
+};
+
+const methodMap: Record<string, PaymentMethod> = {
+  cash: "cash",
+  transfer: "transfer",
+  later: "later",
+};
+
+const linkedToMap: Record<string, LinkedTo> = {
+  stock: "stock",
+  production: "production",
+  salary: "salary",
+  order: "order",
+  general: "general",
+};
+
+function mapExpense(raw: unknown): ExpenseRecord {
+  const record = asRecord(raw);
+  const name = getText(record?.name) || getText(record?.title) || "Sans designation";
+  const notes = getText(record?.notes);
+
+  return {
+    id: getText(record?.id) || crypto.randomUUID(),
+    name: { ar: name, fr: name },
+    category: categoryMap[getText(record?.category)] ?? "other",
+    type: typeMap[getText(record?.type)] ?? "variable",
+    date: getText(record?.date) || getText(record?.createdAt) || "-",
+    amount: getNumber(record?.amount),
+    paymentMethod: methodMap[getText(record?.paymentMethod ?? record?.method)] ?? "cash",
+    supplier: getText(record?.supplier),
+    linkedTo: linkedToMap[getText(record?.linkedTo)] ?? "general",
+    isRecurring: getBoolean(record?.isRecurring),
+    notes: { ar: notes, fr: notes },
+    lastUpdated: getText(record?.lastUpdated) || getText(record?.updatedAt) || "-",
+  };
+}
 
 export function ExpensesPage() {
   const { lang, dir } = useLanguage();
@@ -18,30 +77,72 @@ export function ExpensesPage() {
   const cur = t.currency;
   const navigate = useNavigate();
 
-  const [selectedId, setSelectedId] = useState<string | null>(mockExpenses[0]?.id || null);
-  const [tab, setTab] = useState<string>("all");
-
+  const [records, setRecords] = useState<ExpenseRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
 
-  // Derived mock summary metrics
-  const todayExpenses = "6,500 " + cur;
-  const monthExpenses = "126,500 " + cur;
-  const topCategory = lang === "ar" ? "أقمشة" : "Tissus";
-  const fixedExpenses = "80,000 " + cur;
-  const netProfit = "257,500 " + cur;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const payload = await fetchJson<unknown>("/expenses");
+        if (cancelled) return;
+
+        const nextRecords = getArrayFromPayload(payload).map(mapExpense);
+        setRecords(nextRecords);
+        setSelectedId((current) => current ?? nextRecords[0]?.id ?? null);
+      } catch (err) {
+        if (cancelled) return;
+        setRecords([]);
+        setSelectedId(null);
+        setError(err instanceof Error ? err.message : "Unable to load expenses.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const currentMonth = todayKey.slice(0, 7);
+
+  const todayTotal = records.filter((record) => record.date.slice(0, 10) === todayKey).reduce((sum, record) => sum + record.amount, 0);
+  const monthTotal = records.filter((record) => record.date.startsWith(currentMonth)).reduce((sum, record) => sum + record.amount, 0);
+  const fixedTotal = records.filter((record) => record.type === "fixed").reduce((sum, record) => sum + record.amount, 0);
+
+  const categoryTotals = records.reduce<Record<string, number>>((acc, record) => {
+    acc[record.category] = (acc[record.category] ?? 0) + record.amount;
+    return acc;
+  }, {});
+
+  const topCategoryKey = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] as ExpenseCategory | undefined;
+  const topCategory = topCategoryKey
+    ? categoryLabels[topCategoryKey][lang]
+    : (lang === "ar" ? "لا توجد بيانات" : "Aucune donnee");
 
   const filteredRecords = useMemo(() => {
-    return mockExpenses.filter((rec) => {
-      if (tab === "fixed" && rec.type !== "fixed") return false;
-      if (tab === "variable" && rec.type !== "variable") return false;
-      if (tab === "recurring" && !rec.isRecurring) return false;
+    return records.filter((record) => {
+      if (tab === "fixed" && record.type !== "fixed") return false;
+      if (tab === "variable" && record.type !== "variable") return false;
+      if (tab === "recurring" && !record.isRecurring) return false;
       return true;
     });
-  }, [tab]);
+  }, [records, tab]);
 
-  const selectedRecord = mockExpenses.find((r) => r.id === selectedId) || null;
-
+  const selectedRecord = records.find((record) => record.id === selectedId) ?? null;
   const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
   const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
 
@@ -82,25 +183,22 @@ export function ExpensesPage() {
 
       <div className="mt-6">
         <SummaryCards
-          todayExpenses={todayExpenses}
-          monthExpenses={monthExpenses}
+          todayExpenses={`${todayTotal.toLocaleString()} ${cur}`}
+          monthExpenses={`${monthTotal.toLocaleString()} ${cur}`}
           topCategory={topCategory}
-          fixedExpenses={fixedExpenses}
-          netProfit={netProfit}
+          fixedExpenses={`${fixedTotal.toLocaleString()} ${cur}`}
+          netProfit={`0 ${cur}`}
         />
       </div>
 
-
-
-      {/* Tabs */}
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
-        {tabs.map((tb) => {
-          const active = tb.id === tab;
+        {tabs.map((item) => {
+          const active = item.id === tab;
           return (
             <button
-              key={tb.id}
+              key={item.id}
               type="button"
-              onClick={() => setTab(tb.id)}
+              onClick={() => setTab(item.id)}
               className="transition-colors"
               style={{
                 padding: "9px 16px",
@@ -112,24 +210,30 @@ export function ExpensesPage() {
                 border: `1px solid ${active ? palette.primary : palette.border}`,
               }}
             >
-              {tb.label}
+              {item.label}
             </button>
           );
         })}
       </div>
 
-      {/* Expense details bar — shown when a record is selected */}
-      {selectedRecord && (
+      {selectedRecord ? (
         <div className="mt-5">
-          <ExpenseDetailsBar
-            record={selectedRecord}
-            onClose={() => setSelectedId(null)}
-          />
+          <ExpenseDetailsBar record={selectedRecord} onClose={() => setSelectedId(null)} />
         </div>
-      )}
+      ) : null}
 
-      {/* Main content — full width */}
       <div className="mt-5 pb-10">
+        {loading ? (
+          <div className="mb-4 text-sm" style={{ color: palette.muted }}>
+            {lang === "ar" ? "جاري تحميل المصاريف..." : "Chargement des depenses..."}
+          </div>
+        ) : null}
+        {!loading && error ? (
+          <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
+            {lang === "ar" ? "تعذر تحميل المصاريف من الواجهة الخلفية." : "Impossible de charger les depenses depuis l'API."}
+          </div>
+        ) : null}
+
         <div
           style={{
             backgroundColor: palette.surface,
@@ -147,11 +251,11 @@ export function ExpensesPage() {
             style={{
               backgroundColor: "#fffdf9",
               borderRadius: 16,
-              border: `1px solid #eaddcb`,
+              border: "1px solid #eaddcb",
               padding: "16px 20px",
             }}
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="mb-3 flex items-center gap-2">
               <AlertCircle size={16} style={{ color: "#a87d3c" }} />
               <span style={{ fontSize: 14, fontWeight: 700, color: "#a87d3c" }}>{t.alerts.title}</span>
             </div>

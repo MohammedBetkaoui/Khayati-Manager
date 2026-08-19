@@ -16,7 +16,15 @@ function Line({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
-export function MaterialCostCard() {
+export function MaterialCostCard({
+  monthCost,
+  topMaterial,
+  averageOrderCost,
+}: {
+  monthCost: number;
+  topMaterial: string;
+  averageOrderCost: number;
+}) {
   const { lang, dir } = useLanguage();
   const t = stockText[lang].cost;
   const cur = stockText[lang].currency;
@@ -24,7 +32,7 @@ export function MaterialCostCard() {
 
   return (
     <div
-      className="flex flex-col lg:flex-row items-center justify-between gap-6"
+      className="flex flex-col items-center justify-between gap-6 lg:flex-row"
       style={{
         backgroundColor: palette.surface,
         borderRadius: 20,
@@ -47,16 +55,16 @@ export function MaterialCostCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-6 lg:gap-10">
-        <Line icon={Coins} label={t.monthCost} value={`38,420 ${cur}`} />
+        <Line icon={Coins} label={t.monthCost} value={`${monthCost.toLocaleString()} ${cur}`} />
         <div style={{ width: 1, height: 24, backgroundColor: palette.border }} className="hidden lg:block" />
-        <Line icon={TrendingUp} label={t.topMaterial} value={lang === "ar" ? "خيط أسود" : "Fil noir"} />
+        <Line icon={TrendingUp} label={t.topMaterial} value={topMaterial || (lang === "ar" ? "لا توجد بيانات" : "Aucune donnee")} />
         <div style={{ width: 1, height: 24, backgroundColor: palette.border }} className="hidden lg:block" />
-        <Line icon={Receipt} label={t.avgOrder} value={`1,240 ${cur}`} />
+        <Line icon={Receipt} label={t.avgOrder} value={`${averageOrderCost.toLocaleString()} ${cur}`} />
       </div>
 
       <button
         type="button"
-        className="flex items-center justify-center gap-1.5 transition-colors hover:opacity-90 px-4"
+        className="flex items-center justify-center gap-1.5 px-4 transition-colors hover:opacity-90"
         style={{
           height: 38,
           borderRadius: 12,
@@ -73,4 +81,3 @@ export function MaterialCostCard() {
     </div>
   );
 }
-

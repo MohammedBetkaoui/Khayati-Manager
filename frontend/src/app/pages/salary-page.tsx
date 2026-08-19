@@ -1,12 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Info, UserRound } from "lucide-react";
 import { useNavigate } from "react-router";
-
-
 import { PageBackground } from "../components/page-background";
 import { useLanguage } from "../language-context";
-
-import { palette, salaryText, mockPayroll } from "./salary-data";
+import { palette, salaryText, type PayrollRecord, type PaymentStatus, type SalaryType, type WorkerRole } from "./salary-data";
 import { Button } from "../components/kit";
 import { SummaryCards } from "../components/salary/summary-cards";
 import { PayrollTable } from "../components/salary/payroll-table";
@@ -15,8 +12,85 @@ import {
   CalculateSalaryModal,
   AdvanceModal,
   BonusDeductionModal,
-  PaymentModal
+  PaymentModal,
 } from "../components/salary/salary-modals";
+import { asRecord, fetchJson, getArrayFromPayload, getNumber, getText } from "../lib/api";
+
+const roleMap: Record<string, WorkerRole> = {
+  TAILOR: "tailor",
+  ASSISTANT: "assistant",
+  CUTTER: "cutter",
+  IRONING: "ironer",
+  PACKAGING: "packer",
+  SELLER: "seller",
+  SUPERVISOR: "supervisor",
+  "خياط": "tailor",
+  "مساعد": "assistant",
+  "قاطع قماش": "cutter",
+  "مسؤول كي": "ironer",
+  "مسؤول تغليف": "packer",
+  "بائع": "seller",
+  "مشرف": "supervisor",
+};
+
+const salaryTypeMap: Record<string, SalaryType> = {
+  DAILY: "daily",
+  WEEKLY: "weekly",
+  MONTHLY: "monthly",
+  PIECE: "piece",
+  MIXED: "mixed",
+  "يومي": "daily",
+  "أسبوعي": "weekly",
+  "شهري": "monthly",
+  "حسب القطعة": "piece",
+  "مختلط": "mixed",
+};
+
+const paymentStatusMap: Record<string, PaymentStatus> = {
+  PAID: "paid",
+  PARTIAL: "partial",
+  PARTIALLY_PAID: "partial",
+  UNPAID: "unpaid",
+  "مدفوع": "paid",
+  "مدفوع جزئياً": "partial",
+  "غير مدفوع": "unpaid",
+};
+
+function formatPeriod(start: string, end: string) {
+  if (start && end) {
+    return `${start} - ${end}`;
+  }
+
+  return start || end || "-";
+}
+
+function mapPayrollRecord(raw: unknown): PayrollRecord {
+  const record = asRecord(raw);
+  const workerName = getText(record?.workerName) || getText(record?.fullName) || getText(record?.worker) || "Sans nom";
+  const notes = getText(record?.notes);
+
+  return {
+    id: getText(record?.id) || getText(record?.number) || crypto.randomUUID(),
+    workerName: { ar: workerName, fr: workerName },
+    role: roleMap[getText(record?.role)] ?? "assistant",
+    salaryType: salaryTypeMap[getText(record?.salaryType)] ?? "monthly",
+    period: formatPeriod(getText(record?.periodStart), getText(record?.periodEnd)) || getText(record?.period),
+    workDays: getNumber(record?.workDays ?? record?.workedDays),
+    absentDays: getNumber(record?.absentDays),
+    lateHours: getNumber(record?.lateHours),
+    piecesCount: getNumber(record?.piecesCount ?? record?.piecesCompleted),
+    pieceRate: getNumber(record?.pieceRate),
+    baseSalary: getNumber(record?.baseSalary),
+    bonuses: getNumber(record?.bonuses),
+    deductions: getNumber(record?.deductions),
+    advances: getNumber(record?.advances),
+    netSalary: getNumber(record?.netSalary),
+    paidAmount: getNumber(record?.paidAmount),
+    paymentDate: getText(record?.paymentDate) || null,
+    status: paymentStatusMap[getText(record?.status ?? record?.paymentStatus)] ?? "unpaid",
+    notes: { ar: notes, fr: notes },
+  };
+}
 
 export function SalaryPage() {
   const { lang, dir } = useLanguage();
@@ -24,32 +98,63 @@ export function SalaryPage() {
   const cur = t.currency;
   const navigate = useNavigate();
 
-  const [selectedId, setSelectedId] = useState<string | null>(mockPayroll[0]?.id || null);
-  const [tab, setTab] = useState<string>("all");
-
+  const [records, setRecords] = useState<PayrollRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [bonOpen, setBonOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
 
-  // Derive summary metrics
-  const totalSalaries = mockPayroll.reduce((s, r) => s + r.netSalary, 0).toLocaleString() + " " + cur;
-  const paidSalaries = mockPayroll.filter(r => r.status === "paid" || r.status === "partial").reduce((s, r) => s + r.paidAmount, 0).toLocaleString() + " " + cur;
-  const unpaidSalaries = mockPayroll.reduce((s, r) => s + (r.netSalary - r.paidAmount), 0).toLocaleString() + " " + cur;
-  const totalAdvances = mockPayroll.reduce((s, r) => s + r.advances, 0).toLocaleString() + " " + cur;
-  const netBonuses = mockPayroll.reduce((s, r) => s + r.bonuses - r.deductions, 0).toLocaleString() + " " + cur;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const payload = await fetchJson<unknown>("/payroll");
+        if (cancelled) return;
+
+        const nextRecords = getArrayFromPayload(payload).map(mapPayrollRecord);
+        setRecords(nextRecords);
+        setSelectedId((current) => current ?? nextRecords[0]?.id ?? null);
+      } catch (err) {
+        if (cancelled) return;
+        setRecords([]);
+        setSelectedId(null);
+        setError(err instanceof Error ? err.message : "Unable to load payroll.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredRecords = useMemo(() => {
-    return mockPayroll.filter((rec) => {
-      if (tab === "paid" && rec.status !== "paid") return false;
-      if (tab === "unpaid" && rec.status === "paid") return false;
-      if (tab === "advances" && rec.advances === 0) return false;
-      if (tab === "bonuses" && rec.bonuses === 0 && rec.deductions === 0) return false;
+    return records.filter((record) => {
+      if (tab === "paid" && record.status !== "paid") return false;
+      if (tab === "unpaid" && record.status === "paid") return false;
+      if (tab === "advances" && record.advances === 0) return false;
+      if (tab === "bonuses" && record.bonuses === 0 && record.deductions === 0) return false;
       return true;
     });
-  }, [tab]);
+  }, [records, tab]);
 
-  const selectedRecord = mockPayroll.find((r) => r.id === selectedId) || null;
+  const selectedRecord = records.find((record) => record.id === selectedId) ?? null;
+  const totalSalaries = `${records.reduce((sum, record) => sum + record.netSalary, 0).toLocaleString()} ${cur}`;
+  const paidSalaries = `${records.reduce((sum, record) => sum + record.paidAmount, 0).toLocaleString()} ${cur}`;
+  const unpaidSalaries = `${records.reduce((sum, record) => sum + Math.max(0, record.netSalary - record.paidAmount), 0).toLocaleString()} ${cur}`;
+  const totalAdvances = `${records.reduce((sum, record) => sum + record.advances, 0).toLocaleString()} ${cur}`;
+  const netBonuses = `${records.reduce((sum, record) => sum + record.bonuses - record.deductions, 0).toLocaleString()} ${cur}`;
 
   const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
   const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
@@ -105,17 +210,14 @@ export function SalaryPage() {
         />
       </div>
 
-
-
-      {/* Tabs */}
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
-        {tabs.map((tb) => {
-          const active = tb.id === tab;
+        {tabs.map((item) => {
+          const active = item.id === tab;
           return (
             <button
-              key={tb.id}
+              key={item.id}
               type="button"
-              onClick={() => setTab(tb.id)}
+              onClick={() => setTab(item.id)}
               className="transition-colors"
               style={{
                 padding: "9px 16px",
@@ -127,14 +229,13 @@ export function SalaryPage() {
                 border: `1px solid ${active ? palette.primary : palette.border}`,
               }}
             >
-              {tb.label}
+              {item.label}
             </button>
           );
         })}
       </div>
 
-      {/* Salary details bar — shown when a record is selected */}
-      {selectedRecord && (
+      {selectedRecord ? (
         <div className="mt-5">
           <SalaryDetailsBar
             record={selectedRecord}
@@ -144,10 +245,20 @@ export function SalaryPage() {
             onBonus={() => setBonOpen(true)}
           />
         </div>
-      )}
+      ) : null}
 
-      {/* Main content — full width */}
       <div className="mt-5 pb-10">
+        {loading ? (
+          <div className="mb-4 text-sm" style={{ color: palette.muted }}>
+            {lang === "ar" ? "جاري تحميل بيانات الرواتب..." : "Chargement des donnees de paie..."}
+          </div>
+        ) : null}
+        {!loading && error ? (
+          <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
+            {lang === "ar" ? "تعذر تحميل الرواتب من الواجهة الخلفية." : "Impossible de charger les salaires depuis l'API."}
+          </div>
+        ) : null}
+
         <div
           style={{
             backgroundColor: palette.surface,
@@ -160,8 +271,7 @@ export function SalaryPage() {
           <PayrollTable records={filteredRecords} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
 
-        {/* Salary Types Helper & Alerts */}
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div
             style={{
               backgroundColor: palette.surface,
@@ -170,7 +280,7 @@ export function SalaryPage() {
               padding: "16px 20px",
             }}
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="mb-3 flex items-center gap-2">
               <Info size={16} style={{ color: palette.primary }} />
               <span style={{ fontSize: 14, fontWeight: 700, color: palette.text }}>{t.helpers.title}</span>
             </div>
@@ -187,11 +297,11 @@ export function SalaryPage() {
             style={{
               backgroundColor: "#fffdf9",
               borderRadius: 16,
-              border: `1px solid #eaddcb`,
+              border: "1px solid #eaddcb",
               padding: "16px 20px",
             }}
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="mb-3 flex items-center gap-2">
               <AlertCircle size={16} style={{ color: "#a87d3c" }} />
               <span style={{ fontSize: 14, fontWeight: 700, color: "#a87d3c" }}>{t.alerts.title}</span>
             </div>

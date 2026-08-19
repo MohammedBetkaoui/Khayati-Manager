@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Search, Plus, Download, CalendarDays, Filter, CalendarRange } from "lucide-react";
-import { palette, prodText, productLabels, stageLabels, priorityLabels, workerRoster, stageOrder } from "../../pages/production-data";
+import { palette, prodText, productLabels, stageLabels, priorityLabels, stageOrder, type Bilingual } from "../../pages/production-data";
 import type { ProductType, StageId, Priority } from "../../pages/production-data";
 import { useLanguage } from "../../language-context";
 import { Button, Select } from "../kit";
@@ -19,20 +19,21 @@ export function ActionBar({
   onChange,
   onAdd,
   onCalendar,
+  workers,
 }: {
   filters: Filters;
   onChange: (next: Filters) => void;
   onAdd: () => void;
   onCalendar: () => void;
+  workers: Bilingual[];
 }) {
   const { lang } = useLanguage();
   const t = prodText[lang];
-  const set = <K extends keyof Filters>(k: K, v: Filters[K]) => onChange({ ...filters, [k]: v });
+  const set = <K extends keyof Filters>(key: K, value: Filters[K]) => onChange({ ...filters, [key]: value });
   const [showFilters, setShowFilters] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Top row: filter toggle + primary actions */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <Button variant={showFilters ? "secondary" : "ghost"} onClick={() => setShowFilters(!showFilters)}>
           <Filter size={17} />
@@ -55,10 +56,9 @@ export function ActionBar({
         </div>
       </div>
 
-      {/* Collapsible filter panel */}
-      {showFilters && (
+      {showFilters ? (
         <div
-          className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
+          className="animate-in slide-in-from-top-2 fade-in flex flex-wrap items-center gap-3 duration-200"
           style={{
             backgroundColor: palette.surface,
             borderRadius: 18,
@@ -67,7 +67,6 @@ export function ActionBar({
             padding: 14,
           }}
         >
-          {/* Search */}
           <div className="relative min-w-[220px] flex-1">
             <Search
               size={17}
@@ -76,7 +75,7 @@ export function ActionBar({
             />
             <input
               value={filters.query}
-              onChange={(e) => set("query", e.target.value)}
+              onChange={(event) => set("query", event.target.value)}
               placeholder={t.search}
               className="outline-none"
               style={{
@@ -94,44 +93,44 @@ export function ActionBar({
           </div>
 
           <div className="w-[150px]">
-            <Select value={filters.product} onChange={(e) => set("product", e.target.value as Filters["product"])}>
+            <Select value={filters.product} onChange={(event) => set("product", event.target.value as Filters["product"])}>
               <option value="all">{t.allProducts}</option>
-              {(Object.keys(productLabels) as ProductType[]).map((p) => (
-                <option key={p} value={p}>
-                  {productLabels[p][lang]}
+              {(Object.keys(productLabels) as ProductType[]).map((product) => (
+                <option key={product} value={product}>
+                  {productLabels[product][lang]}
                 </option>
               ))}
             </Select>
           </div>
 
           <div className="w-[150px]">
-            <Select value={filters.stage} onChange={(e) => set("stage", e.target.value as Filters["stage"])}>
+            <Select value={filters.stage} onChange={(event) => set("stage", event.target.value as Filters["stage"])}>
               <option value="all">{t.allStages}</option>
-              {stageOrder.map((s) => (
-                <option key={s} value={s}>
-                  {stageLabels[s][lang]}
+              {stageOrder.map((stage) => (
+                <option key={stage} value={stage}>
+                  {stageLabels[stage][lang]}
                 </option>
               ))}
             </Select>
           </div>
 
           <div className="w-[160px]">
-            <Select value={filters.worker} onChange={(e) => set("worker", e.target.value)}>
+            <Select value={filters.worker} onChange={(event) => set("worker", event.target.value)}>
               <option value="all">{t.allWorkers}</option>
-              {workerRoster.map((w) => (
-                <option key={w.ar} value={w.ar}>
-                  {w[lang]}
+              {workers.map((worker) => (
+                <option key={worker.ar} value={worker.ar}>
+                  {worker[lang]}
                 </option>
               ))}
             </Select>
           </div>
 
           <div className="w-[140px]">
-            <Select value={filters.priority} onChange={(e) => set("priority", e.target.value as Filters["priority"])}>
+            <Select value={filters.priority} onChange={(event) => set("priority", event.target.value as Filters["priority"])}>
               <option value="all">{t.allPriorities}</option>
-              {(Object.keys(priorityLabels) as Priority[]).map((p) => (
-                <option key={p} value={p}>
-                  {priorityLabels[p][lang]}
+              {(Object.keys(priorityLabels) as Priority[]).map((priority) => (
+                <option key={priority} value={priority}>
+                  {priorityLabels[priority][lang]}
                 </option>
               ))}
             </Select>
@@ -147,7 +146,7 @@ export function ActionBar({
               <input
                 type="date"
                 value={filters.date}
-                onChange={(e) => set("date", e.target.value)}
+                onChange={(event) => set("date", event.target.value)}
                 title={t.dateLabel}
                 className="outline-none"
                 style={{
@@ -165,7 +164,7 @@ export function ActionBar({
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
