@@ -4,6 +4,7 @@ import { HomePage } from "./pages/home-page";
 import { WorkersPage } from "./pages/workers-page";
 import { StockPage } from "./pages/stock-page";
 import { ProductionPage } from "./pages/production-page";
+import { OrderDetailPage } from "./pages/order-detail-page";
 import { SalesPage } from "./pages/sales-page";
 import { SalaryPage } from "./pages/salary-page";
 import { ExpensesPage } from "./pages/expenses-page";
@@ -29,8 +30,13 @@ const router = createHashRouter([
       { path: "workers", element: <WorkersPage /> },
       { path: "stock", element: <StockPage /> },
       { path: "production", element: <ProductionPage /> },
+      { path: "production/:id", element: <OrderDetailPage /> },
       { path: "sales", element: <SalesPage /> },
       { path: "customer-profile", element: <CustomerProfilePage /> },
+      {
+        path: "customer-profile/:customerId",
+        element: <CustomerProfilePage />,
+      },
       { path: "salary", element: <SalaryPage /> },
       { path: "worker-profile", element: <WorkerProfilePage /> },
       { path: "expenses", element: <ExpensesPage /> },

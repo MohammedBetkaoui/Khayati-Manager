@@ -1,119 +1,183 @@
 import { useEffect, useState } from "react";
-import { palette, prodText, type Bilingual } from "../../pages/production-data";
 import { useLanguage } from "../../language-context";
+import { fetchJson } from "../../lib/api";
+import { palette, type MaterialOption } from "../../pages/production-data";
 import { Button, Field, Select, TextInput } from "../kit";
 import { ModalShell, Textarea } from "./modal-shell";
-
-type MaterialOption = {
-  name: Bilingual;
-  unit: Bilingual;
-  unitCost: number;
-};
 
 export function LinkMaterialsModal({
   open,
   onClose,
+  orderId,
   materials,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
+  orderId: number | null;
   materials: MaterialOption[];
+  onSaved: () => void | Promise<void>;
 }) {
   const { lang } = useLanguage();
-  const t = prodText[lang].linkModal;
-  const cur = prodText[lang].currency;
-
-  const [form, setForm] = useState({
-    materialIndex: 0,
-    qty: "",
-    notes: "",
-  });
+  const [materialId, setMaterialId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const selected =
+    materials.find((material) => String(material.id) === materialId) ?? null;
+  const total = Number(quantity || 0) * (selected?.unitPrice ?? 0);
+  const labels =
+    lang === "ar"
+      ? {
+          title:
+            "\u0625\u0636\u0627\u0641\u0629 \u0645\u0627\u062f\u0629 \u0644\u0644\u0637\u0644\u0628\u064a\u0629",
+          material: "\u0627\u0644\u0645\u0627\u062f\u0629",
+          quantity:
+            "\u0627\u0644\u0643\u0645\u064a\u0629 \u0627\u0644\u0645\u0633\u062a\u0639\u0645\u0644\u0629",
+          unit: "\u0627\u0644\u0648\u062d\u062f\u0629",
+          available: "\u0627\u0644\u0645\u062a\u0648\u0641\u0631",
+          total: "\u0627\u0644\u062a\u0643\u0644\u0641\u0629",
+          notes: "\u0645\u0644\u0627\u062d\u0638\u0627\u062a",
+          cancel: "\u0625\u0644\u063a\u0627\u0621",
+          save: "\u062e\u0635\u0645 \u0627\u0644\u0645\u0627\u062f\u0629",
+        }
+      : {
+          title: "Ajouter une mati\u00e8re",
+          material: "Mati\u00e8re",
+          quantity: "Quantit\u00e9 utilis\u00e9e",
+          unit: "Unit\u00e9",
+          available: "Disponible",
+          total: "Co\u00fbt",
+          notes: "Notes",
+          cancel: "Annuler",
+          save: "D\u00e9duire la mati\u00e8re",
+        };
 
   useEffect(() => {
     if (!open) return;
-    setForm((current) => ({
-      ...current,
-      materialIndex: Math.min(current.materialIndex, Math.max(0, materials.length - 1)),
-    }));
+    setMaterialId(materials[0] ? String(materials[0].id) : "");
+    setQuantity("");
+    setNotes("");
+    setError(null);
   }, [materials, open]);
 
-  const material = materials[form.materialIndex] ?? {
-    name: { ar: lang === "ar" ? "لا توجد مواد" : "Aucune matiere", fr: lang === "ar" ? "لا توجد مواد" : "Aucune matiere" },
-    unit: { ar: "-", fr: "-" },
-    unitCost: 0,
-  };
-  const quantity = parseFloat(form.qty) || 0;
-  const total = quantity * material.unitCost;
+  async function submit() {
+    if (!orderId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await fetchJson(`/orders/${orderId}/materials`, {
+        method: "POST",
+        body: JSON.stringify({
+          inventoryItemId: Number(materialId),
+          quantityUsed: Number(quantity),
+          notes: notes || undefined,
+        }),
+      });
+      await onSaved();
+      onClose();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Unable to add material",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <ModalShell open={open} onClose={onClose} title={t.title} maxWidth={520}>
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={labels.title}
+      maxWidth={500}
+    >
       <form
         className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2"
         onSubmit={(event) => {
           event.preventDefault();
-          onClose();
+          void submit();
         }}
       >
         <div className="sm:col-span-2">
-          <Field label={t.material}>
+          <Field label={labels.material}>
             <Select
-              value={String(form.materialIndex)}
-              onChange={(event) => setForm({ ...form, materialIndex: Number(event.target.value) })}
+              value={materialId}
+              onChange={(event) => setMaterialId(event.target.value)}
             >
-              {materials.length === 0 ? (
-                <option value="0">{lang === "ar" ? "لا توجد مواد" : "Aucune matiere"}</option>
-              ) : (
-                materials.map((option, index) => (
-                  <option key={`${option.name.ar}-${index}`} value={index}>
-                    {option.name[lang]}
-                  </option>
-                ))
-              )}
+              {materials.map((material) => (
+                <option key={material.id} value={material.id}>
+                  {material.name} ({material.quantity} {material.unit})
+                </option>
+              ))}
             </Select>
           </Field>
         </div>
-
-        <Field label={t.qty}>
+        <Field label={labels.quantity}>
           <TextInput
+            required
+            min="0.01"
+            step="0.01"
             type="number"
-            value={form.qty}
-            onChange={(event) => setForm({ ...form, qty: event.target.value })}
-            placeholder="0"
+            value={quantity}
+            onChange={(event) => setQuantity(event.target.value)}
           />
         </Field>
-
-        <Field label={t.unit}>
-          <TextInput value={material.unit[lang]} readOnly style={{ backgroundColor: palette.bg, color: palette.muted }} />
-        </Field>
-
-        <Field label={t.unitCost}>
+        <Field label={labels.unit}>
           <TextInput
-            value={`${material.unitCost} ${cur}`}
             readOnly
-            style={{ backgroundColor: palette.bg, color: palette.muted, direction: "ltr", textAlign: lang === "ar" ? "right" : "left" }}
+            value={selected?.unit ?? "-"}
+            style={{ backgroundColor: palette.bg }}
           />
         </Field>
-
-        <Field label={t.total}>
+        <Field label={labels.available}>
           <TextInput
-            value={`${total.toLocaleString()} ${cur}`}
             readOnly
-            style={{ backgroundColor: "rgba(18,60,74,0.04)", color: palette.primary, fontWeight: 700, direction: "ltr", textAlign: lang === "ar" ? "right" : "left" }}
+            value={selected ? `${selected.quantity} ${selected.unit}` : "-"}
+            style={{ backgroundColor: palette.bg }}
           />
         </Field>
-
+        <Field label={labels.total}>
+          <TextInput
+            readOnly
+            value={`${total.toLocaleString()} DA`}
+            style={{
+              backgroundColor: palette.bg,
+              color: palette.primary,
+              fontWeight: 800,
+            }}
+          />
+        </Field>
         <div className="sm:col-span-2">
-          <Field label={t.notes}>
-            <Textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          <Field label={labels.notes}>
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
           </Field>
         </div>
-
-        <div className="mt-1 flex items-center justify-end gap-3 sm:col-span-2">
+        {error ? (
+          <div
+            className="sm:col-span-2"
+            style={{ color: "#b46a66", fontSize: 12 }}
+          >
+            {error}
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2 sm:col-span-2">
           <Button variant="secondary" onClick={onClose}>
-            {t.cancel}
+            {labels.cancel}
           </Button>
-          <Button variant="primary" type="submit">
-            {t.save}
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={
+              submitting || !materialId || Number(quantity) <= 0 || !orderId
+            }
+          >
+            {labels.save}
           </Button>
         </div>
       </form>

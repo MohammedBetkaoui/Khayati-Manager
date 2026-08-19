@@ -4,7 +4,6 @@
   Entity,
   ManyToOne,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
 } from 'typeorm';
 import { Invoice } from './invoice.entity';
 
@@ -21,6 +20,9 @@ export class InvoiceItem {
   @Column()
   description!: string;
 
+  @Column({ nullable: true })
+  productType?: string;
+
   @Column({ type: 'real', default: 1 })
   quantity!: number;
 
@@ -32,7 +34,4 @@ export class InvoiceItem {
 
   @CreateDateColumn()
   createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
 }

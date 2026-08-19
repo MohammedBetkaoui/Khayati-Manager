@@ -20,9 +20,13 @@ export class OrderMaterial {
   order!: Order;
 
   @ManyToOne(() => InventoryItem, (item) => item.orderMaterialUsages, {
-    onDelete: 'CASCADE',
+    nullable: true,
+    onDelete: 'SET NULL',
   })
-  inventoryItem!: InventoryItem;
+  inventoryItem?: InventoryItem;
+
+  @Column()
+  materialName!: string;
 
   @Column({ type: 'real' })
   quantityUsed!: number;

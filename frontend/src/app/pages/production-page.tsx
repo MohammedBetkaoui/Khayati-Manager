@@ -1,551 +1,402 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Coins, Receipt, Table2, TrendingUp } from "lucide-react";
+import { useDeferredValue, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+} from "lucide-react";
 import { useNavigate } from "react-router";
+import {
+  ActionBar,
+  type OrderFilters,
+} from "../components/production/action-bar";
+import { AddOrderModal } from "../components/production/add-order-modal";
+import { ChangeStageModal } from "../components/production/change-stage-modal";
+import { OrdersTable } from "../components/production/orders-table";
+import { SummaryCards } from "../components/production/summary-cards";
 import { PageBackground } from "../components/page-background";
 import { useLanguage } from "../language-context";
-import { SummaryCards } from "../components/production/summary-cards";
-import { ActionBar, type Filters } from "../components/production/action-bar";
-import { KanbanBoard } from "../components/production/kanban-board";
-import { OrdersTable } from "../components/production/orders-table";
-import { OrderDetailsBar } from "../components/production/order-details-bar";
-import { AddOrderModal } from "../components/production/add-order-modal";
-import { AssignWorkersModal } from "../components/production/assign-workers-modal";
-import { LinkMaterialsModal } from "../components/production/link-materials-modal";
-import { ChangeStageModal } from "../components/production/change-stage-modal";
 import {
-  deadlineLabels,
-  orderMaterialCost,
-  orderTotalCost,
+  asRecord,
+  fetchJson,
+  getArrayFromPayload,
+  getNumber,
+  getText,
+} from "../lib/api";
+import {
+  mapDashboard,
+  mapOrder,
   palette,
-  prodText,
-  productLabels,
-  stageOrder,
-  type Bilingual,
-  type DeadlineStatus,
-  type Order,
-  type PaymentStatus,
-  type Priority,
-  type ProductType,
-  type StageId,
+  productionText,
+  type CustomerOption,
+  type DashboardStats,
+  type OrderListItem,
+  type WorkerOption,
 } from "./production-data";
-import { asRecord, fetchJson, getArrayFromPayload, getNumber, getText } from "../lib/api";
 
-type TabId = "board" | "all" | "calendar" | "costs" | "late";
-
-type MaterialOption = {
-  name: Bilingual;
-  unit: Bilingual;
-  unitCost: number;
+const emptyStats: DashboardStats = {
+  newOrders: 0,
+  inProduction: 0,
+  ready: 0,
+  late: 0,
+  monthlyCost: 0,
 };
-
-const stageMap: Record<string, StageId> = {
-  new: "new",
-  NEW: "new",
-  cutting: "cutting",
-  CUTTING: "cutting",
-  sewing: "sewing",
-  SEWING: "sewing",
-  ironing: "ironing",
-  IRONING: "ironing",
-  ready: "ready",
-  READY: "ready",
-  delivered: "delivered",
-  DELIVERED: "delivered",
+const initialFilters: OrderFilters = {
+  search: "",
+  status: "ALL",
+  priority: "ALL",
+  deliveryDate: "",
 };
-
-const productMap: Record<string, ProductType> = {
-  shirt: "shirt",
-  pants: "pants",
-  dress: "dress",
-  school: "school",
-  workwear: "workwear",
-  other: "other",
-  SHIRT: "shirt",
-  PANTS: "pants",
-  DRESS: "dress",
-  SCHOOL: "school",
-  WORKWEAR: "workwear",
-  OTHER: "other",
-};
-
-const priorityMap: Record<string, Priority> = {
-  normal: "normal",
-  urgent: "urgent",
-  NORMAL: "normal",
-  URGENT: "urgent",
-};
-
-const paymentMap: Record<string, PaymentStatus> = {
-  unpaid: "unpaid",
-  partial: "partial",
-  paid: "paid",
-  UNPAID: "unpaid",
-  PARTIAL: "partial",
-  PAID: "paid",
-};
-
-function computeDeadline(deliveryDate: string, stage: StageId): DeadlineStatus {
-  if (!deliveryDate || stage === "delivered") {
-    return "ontime";
-  }
-
-  const today = "2026-08-19";
-  if (deliveryDate < today) return "late";
-  if (deliveryDate <= "2026-08-22") return "near";
-  return "ontime";
-}
-
-function buildTimeline(stage: StageId, receivedDate: string) {
-  const reachedIndex = stageOrder.indexOf(stage);
-  return stageOrder.map((step, index) => ({
-    stage: step,
-    date: index <= reachedIndex ? (index === 0 ? receivedDate || "2026-08-19" : receivedDate || null) : null,
-  }));
-}
-
-function mapOrder(raw: unknown): Order {
-  const record = asRecord(raw);
-  const customer = getText(record?.customerName) || getText(record?.customer) || "Client";
-  const stage = stageMap[getText(record?.stage)] ?? "new";
-  const product = productMap[getText(record?.product)] ?? "other";
-  const deliveryDate = getText(record?.deliveryDate) || getText(record?.date) || "2026-08-19";
-  const receivedDate = getText(record?.receivedDate) || getText(record?.createdAt) || "2026-08-19";
-  const workers = Array.isArray(record?.workers)
-    ? record.workers.map((worker) => getText(worker)).filter(Boolean)
-    : [];
-
-  return {
-    id: getText(record?.id) || crypto.randomUUID(),
-    number: getText(record?.number) || getText(record?.orderNumber) || "-",
-    customer: { ar: customer, fr: customer },
-    phone: getText(record?.phone) || getText(record?.customerPhone),
-    product,
-    quantity: getNumber(record?.quantity, 0),
-    sizes: getText(record?.sizes),
-    colors: [],
-    receivedDate,
-    deliveryDate,
-    stage,
-    priority: priorityMap[getText(record?.priority)] ?? "normal",
-    deadline: computeDeadline(deliveryDate, stage),
-    workers,
-    materials: [],
-    laborCost: getNumber(record?.laborCost),
-    extraCost: getNumber(record?.extraCost),
-    agreedPrice: getNumber(record?.agreedPrice ?? record?.total),
-    payment: paymentMap[getText(record?.paymentStatus ?? record?.payment)] ?? "unpaid",
-    notes: { ar: getText(record?.notes), fr: getText(record?.notes) },
-    timeline: buildTimeline(stage, receivedDate),
-  };
-}
 
 export function ProductionPage() {
   const { lang, dir } = useLanguage();
-  const t = prodText[lang];
   const navigate = useNavigate();
-
-  const [filters, setFilters] = useState<Filters>({
-    query: "",
-    product: "all",
-    stage: "all",
-    worker: "all",
-    priority: "all",
-    date: "",
-  });
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [workers, setWorkers] = useState<Bilingual[]>([]);
-  const [materials, setMaterials] = useState<MaterialOption[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>("board");
-  const [addOpen, setAddOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [stageModalId, setStageModalId] = useState<string | null>(null);
+  const text = productionText[lang];
+  const [filters, setFilters] = useState<OrderFilters>(initialFilters);
+  const deferredSearch = useDeferredValue(filters.search);
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [stats, setStats] = useState<DashboardStats>(emptyStats);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const itemsPerPage = 8;
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters, tab]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<OrderListItem | null>(null);
+  const [statusOrder, setStatusOrder] = useState<OrderListItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function safeLoad(path: string) {
+    async function loadResources() {
       try {
-        return await fetchJson<unknown>(path);
-      } catch {
-        return null;
-      }
-    }
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [ordersPayload, workersPayload, materialsPayload] = await Promise.all([
-          safeLoad("/orders"),
-          safeLoad("/workers?limit=100&sortBy=fullName&sortOrder=ASC"),
-          safeLoad("/inventory?limit=200"),
+        const [customersPayload, workersPayload] = await Promise.all([
+          fetchJson<unknown>(
+            "/sales/customers?limit=100&sortBy=fullName&sortOrder=ASC",
+          ),
+          fetchJson<unknown>(
+            "/workers?limit=100&sortBy=fullName&sortOrder=ASC",
+          ),
         ]);
-
         if (cancelled) return;
-
-        setOrders(getArrayFromPayload(ordersPayload).map(mapOrder));
-        setWorkers(
-          getArrayFromPayload(workersPayload).map((worker) => {
-            const record = asRecord(worker);
-            const name = getText(record?.fullName) || getText(record?.name) || "Ouvrier";
-            return { ar: name, fr: name };
-          }),
-        );
-        setMaterials(
-          getArrayFromPayload(materialsPayload).map((item) => {
-            const record = asRecord(item);
-            const name = getText(record?.name) || "Matiere";
-            const unit = getText(record?.unit) || "-";
+        setCustomers(
+          getArrayFromPayload(customersPayload).map((item) => {
+            const row = asRecord(item);
             return {
-              name: { ar: name, fr: name },
-              unit: { ar: unit, fr: unit },
-              unitCost: getNumber(record?.unitPrice),
+              id: getNumber(row?.id),
+              fullName: getText(row?.fullName),
+              phone: getText(row?.phone),
             };
           }),
         );
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Unable to load production.");
-      } finally {
-        if (!cancelled) setLoading(false);
+        setWorkers(
+          getArrayFromPayload(workersPayload).map((item) => {
+            const row = asRecord(item);
+            return {
+              id: getNumber(row?.id),
+              fullName: getText(row?.fullName),
+              role: getText(row?.role),
+            };
+          }),
+        );
+      } catch (reason) {
+        if (!cancelled)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Unable to load resources",
+          );
       }
     }
-
-    void load();
-
+    void loadResources();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const filtered = useMemo(() => {
-    const query = filters.query.trim().toLowerCase();
-    return orders.filter((order) => {
-      if (
-        query &&
-        !order.customer[lang].toLowerCase().includes(query) &&
-        !order.number.includes(query) &&
-        !productLabels[order.product][lang].toLowerCase().includes(query)
-      ) {
-        return false;
+  useEffect(() => {
+    let cancelled = false;
+    async function loadStats() {
+      try {
+        const payload = await fetchJson<unknown>("/orders/dashboard");
+        if (!cancelled) setStats(mapDashboard(payload));
+      } catch (reason) {
+        if (!cancelled)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Unable to load dashboard",
+          );
       }
-      if (filters.product !== "all" && order.product !== filters.product) return false;
-      if (filters.stage !== "all" && order.stage !== filters.stage) return false;
-      if (filters.worker !== "all" && !order.workers.includes(filters.worker)) return false;
-      if (filters.priority !== "all" && order.priority !== filters.priority) return false;
-      if (filters.date && order.deliveryDate !== filters.date) return false;
-      return true;
-    });
-  }, [filters, lang, orders]);
+    }
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
-  const lateRows = filtered.filter((order) => order.deadline === "late");
-  const newCount = orders.filter((order) => order.stage === "new").length;
-  const inProduction = orders.filter((order) => ["cutting", "sewing", "ironing"].includes(order.stage)).length;
-  const readyCount = orders.filter((order) => order.stage === "ready").length;
-  const lateCount = orders.filter((order) => order.deadline === "late").length;
-  const monthCost = `${orders.reduce((sum, order) => sum + orderMaterialCost(order) + order.laborCost + order.extraCost, 0).toLocaleString()} ${t.currency}`;
+  useEffect(() => {
+    let cancelled = false;
+    async function loadOrders() {
+      setLoading(true);
+      setError(null);
+      const query = new URLSearchParams({ page: String(page), limit: "10" });
+      if (deferredSearch.trim()) query.set("search", deferredSearch.trim());
+      if (filters.status !== "ALL") query.set("status", filters.status);
+      if (filters.priority !== "ALL") query.set("priority", filters.priority);
+      if (filters.deliveryDate) query.set("deliveryDate", filters.deliveryDate);
+      try {
+        const payload = await fetchJson<unknown>(`/orders?${query.toString()}`);
+        if (cancelled) return;
+        const record = asRecord(payload);
+        const pagination = asRecord(record?.pagination);
+        setOrders(getArrayFromPayload(payload).map(mapOrder));
+        setTotal(getNumber(pagination?.total));
+        setTotalPages(getNumber(pagination?.totalPages));
+      } catch (reason) {
+        if (cancelled) return;
+        setOrders([]);
+        setError(
+          reason instanceof Error ? reason.message : "Unable to load orders",
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadOrders();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    deferredSearch,
+    filters.deliveryDate,
+    filters.priority,
+    filters.status,
+    page,
+    reloadKey,
+  ]);
 
-  const selected = orders.find((order) => order.id === selectedId) ?? null;
-  const stageModalOrder = orders.find((order) => order.id === stageModalId) ?? null;
-  const tableRows = tab === "late" ? lateRows : filtered;
-  const totalPages = Math.ceil(tableRows.length / itemsPerPage) || 1;
-  const startIndex = (page - 1) * itemsPerPage;
-  const paginatedRows = tableRows.slice(startIndex, startIndex + itemsPerPage);
-  const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
-  const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
-
-  const tabs: { id: TabId; label: string }[] = [
-    { id: "board", label: t.tabs.board },
-    { id: "all", label: t.tabs.all },
-    { id: "calendar", label: t.tabs.calendar },
-    { id: "costs", label: t.tabs.costs },
-    { id: "late", label: t.tabs.late },
-  ];
-
-  function moveOrder(id: string, stage: StageId) {
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === id
-          ? {
-              ...order,
-              stage,
-              deadline: computeDeadline(order.deliveryDate, stage),
-              timeline: buildTimeline(stage, order.receivedDate),
-            }
-          : order,
-      ),
-    );
+  function updateFilters(next: OrderFilters) {
+    setFilters(next);
+    setPage(1);
   }
+
+  function refresh() {
+    setReloadKey((current) => current + 1);
+  }
+
+  async function deleteOrder(order: OrderListItem) {
+    if (!window.confirm(text.actions.confirmDelete)) return;
+    try {
+      await fetchJson(`/orders/${order.id}`, { method: "DELETE" });
+      if (orders.length === 1 && page > 1) setPage((current) => current - 1);
+      else refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Unable to delete order",
+      );
+    }
+  }
+
+  const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
+  const PreviousIcon = dir === "rtl" ? ChevronRight : ChevronLeft;
+  const NextIcon = dir === "rtl" ? ChevronLeft : ChevronRight;
 
   return (
     <PageBackground>
-      <div className="flex items-center gap-4 pt-7">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="flex items-center justify-center transition-colors hover:opacity-80"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: palette.surface,
-            border: `1px solid ${palette.border}`,
-            color: palette.primary,
-          }}
-        >
-          <BackArrow size={20} />
-        </button>
-        <div>
-          <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-            <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
-              {t.breadcrumbHome}
-            </button>
-            <CrumbChevron size={14} />
-            <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
+      <header className="flex flex-wrap items-start justify-between gap-4 pt-2">
+        <div className="flex items-start gap-4">
+          <button
+            type="button"
+            aria-label={text.home}
+            onClick={() => navigate("/")}
+            className="flex shrink-0 items-center justify-center transition-transform hover:-translate-y-0.5"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: palette.surface,
+              border: `1px solid ${palette.border}`,
+              color: palette.primary,
+            }}
+          >
+            <BackArrow size={20} />
+          </button>
+          <div>
+            <div style={{ color: palette.muted, fontSize: 12.5 }}>
+              {text.home} /{" "}
+              <span style={{ color: palette.primary, fontWeight: 700 }}>
+                {text.breadcrumb}
+              </span>
+            </div>
+            <h1
+              className="mt-1"
+              style={{ color: palette.text, fontSize: 25, fontWeight: 850 }}
+            >
+              {text.title}
+            </h1>
+            <p
+              className="mt-1 max-w-[760px]"
+              style={{ color: palette.muted, fontSize: 13.5 }}
+            >
+              {text.subtitle}
+            </p>
           </div>
-          <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
-            {t.title}
-          </h1>
-          <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
         </div>
-      </div>
+      </header>
 
       <div className="mt-6">
-        <SummaryCards newCount={newCount} inProduction={inProduction} ready={readyCount} late={lateCount} monthCost={monthCost} />
+        <SummaryCards stats={stats} />
       </div>
-
       <div className="mt-5">
-        <ActionBar filters={filters} onChange={setFilters} onAdd={() => setAddOpen(true)} onCalendar={() => setTab("calendar")} workers={workers} />
+        <ActionBar
+          filters={filters}
+          onChange={updateFilters}
+          onAdd={() => {
+            setEditingOrder(null);
+            setAddOpen(true);
+          }}
+        />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-1.5">
-        {tabs.map((item) => {
-          const active = item.id === tab;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className="transition-colors"
-              style={{
-                padding: "9px 16px",
-                borderRadius: 12,
-                fontSize: 14,
-                fontWeight: active ? 700 : 500,
-                color: active ? "#fff" : palette.muted,
-                backgroundColor: active ? palette.primary : palette.surface,
-                border: `1px solid ${active ? palette.primary : palette.border}`,
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {selected ? (
-        <div className="mt-5">
-          <OrderDetailsBar
-            order={selected}
-            onClose={() => setSelectedId(null)}
-            onChangeStage={() => setStageModalId(selected.id)}
-            onAssign={() => setAssignOpen(true)}
-            onLink={() => setLinkOpen(true)}
-          />
+      {error ? (
+        <div
+          className="mt-4 rounded-xl border px-4 py-3"
+          style={{
+            borderColor: "rgba(180,106,102,.28)",
+            backgroundColor: "rgba(180,106,102,.08)",
+            color: "#9f5652",
+            fontSize: 12.5,
+          }}
+        >
+          {error}
         </div>
       ) : null}
 
-      <div className="mt-5 pb-10">
-        {loading ? (
-          <div className="mb-4 text-sm" style={{ color: palette.muted }}>
-            {lang === "ar" ? "جاري تحميل الطلبيات..." : "Chargement des commandes..."}
+      <section
+        className="mt-5 overflow-hidden pb-2"
+        style={{
+          backgroundColor: palette.surface,
+          border: `1px solid ${palette.border}`,
+          borderRadius: 20,
+          boxShadow: "0 12px 32px -28px rgba(18,60,74,.5)",
+        }}
+      >
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+          style={{ borderBottom: `1px solid ${palette.border}` }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                backgroundColor: "rgba(18,60,74,.08)",
+                color: palette.primary,
+              }}
+            >
+              <ClipboardList size={19} />
+            </div>
+            <div>
+              <h2
+                style={{ color: palette.text, fontSize: 15, fontWeight: 800 }}
+              >
+                {text.listTitle}
+              </h2>
+              <p style={{ color: palette.muted, fontSize: 11.5 }}>
+                {text.listHint}
+              </p>
+            </div>
           </div>
-        ) : null}
-        {!loading && error ? (
-          <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
-            {lang === "ar" ? "تعذر تحميل بيانات الإنتاج من الواجهة الخلفية." : "Impossible de charger les donnees de production depuis l'API."}
+          <div style={{ color: palette.muted, fontSize: 12 }}>
+            {total}{" "}
+            {lang === "ar" ? "\u0637\u0644\u0628\u064a\u0629" : "commande(s)"}
           </div>
-        ) : null}
+        </div>
 
-        {tab === "board" ? (
-          <KanbanBoard orders={filtered} selectedId={selectedId} onSelect={setSelectedId} onMove={moveOrder} />
-        ) : null}
-
-        {tab === "all" || tab === "late" ? (
-          <div
-            style={{
-              backgroundColor: palette.surface,
-              borderRadius: 20,
-              border: `1px solid ${palette.border}`,
-              boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-              overflow: "hidden",
+        <div
+          style={{
+            opacity: loading ? 0.55 : 1,
+            transition: "opacity .18s ease",
+          }}
+        >
+          <OrdersTable
+            rows={orders}
+            onView={(order) => navigate(`/production/${order.id}`)}
+            onEdit={(order) => {
+              setEditingOrder(order);
+              setAddOpen(true);
             }}
-          >
-            <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: `1px solid ${palette.border}` }}>
-              <Table2 size={17} style={{ color: palette.primary }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: palette.text }}>
-                {tab === "late" ? t.tabs.late : t.tableView}
-              </span>
-            </div>
-            <div className="p-4">
-              <OrdersTable rows={paginatedRows} selectedId={selectedId} onSelect={setSelectedId} onChangeStage={setStageModalId} />
-            </div>
-            <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: `1px solid ${palette.border}`, fontSize: 13, color: palette.muted }}>
-              <div>
-                {t.showing} {Math.min(startIndex + 1, tableRows.length)} - {Math.min(startIndex + itemsPerPage, tableRows.length)} {t.of} {tableRows.length} {t.items}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-black/5 disabled:opacity-50"
-                  style={{ borderColor: palette.border }}
-                >
-                  <ChevronRight size={16} style={{ transform: dir === "rtl" ? "none" : "rotate(180deg)" }} />
-                </button>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: palette.primary, color: "white", fontWeight: 600 }}>
-                  {page}
-                </div>
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-black/5 disabled:opacity-50"
-                  style={{ borderColor: palette.border }}
-                >
-                  <ChevronLeft size={16} style={{ transform: dir === "rtl" ? "none" : "rotate(180deg)" }} />
-                </button>
-              </div>
-            </div>
+            onChangeStatus={setStatusOrder}
+            onDelete={(order) => {
+              void deleteOrder(order);
+            }}
+          />
+        </div>
+
+        <div
+          className="flex items-center justify-between px-5 py-3"
+          style={{ borderTop: `1px solid ${palette.border}` }}
+        >
+          <span style={{ color: palette.muted, fontSize: 11.5 }}>
+            {page} / {Math.max(totalPages, 1)}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              aria-label="Previous page"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((current) => current - 1)}
+              className="flex items-center justify-center disabled:opacity-35"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                border: `1px solid ${palette.border}`,
+                color: palette.primary,
+              }}
+            >
+              <PreviousIcon size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next page"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((current) => current + 1)}
+              className="flex items-center justify-center disabled:opacity-35"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                border: `1px solid ${palette.border}`,
+                color: palette.primary,
+              }}
+            >
+              <NextIcon size={16} />
+            </button>
           </div>
-        ) : null}
+        </div>
+      </section>
 
-        {tab === "costs" ? <CostsView orders={orders} /> : null}
-        {tab === "calendar" ? <CalendarView orders={orders} /> : null}
-      </div>
-
-      <AddOrderModal open={addOpen} onClose={() => setAddOpen(false)} />
-      <AssignWorkersModal open={assignOpen} onClose={() => setAssignOpen(false)} defaultOrderId={selectedId} orders={orders} workers={workers} />
-      <LinkMaterialsModal open={linkOpen} onClose={() => setLinkOpen(false)} materials={materials} />
-      <ChangeStageModal open={!!stageModalId} onClose={() => setStageModalId(null)} order={stageModalOrder} />
+      <AddOrderModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        customers={customers}
+        order={editingOrder}
+        onSaved={refresh}
+      />
+      <ChangeStageModal
+        open={Boolean(statusOrder)}
+        onClose={() => setStatusOrder(null)}
+        order={statusOrder}
+        workers={workers}
+        onSaved={refresh}
+      />
     </PageBackground>
-  );
-}
-
-function CostsView({ orders }: { orders: Order[] }) {
-  const { lang } = useLanguage();
-  const t = prodText[lang];
-  const cur = t.currency;
-  const totalMaterial = orders.reduce((sum, order) => sum + orderMaterialCost(order), 0);
-  const totalLabor = orders.reduce((sum, order) => sum + order.laborCost, 0);
-  const average = orders.length ? Math.round(orders.reduce((sum, order) => sum + orderTotalCost(order), 0) / orders.length) : 0;
-
-  const cards = [
-    { icon: Coins, label: t.summary.cost, value: `${(totalMaterial + totalLabor).toLocaleString()} ${cur}`, color: "#a87d3c", tint: "rgba(195,154,91,0.16)" },
-    { icon: TrendingUp, label: lang === "ar" ? "تكلفة المواد" : "Coût matières", value: `${totalMaterial.toLocaleString()} ${cur}`, color: "#4d8a6a", tint: "rgba(77,138,106,0.12)" },
-    { icon: Receipt, label: lang === "ar" ? "متوسط تكلفة الطلبية" : "Coût moyen / commande", value: `${average.toLocaleString()} ${cur}`, color: palette.primary, tint: "rgba(18,60,74,0.08)" },
-  ];
-
-  return (
-    <div
-      style={{
-        backgroundColor: palette.surface,
-        borderRadius: 20,
-        border: `1px solid ${palette.border}`,
-        boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-        padding: 18,
-      }}
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {cards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="flex items-center gap-3" style={{ backgroundColor: palette.bg, borderRadius: 16, border: `1px solid ${palette.border}`, padding: 14 }}>
-              <div className="flex shrink-0 items-center justify-center" style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: card.tint, color: card.color }}>
-                <Icon size={19} strokeWidth={1.9} />
-              </div>
-              <div className="min-w-0">
-                <div style={{ fontSize: 12, color: palette.muted }}>{card.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: palette.text }}>{card.value}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-4 text-sm" style={{ color: palette.muted }}>
-        {orders.length === 0 ? (lang === "ar" ? "لا توجد طلبيات لعرض التكاليف." : "Aucune commande disponible pour afficher les coûts.") : null}
-      </div>
-    </div>
-  );
-}
-
-function CalendarView({ orders }: { orders: Order[] }) {
-  const { lang } = useLanguage();
-  const t = prodText[lang];
-  const upcoming = [...orders].filter((order) => order.stage !== "delivered").sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
-
-  return (
-    <div
-      style={{
-        backgroundColor: palette.surface,
-        borderRadius: 20,
-        border: `1px solid ${palette.border}`,
-        boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-        padding: 20,
-      }}
-    >
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center justify-center" style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(18,60,74,0.08)", color: palette.primary }}>
-          <CalendarDays size={20} strokeWidth={1.9} />
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: palette.text }}>{t.tabs.calendar}</div>
-          <div style={{ fontSize: 12.5, color: palette.muted }}>{t.calendarSoon}</div>
-        </div>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-2.5">
-        {upcoming.length === 0 ? (
-          <div className="text-sm" style={{ color: palette.muted }}>
-            {lang === "ar" ? "لا توجد طلبيات قادمة." : "Aucune commande à venir."}
-          </div>
-        ) : (
-          upcoming.map((order) => (
-            <div key={order.id} className="flex items-center justify-between gap-3" style={{ backgroundColor: palette.bg, borderRadius: 14, border: `1px solid ${palette.border}`, padding: "12px 14px" }}>
-              <div className="flex items-center gap-3">
-                <div className="flex min-h-[46px] w-[52px] flex-col items-center justify-center text-center" style={{ borderRadius: 12, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}>
-                  <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1 }}>{order.deliveryDate.slice(8)}</span>
-                  <span style={{ fontSize: 10, color: palette.muted }}>{order.deliveryDate.slice(0, 7)}</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span style={{ direction: "ltr", fontSize: 13, fontWeight: 800, color: palette.primary }}>#{order.number}</span>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: palette.text }}>{order.customer[lang]}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: palette.muted, marginTop: 2 }}>
-                    {productLabels[order.product][lang]} · {order.quantity} {lang === "ar" ? "قطعة" : "pcs"}
-                  </div>
-                </div>
-              </div>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: order.deadline === "late" ? "#b46a66" : order.deadline === "near" ? "#a87d3c" : "#4d8a6a" }}>
-                {deadlineLabels[order.deadline][lang]}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
   );
 }

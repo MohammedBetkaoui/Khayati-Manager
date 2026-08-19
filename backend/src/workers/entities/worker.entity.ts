@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { SalaryType, WorkerRole, WorkerStatus } from '../../common/enums';
-import { OrderWorkerAssignment } from '../../orders/entities/order-worker-assignment.entity';
+import { OrderWorker } from '../../orders/entities/order-worker.entity';
 import { Advance } from '../../payroll/entities/advance.entity';
 import { BonusDeduction } from '../../payroll/entities/bonus-deduction.entity';
 import { Payroll } from '../../payroll/entities/payroll.entity';
@@ -62,8 +62,8 @@ export class Worker {
   @OneToMany(() => BonusDeduction, (record) => record.worker)
   bonusDeductions!: BonusDeduction[];
 
-  @OneToMany(() => OrderWorkerAssignment, (assignment) => assignment.worker)
-  orderAssignments!: OrderWorkerAssignment[];
+  @OneToMany(() => OrderWorker, (assignment) => assignment.worker)
+  orderAssignments!: OrderWorker[];
 
   @CreateDateColumn()
   createdAt!: Date;

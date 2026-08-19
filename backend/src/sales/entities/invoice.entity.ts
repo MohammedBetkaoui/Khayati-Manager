@@ -7,7 +7,7 @@
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { PaymentMethod, PaymentStatus } from '../../common/enums';
+import { PaymentStatus } from '../../common/enums';
 import { Order } from '../../orders/entities/order.entity';
 import { Customer } from './customer.entity';
 import { InvoiceItem } from './invoice-item.entity';
@@ -22,10 +22,10 @@ export class Invoice {
   invoiceNumber!: string;
 
   @ManyToOne(() => Customer, (customer) => customer.invoices, {
-    nullable: true,
-    onDelete: 'SET NULL',
+    nullable: false,
+    onDelete: 'CASCADE',
   })
-  customer?: Customer;
+  customer!: Customer;
 
   @ManyToOne(() => Order, (order) => order.invoices, {
     nullable: true,
@@ -33,8 +33,8 @@ export class Invoice {
   })
   order?: Order;
 
-  @Column({ type: 'date' })
-  invoiceDate!: string;
+  @Column({ type: 'date', default: () => 'CURRENT_DATE' })
+  date!: string;
 
   @Column({ type: 'real', default: 0 })
   subtotal!: number;
@@ -51,9 +51,6 @@ export class Invoice {
   @Column({ type: 'real', default: 0 })
   remainingAmount!: number;
 
-  @Column({ type: 'simple-enum', enum: PaymentMethod })
-  paymentMethod!: PaymentMethod;
-
   @Column({
     type: 'simple-enum',
     enum: PaymentStatus,
@@ -64,7 +61,7 @@ export class Invoice {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
-  @OneToMany(() => InvoiceItem, (item) => item.invoice)
+  @OneToMany(() => InvoiceItem, (item) => item.invoice, { cascade: true })
   items!: InvoiceItem[];
 
   @OneToMany(() => Payment, (payment) => payment.invoice)

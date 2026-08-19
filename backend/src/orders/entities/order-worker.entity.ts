@@ -1,4 +1,4 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
@@ -10,14 +10,12 @@ import { OrderStatus } from '../../common/enums';
 import { Worker } from '../../workers/entities/worker.entity';
 import { Order } from './order.entity';
 
-@Entity('order_worker_assignments')
-export class OrderWorkerAssignment {
+@Entity('order_workers')
+export class OrderWorker {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @ManyToOne(() => Order, (order) => order.workerAssignments, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(() => Order, (order) => order.workers, { onDelete: 'CASCADE' })
   order!: Order;
 
   @ManyToOne(() => Worker, (worker) => worker.orderAssignments, {
@@ -28,11 +26,8 @@ export class OrderWorkerAssignment {
   @Column({ type: 'simple-enum', enum: OrderStatus })
   stage!: OrderStatus;
 
-  @Column()
-  taskType!: string;
-
-  @Column({ type: 'integer', default: 0 })
-  requiredPieces!: number;
+  @Column({ type: 'date', default: () => 'CURRENT_DATE' })
+  assignedDate!: string;
 
   @Column({ type: 'integer', default: 0 })
   completedPieces!: number;

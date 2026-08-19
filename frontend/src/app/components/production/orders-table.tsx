@@ -1,186 +1,215 @@
-import { Eye, ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, Eye, Pencil, Trash2 } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { useLanguage } from "../../language-context";
 import {
   palette,
-  prodText,
-  productLabels,
-  stageLabels,
-  stageColors,
-  paymentLabels,
-  paymentColors,
-  deadlineColors,
-  orderTotalCost,
-  initialsOf,
+  priorityLabels,
+  productionText,
+  statusColors,
+  statusLabels,
+  type OrderListItem,
 } from "../../pages/production-data";
-import type { Order } from "../../pages/production-data";
-import { useLanguage } from "../../language-context";
-import { Badge } from "../kit";
+import { Avatar, Badge } from "../kit";
 
 export function OrdersTable({
   rows,
-  selectedId,
-  onSelect,
-  onChangeStage,
+  onView,
+  onEdit,
+  onChangeStatus,
+  onDelete,
 }: {
-  rows: Order[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onChangeStage: (id: string) => void;
+  rows: OrderListItem[];
+  onView: (order: OrderListItem) => void;
+  onEdit: (order: OrderListItem) => void;
+  onChangeStatus: (order: OrderListItem) => void;
+  onDelete: (order: OrderListItem) => void;
 }) {
   const { lang } = useLanguage();
-  const t = prodText[lang];
-  const cur = t.currency;
-
-  const headStyle: React.CSSProperties = {
-    fontSize: 12,
-    fontWeight: 700,
+  const text = productionText[lang];
+  const headStyle: CSSProperties = {
+    padding: "12px 13px",
     color: palette.muted,
+    fontSize: 11.5,
+    fontWeight: 700,
     textAlign: "start",
-    padding: "0 14px 12px",
     whiteSpace: "nowrap",
   };
-  const cellStyle: React.CSSProperties = {
-    padding: "12px 14px",
-    fontSize: 13.5,
+  const cellStyle: CSSProperties = {
+    padding: "13px",
     color: palette.text,
+    fontSize: 13,
     verticalAlign: "middle",
     whiteSpace: "nowrap",
   };
 
+  if (rows.length === 0) {
+    return (
+      <div
+        className="flex min-h-48 items-center justify-center"
+        style={{ color: palette.muted, fontSize: 13.5 }}
+      >
+        {text.empty}
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 940 }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
-            <th style={headStyle}>{t.cols.number}</th>
-            <th style={headStyle}>{t.cols.customer}</th>
-            <th style={headStyle}>{t.cols.product}</th>
-            <th style={headStyle}>{t.cols.quantity}</th>
-            <th style={headStyle}>{t.cols.delivery}</th>
-            <th style={headStyle}>{t.cols.stage}</th>
-            <th style={headStyle}>{t.cols.workers}</th>
-            <th style={headStyle}>{t.cols.cost}</th>
-            <th style={headStyle}>{t.cols.payment}</th>
-            <th style={{ ...headStyle, textAlign: "center" }}>{t.cols.actions}</th>
+      <table
+        className="w-full"
+        style={{ borderCollapse: "collapse", minWidth: 1240 }}
+      >
+        <thead style={{ backgroundColor: "rgba(18,60,74,.035)" }}>
+          <tr>
+            <th style={headStyle}>{text.columns.number}</th>
+            <th style={headStyle}>{text.columns.customer}</th>
+            <th style={headStyle}>{text.columns.product}</th>
+            <th style={headStyle}>{text.columns.quantity}</th>
+            <th style={headStyle}>{text.columns.color}</th>
+            <th style={headStyle}>{text.columns.received}</th>
+            <th style={headStyle}>{text.columns.delivery}</th>
+            <th style={headStyle}>{text.columns.responsible}</th>
+            <th style={headStyle}>{text.columns.status}</th>
+            <th style={headStyle}>{text.columns.cost}</th>
+            <th style={{ ...headStyle, textAlign: "center" }}>
+              {text.columns.actions}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((o) => {
-            const accent = stageColors[o.stage];
-            const selected = o.id === selectedId;
+          {rows.map((order) => {
+            const accent = statusColors[order.statusCode];
             return (
               <tr
-                key={o.id}
-                onClick={() => onSelect(o.id)}
-                className="cursor-pointer transition-colors"
-                style={{
-                  borderBottom: `1px solid ${palette.border}`,
-                  backgroundColor: selected ? "rgba(18,60,74,0.05)" : "transparent",
-                }}
+                key={order.id}
+                className="transition-colors hover:bg-black/[.018]"
+                style={{ borderTop: `1px solid ${palette.border}` }}
               >
-                <td style={{ ...cellStyle, direction: "ltr", fontWeight: 800, color: palette.primary }}>
-                  #{o.number}
+                <td
+                  style={{
+                    ...cellStyle,
+                    direction: "ltr",
+                    color: palette.primary,
+                    fontWeight: 800,
+                  }}
+                >
+                  {order.orderNumber}
+                </td>
+                <td style={cellStyle}>
+                  <button
+                    type="button"
+                    onClick={() => onView(order)}
+                    className="text-start"
+                    style={{ fontWeight: 700, color: palette.text }}
+                  >
+                    {order.customer}
+                    <span
+                      className="block"
+                      style={{
+                        color: palette.muted,
+                        fontSize: 10.5,
+                        fontWeight: 500,
+                        direction: "ltr",
+                      }}
+                    >
+                      {order.customerPhone}
+                    </span>
+                  </button>
                 </td>
                 <td style={{ ...cellStyle, fontWeight: 600 }}>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: 999,
-                        backgroundColor: deadlineColors[o.deadline],
-                      }}
-                      title={o.deadline}
-                    />
-                    {o.customer[lang]}
-                  </div>
+                  {order.product}
                 </td>
-                <td style={cellStyle}>{productLabels[o.product][lang]}</td>
-                <td style={{ ...cellStyle, fontWeight: 700 }}>{o.quantity}</td>
-                <td style={{ ...cellStyle, direction: "ltr", textAlign: "start", color: palette.muted }}>
-                  {o.deliveryDate}
+                <td
+                  style={{ ...cellStyle, textAlign: "center", fontWeight: 800 }}
+                >
+                  {order.quantity}
+                </td>
+                <td style={cellStyle}>{order.color}</td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    direction: "ltr",
+                    color: palette.muted,
+                  }}
+                >
+                  {order.receivedDate || "-"}
+                </td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    direction: "ltr",
+                    color: order.delayed ? "#b46a66" : palette.text,
+                    fontWeight: order.delayed ? 800 : 500,
+                  }}
+                >
+                  {order.deliveryDate || "-"}
                 </td>
                 <td style={cellStyle}>
-                  <Badge bg={`${accent}1f`} fg={accent} dot={accent}>
-                    {stageLabels[o.stage][lang]}
-                  </Badge>
-                </td>
-                <td style={cellStyle}>
-                  <div className="flex items-center">
-                    {o.workers.slice(0, 3).map((w, i) => (
-                      <span
-                        key={w}
-                        title={w}
-                        className="flex items-center justify-center"
-                        style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 999,
-                          backgroundColor: palette.accentSoft,
-                          color: palette.accent,
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          border: `1.5px solid ${palette.surface}`,
-                          marginInlineStart: i === 0 ? 0 : -8,
-                        }}
-                      >
-                        {initialsOf(w)}
+                  {order.responsible !== "-" ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar name={order.responsible} size={28} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                        {order.responsible}
                       </span>
-                    ))}
-                    {o.workers.length > 3 ? (
+                    </div>
+                  ) : (
+                    <span style={{ color: palette.muted }}>-</span>
+                  )}
+                </td>
+                <td style={cellStyle}>
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge bg={`${accent}18`} fg={accent} dot={accent}>
+                      {statusLabels[order.statusCode][lang]}
+                    </Badge>
+                    {order.priorityCode === "URGENT" ? (
                       <span
-                        className="flex items-center justify-center"
                         style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 999,
-                          backgroundColor: palette.bg,
-                          color: palette.muted,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          border: `1.5px solid ${palette.surface}`,
-                          marginInlineStart: -8,
+                          color: "#b46a66",
+                          fontSize: 10.5,
+                          fontWeight: 800,
                         }}
                       >
-                        +{o.workers.length - 3}
+                        {priorityLabels.URGENT[lang]}
                       </span>
                     ) : null}
                   </div>
                 </td>
-                <td style={{ ...cellStyle, fontWeight: 700 }}>
-                  {orderTotalCost(o).toLocaleString()}{" "}
-                  <span style={{ fontWeight: 500, fontSize: 12, color: palette.muted }}>{cur}</span>
-                </td>
-                <td style={cellStyle}>
-                  <Badge bg={`${paymentColors[o.payment]}1f`} fg={paymentColors[o.payment]} dot={paymentColors[o.payment]}>
-                    {paymentLabels[o.payment][lang]}
-                  </Badge>
+                <td style={{ ...cellStyle, direction: "ltr", fontWeight: 800 }}>
+                  {order.cost.toLocaleString()}{" "}
+                  <span style={{ color: palette.muted, fontSize: 10.5 }}>
+                    {text.currency}
+                  </span>
                 </td>
                 <td style={cellStyle}>
                   <div className="flex items-center justify-center gap-1.5">
-                    <button
-                      type="button"
-                      title={t.panel.title}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelect(o.id);
-                      }}
-                      className="flex items-center justify-center transition-colors hover:bg-black/5"
-                      style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${palette.border}`, color: palette.primary }}
+                    <ActionButton
+                      label={text.actions.view}
+                      color={palette.primary}
+                      onClick={() => onView(order)}
                     >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      title={t.panel.changeStage}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onChangeStage(o.id);
-                      }}
-                      className="flex items-center justify-center transition-colors hover:bg-black/5"
-                      style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${palette.border}`, color: palette.muted }}
+                      <Eye size={15} />
+                    </ActionButton>
+                    <ActionButton
+                      label={text.actions.edit}
+                      color="#6b8aa0"
+                      onClick={() => onEdit(order)}
                     >
-                      <ArrowRightLeft size={16} />
-                    </button>
+                      <Pencil size={15} />
+                    </ActionButton>
+                    <ActionButton
+                      label={text.actions.status}
+                      color="#a87d3c"
+                      onClick={() => onChangeStatus(order)}
+                    >
+                      <ArrowRightLeft size={15} />
+                    </ActionButton>
+                    <ActionButton
+                      label={text.actions.delete}
+                      color="#b46a66"
+                      onClick={() => onDelete(order)}
+                    >
+                      <Trash2 size={15} />
+                    </ActionButton>
                   </div>
                 </td>
               </tr>
@@ -189,5 +218,37 @@ export function OrdersTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ActionButton({
+  label,
+  color,
+  onClick,
+  children,
+}: {
+  label: string;
+  color: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className="flex items-center justify-center transition-transform hover:-translate-y-0.5"
+      style={{
+        width: 31,
+        height: 31,
+        borderRadius: 9,
+        border: `1px solid ${palette.border}`,
+        backgroundColor: palette.surface,
+        color,
+      }}
+    >
+      {children}
+    </button>
   );
 }

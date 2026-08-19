@@ -11,7 +11,8 @@ import { OrderPriority, OrderStatus } from '../../common/enums';
 import { Customer } from '../../sales/entities/customer.entity';
 import { Invoice } from '../../sales/entities/invoice.entity';
 import { OrderMaterial } from './order-material.entity';
-import { OrderWorkerAssignment } from './order-worker-assignment.entity';
+import { OrderStatusHistory } from './order-status-history.entity';
+import { OrderWorker } from './order-worker.entity';
 
 @Entity('orders')
 export class Order {
@@ -74,11 +75,14 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
-  @OneToMany(() => OrderWorkerAssignment, (assignment) => assignment.order)
-  workerAssignments!: OrderWorkerAssignment[];
+  @OneToMany(() => OrderWorker, (assignment) => assignment.order)
+  workers!: OrderWorker[];
 
   @OneToMany(() => OrderMaterial, (material) => material.order)
   materials!: OrderMaterial[];
+
+  @OneToMany(() => OrderStatusHistory, (history) => history.order)
+  statusHistory!: OrderStatusHistory[];
 
   @OneToMany(() => Invoice, (invoice) => invoice.order)
   invoices!: Invoice[];

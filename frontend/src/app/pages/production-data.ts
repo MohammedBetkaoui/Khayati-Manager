@@ -1,392 +1,407 @@
+import {
+  asRecord,
+  getArrayFromPayload,
+  getBoolean,
+  getNumber,
+  getText,
+} from "../lib/api";
 import { palette } from "../content";
 
 export type Lang = "ar" | "fr";
-
-/* ------------------------------ Domain types ------------------------------ */
-
-export type StageId = "new" | "cutting" | "sewing" | "ironing" | "ready" | "delivered";
-export type ProductType = "shirt" | "pants" | "dress" | "school" | "workwear" | "other";
-export type Priority = "normal" | "urgent";
-export type DeadlineStatus = "ontime" | "near" | "late";
-export type PaymentStatus = "unpaid" | "partial" | "paid";
-
 export type Bilingual = { ar: string; fr: string };
+export type OrderStatusCode =
+  "NEW" | "CUTTING" | "SEWING" | "IRONING" | "READY" | "DELIVERED";
+export type OrderPriorityCode = "NORMAL" | "URGENT";
 
-export type OrderMaterial = {
-  name: Bilingual;
-  qty: number;
-  unit: Bilingual;
-  unitCost: number;
-};
-
-export type TimelineStep = {
-  stage: StageId;
-  date: string | null; // null => not reached yet
-};
-
-export type Order = {
-  id: string;
-  number: string;
-  customer: Bilingual;
-  phone: string;
-  product: ProductType;
+export type OrderListItem = {
+  id: number;
+  orderNumber: string;
+  customerId: number | null;
+  customer: string;
+  customerPhone: string;
+  product: string;
   quantity: number;
+  color: string;
   sizes: string;
-  colors: { label: Bilingual; hex: string }[];
   receivedDate: string;
   deliveryDate: string;
-  stage: StageId;
-  priority: Priority;
-  deadline: DeadlineStatus;
-  workers: string[]; // full names
-  materials: OrderMaterial[];
-  laborCost: number;
-  extraCost: number;
-  agreedPrice: number;
-  payment: PaymentStatus;
-  notes: Bilingual;
-  timeline: TimelineStep[];
+  responsible: string;
+  statusCode: OrderStatusCode;
+  priorityCode: OrderPriorityCode;
+  cost: number;
+  finalPrice: number;
+  profit: number;
+  delayed: boolean;
+  notes: string;
 };
 
-/* ------------------------------- Label maps ------------------------------- */
+export type WorkflowStep = {
+  statusCode: OrderStatusCode;
+  reached: boolean;
+  current: boolean;
+  date: string | null;
+  responsible: string | null;
+  comment: string | null;
+};
 
-export const stageOrder: StageId[] = [
-  "new",
-  "cutting",
-  "sewing",
-  "ironing",
-  "ready",
-  "delivered",
+export type AssignedWorker = {
+  id: number;
+  workerId: number;
+  fullName: string;
+  role: string;
+  stageCode: OrderStatusCode;
+  assignedDate: string;
+  completedPieces: number;
+  laborCost: number;
+  notes: string | null;
+};
+
+export type UsedMaterial = {
+  id: number;
+  inventoryItemId: number | null;
+  name: string;
+  quantityUsed: number;
+  unit: string;
+  unitCost: number;
+  totalCost: number;
+  notes: string | null;
+};
+
+export type OrderDetails = OrderListItem & {
+  client: {
+    id: number | null;
+    fullName: string;
+    phone: string;
+    historyUrl: string | null;
+  };
+  productDetails: {
+    type: string;
+    quantity: number;
+    colors: string | null;
+    sizes: string | null;
+    notes: string | null;
+  };
+  workflow: WorkflowStep[];
+  workers: AssignedWorker[];
+  materials: UsedMaterial[];
+  costs: {
+    materialCost: number;
+    laborCost: number;
+    totalCost: number;
+    salePrice: number;
+    profit: number;
+  };
+};
+
+export type DashboardStats = {
+  newOrders: number;
+  inProduction: number;
+  ready: number;
+  late: number;
+  monthlyCost: number;
+};
+
+export type CustomerOption = { id: number; fullName: string; phone: string };
+export type WorkerOption = { id: number; fullName: string; role: string };
+export type MaterialOption = {
+  id: number;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+};
+
+export const statusFlow: OrderStatusCode[] = [
+  "NEW",
+  "CUTTING",
+  "SEWING",
+  "IRONING",
+  "READY",
+  "DELIVERED",
 ];
 
-export const stageLabels: Record<StageId, Bilingual> = {
-  new: { ar: "جديد", fr: "Nouveau" },
-  cutting: { ar: "قيد القص", fr: "Découpe" },
-  sewing: { ar: "قيد الخياطة", fr: "Couture" },
-  ironing: { ar: "قيد الكي", fr: "Repassage" },
-  ready: { ar: "جاهز", fr: "Prêt" },
-  delivered: { ar: "مسلّم", fr: "Livré" },
+export const statusLabels: Record<OrderStatusCode, Bilingual> = {
+  NEW: { ar: "\u062c\u062f\u064a\u062f", fr: "Nouveau" },
+  CUTTING: { ar: "\u0642\u0635", fr: "D\u00e9coupe" },
+  SEWING: { ar: "\u062e\u064a\u0627\u0637\u0629", fr: "Couture" },
+  IRONING: { ar: "\u0643\u064a", fr: "Repassage" },
+  READY: { ar: "\u062c\u0627\u0647\u0632", fr: "Pr\u00eat" },
+  DELIVERED: {
+    ar: "\u062a\u0645 \u0627\u0644\u062a\u0633\u0644\u064a\u0645",
+    fr: "Livr\u00e9",
+  },
 };
 
-// Soft, non-flashy stage accents that harmonize with the teal/gold identity.
-export const stageColors: Record<StageId, string> = {
-  new: "#6b8aa0",
-  cutting: "#a87d3c",
-  sewing: "#123c4a",
-  ironing: "#8a6ea0",
-  ready: "#4d8a6a",
-  delivered: "#7a8a63",
+export const statusColors: Record<OrderStatusCode, string> = {
+  NEW: "#6b8aa0",
+  CUTTING: "#a87d3c",
+  SEWING: "#123c4a",
+  IRONING: "#7f6b91",
+  READY: "#4d8a6a",
+  DELIVERED: "#718064",
 };
 
-export const productLabels: Record<ProductType, Bilingual> = {
-  shirt: { ar: "قميص", fr: "Chemise" },
-  pants: { ar: "سروال", fr: "Pantalon" },
-  dress: { ar: "فستان", fr: "Robe" },
-  school: { ar: "زي مدرسي", fr: "Uniforme scolaire" },
-  workwear: { ar: "لباس عمل", fr: "Vêtement de travail" },
-  other: { ar: "أخرى", fr: "Autre" },
+export const priorityLabels: Record<OrderPriorityCode, Bilingual> = {
+  NORMAL: { ar: "\u0639\u0627\u062f\u064a", fr: "Normal" },
+  URGENT: { ar: "\u0645\u0633\u062a\u0639\u062c\u0644", fr: "Urgent" },
 };
 
-export const priorityLabels: Record<Priority, Bilingual> = {
-  normal: { ar: "عادي", fr: "Normal" },
-  urgent: { ar: "مستعجل", fr: "Urgent" },
-};
+export const productOptions: Array<{ value: string; label: Bilingual }> = [
+  {
+    value: "\u0642\u0645\u064a\u0635",
+    label: { ar: "\u0642\u0645\u064a\u0635", fr: "Chemise" },
+  },
+  {
+    value: "\u0633\u0631\u0648\u0627\u0644",
+    label: { ar: "\u0633\u0631\u0648\u0627\u0644", fr: "Pantalon" },
+  },
+  {
+    value: "\u0641\u0633\u062a\u0627\u0646",
+    label: { ar: "\u0641\u0633\u062a\u0627\u0646", fr: "Robe" },
+  },
+  {
+    value: "\u0632\u064a \u0645\u062f\u0631\u0633\u064a",
+    label: {
+      ar: "\u0632\u064a \u0645\u062f\u0631\u0633\u064a",
+      fr: "Uniforme scolaire",
+    },
+  },
+  {
+    value: "\u0644\u0628\u0627\u0633 \u0639\u0645\u0644",
+    label: {
+      ar: "\u0644\u0628\u0627\u0633 \u0639\u0645\u0644",
+      fr: "V\u00eatement de travail",
+    },
+  },
+];
 
-export const deadlineLabels: Record<DeadlineStatus, Bilingual> = {
-  ontime: { ar: "في الوقت", fr: "Dans les temps" },
-  near: { ar: "يقترب الموعد", fr: "Échéance proche" },
-  late: { ar: "متأخر", fr: "En retard" },
-};
-
-export const deadlineColors: Record<DeadlineStatus, string> = {
-  ontime: "#4d8a6a",
-  near: "#a87d3c",
-  late: "#b46a66",
-};
-
-export const paymentLabels: Record<PaymentStatus, Bilingual> = {
-  unpaid: { ar: "غير مدفوع", fr: "Non payé" },
-  partial: { ar: "دفع جزئي", fr: "Partiel" },
-  paid: { ar: "مدفوع", fr: "Payé" },
-};
-
-export const paymentColors: Record<PaymentStatus, string> = {
-  unpaid: "#b46a66",
-  partial: "#a87d3c",
-  paid: "#4d8a6a",
-};
-
-export const taskLabels: Record<string, Bilingual> = {
-  cut: { ar: "قص القماش", fr: "Découpe du tissu" },
-  sew: { ar: "خياطة", fr: "Couture" },
-  iron: { ar: "كي", fr: "Repassage" },
-  pack: { ar: "تغليف", fr: "Emballage" },
-  qa: { ar: "مراجعة الجودة", fr: "Contrôle qualité" },
-};
-
-/* --------------------------------- Helpers -------------------------------- */
-
-export function orderMaterialCost(o: Order): number {
-  return o.materials.reduce((s, m) => s + m.qty * m.unitCost, 0);
-}
-
-export function orderTotalCost(o: Order): number {
-  return orderMaterialCost(o) + o.laborCost + o.extraCost;
-}
-
-export function orderMargin(o: Order): number {
-  return o.agreedPrice - orderTotalCost(o);
-}
-
-export function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("");
-}
-
-/* --------------------------------- UI text -------------------------------- */
-
-type ProdText = {
-  currency: string;
-  breadcrumbHome: string;
-  breadcrumb: string;
-  title: string;
-  subtitle: string;
-  summary: {
-    new: string; newHelp: string;
-    prod: string; prodHelp: string;
-    ready: string; readyHelp: string;
-    late: string; lateHelp: string;
-    cost: string; costHelp: string;
-  };
-  search: string;
-  filtersToggle: string;
-  allProducts: string;
-  allStages: string;
-  allWorkers: string;
-  allPriorities: string;
-  dateLabel: string;
-  addOrder: string;
-  calendar: string;
-  export: string;
-  tabs: {
-    board: string; all: string; calendar: string; costs: string; late: string;
-  };
-  emptyColumn: string;
-  estCost: string;
-  qty: string;
-  delivery: string;
-  tableView: string;
-  tableHint: string;
-  cols: {
-    number: string; customer: string; product: string; quantity: string;
-    delivery: string; stage: string; workers: string; cost: string;
-    payment: string; actions: string;
-  };
-  panel: {
-    title: string;
-    empty: string;
-    emptyHint: string;
-    customer: string; phone: string; product: string; quantity: string;
-    sizes: string; colors: string; received: string; delivery: string;
-    stage: string; deadline: string; workers: string; materials: string;
-    payment: string; notes: string;
-    timelineTitle: string;
-    costTitle: string;
-    materialCost: string; laborCost: string; extraCost: string;
-    totalCost: string; margin: string;
-    edit: string; changeStage: string; assign: string; link: string;
-    recordCost: string; deliver: string;
-    noWorkers: string;
-  };
-  addModal: {
-    title: string;
-    customer: string; phone: string; product: string; quantity: string;
-    sizes: string; color: string; received: string; delivery: string;
-    priority: string; price: string; notes: string;
-    save: string; cancel: string;
-  };
-  assignModal: {
-    title: string;
-    order: string; stage: string; worker: string; task: string;
-    pieces: string; notes: string; save: string; cancel: string;
-  };
-  linkModal: {
-    title: string;
-    material: string; qty: string; unit: string; unitCost: string;
-    total: string; notes: string; save: string; cancel: string;
-  };
-  stageModal: {
-    title: string; stage: string; date: string; note: string;
-    save: string; cancel: string;
-  };
-  showing: string; of: string; items: string;
-  calendarSoon: string;
-};
-
-export const prodText: Record<Lang, ProdText> = {
+export const productionText = {
   ar: {
-    currency: "د.ج",
-    breadcrumbHome: "الرئيسية",
-    breadcrumb: "تسيير الإنتاج والطلبيات",
-    title: "تسيير الإنتاج والطلبيات",
+    home: "\u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+    breadcrumb:
+      "\u0627\u0644\u0625\u0646\u062a\u0627\u062c \u0648\u0627\u0644\u0637\u0644\u0628\u064a\u0627\u062a",
+    title:
+      "\u062a\u0633\u064a\u064a\u0631 \u0627\u0644\u0625\u0646\u062a\u0627\u062c \u0648\u0627\u0644\u0637\u0644\u0628\u064a\u0627\u062a",
     subtitle:
-      "متابعة الطلبيات ومراحل الإنتاج من الاستلام إلى التسليم مع ربط العمال والمواد والتكاليف",
-    summary: {
-      new: "الطلبيات الجديدة", newHelp: "طلبات لم تبدأ بعد",
-      prod: "قيد الإنتاج", prodHelp: "طلبات في مرحلة العمل",
-      ready: "جاهزة للتسليم", readyHelp: "طلبات مكتملة",
-      late: "طلبيات متأخرة", lateHelp: "تجاوزت تاريخ التسليم",
-      cost: "تكلفة الإنتاج هذا الشهر", costHelp: "مجموع تكلفة المواد والعمال",
+      "\u0645\u062a\u0627\u0628\u0639\u0629 \u0637\u0644\u0628\u064a\u0627\u062a \u0627\u0644\u0632\u0628\u0627\u0626\u0646\u060c \u0645\u0631\u0627\u062d\u0644 \u0627\u0644\u062a\u0635\u0646\u064a\u0639\u060c \u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0645\u0633\u062a\u0639\u0645\u0644\u0629 \u0648\u0627\u0644\u062a\u0643\u0627\u0644\u064a\u0641.",
+    cards: {
+      new: "\u0637\u0644\u0628\u064a\u0627\u062a \u062c\u062f\u064a\u062f\u0629",
+      production:
+        "\u0642\u064a\u062f \u0627\u0644\u0625\u0646\u062a\u0627\u062c",
+      ready:
+        "\u062c\u0627\u0647\u0632\u0629 \u0644\u0644\u062a\u0633\u0644\u064a\u0645",
+      late: "\u0637\u0644\u0628\u064a\u0627\u062a \u0645\u062a\u0623\u062e\u0631\u0629",
+      cost: "\u062a\u0643\u0644\u0641\u0629 \u0627\u0644\u0625\u0646\u062a\u0627\u062c \u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631",
     },
-    search: "البحث عن طلبية أو زبون...",
-    filtersToggle: "تصفية",
-    allProducts: "كل المنتجات",
-    allStages: "كل المراحل",
-    allWorkers: "كل العمال",
-    allPriorities: "كل الأولويات",
-    dateLabel: "تاريخ التسليم",
-    addOrder: "إضافة طلبية",
-    calendar: "عرض التقويم",
-    export: "تصدير",
-    tabs: {
-      board: "لوحة التقدم", all: "جميع الطلبيات", calendar: "التقويم",
-      costs: "التكاليف", late: "الطلبيات المتأخرة",
+    filters: {
+      search:
+        "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628\u064a\u0629\u060c \u0627\u0644\u0632\u0628\u0648\u0646 \u0623\u0648 \u0627\u0644\u0645\u0646\u062a\u062c...",
+      allStatus: "\u0643\u0644 \u0627\u0644\u062d\u0627\u0644\u0627\u062a",
+      allPriority:
+        "\u0643\u0644 \u0627\u0644\u0623\u0648\u0644\u0648\u064a\u0627\u062a",
+      deliveryDate:
+        "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u062a\u0633\u0644\u064a\u0645",
+      reset: "\u0645\u0633\u062d \u0627\u0644\u0641\u0644\u0627\u062a\u0631",
+      add: "\u0637\u0644\u0628\u064a\u0629 \u062c\u062f\u064a\u062f\u0629",
     },
-    emptyColumn: "لا توجد طلبيات",
-    estCost: "تكلفة تقديرية",
-    qty: "الكمية",
-    delivery: "التسليم",
-    tableView: "عرض الجدول",
-    tableHint: "عرض تفصيلي لكل الطلبيات في جدول واحد",
-    cols: {
-      number: "رقم الطلبية", customer: "الزبون", product: "المنتج",
-      quantity: "الكمية", delivery: "تاريخ التسليم", stage: "المرحلة الحالية",
-      workers: "العمال", cost: "التكلفة", payment: "حالة الدفع", actions: "إجراءات",
+    listTitle:
+      "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0637\u0644\u0628\u064a\u0627\u062a",
+    listHint:
+      "\u0645\u062a\u0627\u0628\u0639\u0629 \u0645\u0648\u062d\u062f\u0629 \u0645\u0646 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645 \u0625\u0644\u0649 \u0627\u0644\u062a\u0633\u0644\u064a\u0645",
+    empty:
+      "\u0644\u0627 \u062a\u0648\u062c\u062f \u0637\u0644\u0628\u064a\u0627\u062a \u0645\u0637\u0627\u0628\u0642\u0629.",
+    columns: {
+      number: "\u0627\u0644\u0631\u0642\u0645",
+      customer: "\u0627\u0644\u0632\u0628\u0648\u0646",
+      product: "\u0627\u0644\u0645\u0646\u062a\u062c",
+      quantity: "\u0627\u0644\u0643\u0645\u064a\u0629",
+      color: "\u0627\u0644\u0644\u0648\u0646",
+      received: "\u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645",
+      delivery: "\u0627\u0644\u062a\u0633\u0644\u064a\u0645",
+      responsible: "\u0627\u0644\u0645\u0633\u0624\u0648\u0644",
+      status: "\u0627\u0644\u062d\u0627\u0644\u0629",
+      cost: "\u0627\u0644\u062a\u0643\u0644\u0641\u0629",
+      actions: "\u0627\u0644\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
     },
-    panel: {
-      title: "تفاصيل الطلبية",
-      empty: "لم يتم اختيار طلبية",
-      emptyHint: "اختر بطاقة طلبية من اللوحة لعرض تفاصيلها الكاملة هنا.",
-      customer: "الزبون", phone: "الهاتف", product: "نوع المنتج", quantity: "الكمية",
-      sizes: "المقاسات", colors: "الألوان", received: "تاريخ الاستلام", delivery: "تاريخ التسليم",
-      stage: "المرحلة الحالية", deadline: "حالة الموعد", workers: "العمال المكلّفون",
-      materials: "المواد المستعملة", payment: "حالة الدفع", notes: "ملاحظات",
-      timelineTitle: "مسار الإنتاج",
-      costTitle: "تكلفة الطلبية",
-      materialCost: "تكلفة المواد", laborCost: "تكلفة العمال", extraCost: "مصاريف إضافية",
-      totalCost: "التكلفة الإجمالية", margin: "هامش الربح المتوقع",
-      edit: "تعديل الطلبية", changeStage: "تغيير المرحلة", assign: "تعيين عمال",
-      link: "ربط المواد", recordCost: "تسجيل تكلفة", deliver: "تسليم الطلبية",
-      noWorkers: "لم يُعيَّن أي عامل بعد",
+    actions: {
+      view: "\u0639\u0631\u0636 \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644",
+      edit: "\u062a\u0639\u062f\u064a\u0644",
+      status:
+        "\u062a\u063a\u064a\u064a\u0631 \u0627\u0644\u062d\u0627\u0644\u0629",
+      delete: "\u062d\u0630\u0641",
+      confirmDelete:
+        "\u0647\u0644 \u062a\u0631\u064a\u062f \u062d\u0630\u0641 \u0647\u0630\u0647 \u0627\u0644\u0637\u0644\u0628\u064a\u0629\u061f",
     },
-    addModal: {
-      title: "إضافة طلبية جديدة",
-      customer: "اسم الزبون", phone: "رقم الهاتف", product: "نوع المنتج", quantity: "الكمية",
-      sizes: "المقاسات", color: "اللون", received: "تاريخ الاستلام", delivery: "تاريخ التسليم",
-      priority: "الأولوية", price: "السعر المتفق عليه", notes: "ملاحظات",
-      save: "حفظ الطلبية", cancel: "إلغاء",
-    },
-    assignModal: {
-      title: "تعيين العمال للطلبية",
-      order: "اختيار الطلبية", stage: "مرحلة العمل", worker: "اختيار العامل", task: "نوع المهمة",
-      pieces: "عدد القطع المطلوبة", notes: "ملاحظات", save: "حفظ التعيين", cancel: "إلغاء",
-    },
-    linkModal: {
-      title: "ربط المواد بالطلبية",
-      material: "اختيار المادة", qty: "الكمية المستعملة", unit: "الوحدة", unitCost: "تكلفة الوحدة",
-      total: "التكلفة الإجمالية", notes: "ملاحظات", save: "حفظ المواد", cancel: "إلغاء",
-    },
-    stageModal: {
-      title: "تغيير مرحلة الطلبية", stage: "المرحلة", date: "تاريخ التغيير", note: "ملاحظة قصيرة",
-      save: "تحديث المرحلة", cancel: "إلغاء",
-    },
-    showing: "عرض", of: "من", items: "طلبية",
-    calendarSoon: "عرض التقويم قيد التطوير — سيعرض الطلبيات حسب تاريخ التسليم.",
+    currency: "\u062f.\u062c",
   },
   fr: {
-    currency: "DA",
-    breadcrumbHome: "Accueil",
-    breadcrumb: "Gestion de la production et des commandes",
+    home: "Accueil",
+    breadcrumb: "Production et commandes",
     title: "Gestion de la production et des commandes",
     subtitle:
-      "Suivi des commandes et des étapes de production, de la réception à la livraison, avec les ouvriers, les matières et les coûts",
-    summary: {
-      new: "Nouvelles commandes", newHelp: "Commandes non démarrées",
-      prod: "En production", prodHelp: "Commandes en cours de travail",
-      ready: "Prêtes à livrer", readyHelp: "Commandes terminées",
-      late: "Commandes en retard", lateHelp: "Délai de livraison dépassé",
-      cost: "Coût de production ce mois", costHelp: "Total matières et main-d'œuvre",
+      "Suivi des commandes clients, \u00e9tapes de fabrication, ressources utilis\u00e9es et co\u00fbts.",
+    cards: {
+      new: "Nouvelles commandes",
+      production: "En production",
+      ready: "Pr\u00eates \u00e0 livrer",
+      late: "Commandes en retard",
+      cost: "Co\u00fbt production ce mois",
     },
-    search: "Rechercher une commande ou un client...",
-    filtersToggle: "Filtrer",
-    allProducts: "Tous les produits",
-    allStages: "Toutes les étapes",
-    allWorkers: "Tous les ouvriers",
-    allPriorities: "Toutes les priorités",
-    dateLabel: "Date de livraison",
-    addOrder: "Ajouter une commande",
-    calendar: "Vue calendrier",
-    export: "Exporter",
-    tabs: {
-      board: "Tableau de suivi", all: "Toutes les commandes", calendar: "Calendrier",
-      costs: "Coûts", late: "Commandes en retard",
+    filters: {
+      search: "Rechercher par num\u00e9ro, client ou produit...",
+      allStatus: "Tous les \u00e9tats",
+      allPriority: "Toutes les priorit\u00e9s",
+      deliveryDate: "Date de livraison",
+      reset: "R\u00e9initialiser",
+      add: "Nouvelle commande",
     },
-    emptyColumn: "Aucune commande",
-    estCost: "Coût estimé",
-    qty: "Qté",
-    delivery: "Livraison",
-    tableView: "Vue tableau",
-    tableHint: "Vue détaillée de toutes les commandes dans un seul tableau",
-    cols: {
-      number: "N° commande", customer: "Client", product: "Produit",
-      quantity: "Qté", delivery: "Livraison", stage: "Étape actuelle",
-      workers: "Ouvriers", cost: "Coût", payment: "Paiement", actions: "Actions",
+    listTitle: "Liste des commandes",
+    listHint: "Pilotage unifi\u00e9 de la r\u00e9ception \u00e0 la livraison",
+    empty: "Aucune commande ne correspond aux filtres.",
+    columns: {
+      number: "Num\u00e9ro",
+      customer: "Client",
+      product: "Produit",
+      quantity: "Quantit\u00e9",
+      color: "Couleur",
+      received: "R\u00e9ception",
+      delivery: "Livraison",
+      responsible: "Responsable",
+      status: "\u00c9tat",
+      cost: "Co\u00fbt",
+      actions: "Actions",
     },
-    panel: {
-      title: "Détails de la commande",
-      empty: "Aucune commande sélectionnée",
-      emptyHint: "Sélectionnez une carte de commande dans le tableau pour afficher ses détails ici.",
-      customer: "Client", phone: "Téléphone", product: "Type de produit", quantity: "Quantité",
-      sizes: "Tailles", colors: "Couleurs", received: "Date de réception", delivery: "Date de livraison",
-      stage: "Étape actuelle", deadline: "État du délai", workers: "Ouvriers assignés",
-      materials: "Matières utilisées", payment: "État du paiement", notes: "Notes",
-      timelineTitle: "Historique de production",
-      costTitle: "Coût de la commande",
-      materialCost: "Coût matières", laborCost: "Coût main-d'œuvre", extraCost: "Frais annexes",
-      totalCost: "Coût total", margin: "Marge estimée",
-      edit: "Modifier", changeStage: "Changer l'étape", assign: "Assigner",
-      link: "Lier matières", recordCost: "Saisir un coût", deliver: "Livrer",
-      noWorkers: "Aucun ouvrier assigné",
+    actions: {
+      view: "Voir les d\u00e9tails",
+      edit: "Modifier",
+      status: "Changer l'\u00e9tat",
+      delete: "Supprimer",
+      confirmDelete: "Supprimer cette commande ?",
     },
-    addModal: {
-      title: "Ajouter une nouvelle commande",
-      customer: "Nom du client", phone: "Téléphone", product: "Type de produit", quantity: "Quantité",
-      sizes: "Tailles", color: "Couleur", received: "Date de réception", delivery: "Date de livraison",
-      priority: "Priorité", price: "Prix convenu", notes: "Notes",
-      save: "Enregistrer", cancel: "Annuler",
-    },
-    assignModal: {
-      title: "Assigner des ouvriers à la commande",
-      order: "Choisir la commande", stage: "Étape de travail", worker: "Choisir l'ouvrier", task: "Type de tâche",
-      pieces: "Nombre de pièces", notes: "Notes", save: "Enregistrer", cancel: "Annuler",
-    },
-    linkModal: {
-      title: "Lier des matières à la commande",
-      material: "Choisir la matière", qty: "Quantité utilisée", unit: "Unité", unitCost: "Coût unitaire",
-      total: "Coût total", notes: "Notes", save: "Enregistrer", cancel: "Annuler",
-    },
-    stageModal: {
-      title: "Changer l'étape de la commande", stage: "Étape", date: "Date du changement", note: "Note courte",
-      save: "Mettre à jour", cancel: "Annuler",
-    },
-    showing: "Affichage de", of: "sur", items: "commandes",
-    calendarSoon: "Vue calendrier en cours de développement — affichera les commandes par date de livraison.",
+    currency: "DA",
   },
+} as const;
+
+const statusAliases: Record<string, OrderStatusCode> = {
+  NEW: "NEW",
+  CUTTING: "CUTTING",
+  SEWING: "SEWING",
+  IRONING: "IRONING",
+  READY: "READY",
+  DELIVERED: "DELIVERED",
 };
 
-// Re-export palette for convenience in production components.
+export function mapOrder(raw: unknown): OrderListItem {
+  const record = asRecord(raw);
+  const statusCode =
+    statusAliases[getText(record?.statusCode) || getText(record?.stage)] ??
+    "NEW";
+  const priorityCode =
+    getText(record?.priorityCode) === "URGENT" ? "URGENT" : "NORMAL";
+  return {
+    id: getNumber(record?.id),
+    orderNumber: getText(record?.orderNumber) || getText(record?.number) || "-",
+    customerId:
+      record?.customerId == null ? null : getNumber(record.customerId),
+    customer: getText(record?.customer) || getText(record?.customerName) || "-",
+    customerPhone: getText(record?.customerPhone) || getText(record?.phone),
+    product: getText(record?.product) || getText(record?.productType) || "-",
+    quantity: getNumber(record?.quantity),
+    color: getText(record?.color) || getText(record?.colors) || "-",
+    sizes: getText(record?.sizes),
+    receivedDate: getText(record?.receivedDate),
+    deliveryDate: getText(record?.deliveryDate),
+    responsible: getText(record?.responsible) || "-",
+    statusCode,
+    priorityCode,
+    cost: getNumber(record?.cost ?? record?.estimatedCost),
+    finalPrice: getNumber(record?.finalPrice),
+    profit: getNumber(record?.profit),
+    delayed: getBoolean(record?.delayed),
+    notes: getText(record?.notes),
+  };
+}
+
+export function mapDashboard(raw: unknown): DashboardStats {
+  const record = asRecord(raw);
+  return {
+    newOrders: getNumber(record?.newOrders),
+    inProduction: getNumber(record?.inProduction),
+    ready: getNumber(record?.ready),
+    late: getNumber(record?.late),
+    monthlyCost: getNumber(record?.monthlyCost),
+  };
+}
+
+export function mapOrderDetails(raw: unknown): OrderDetails {
+  const record = asRecord(raw);
+  const base = mapOrder(raw);
+  const client = asRecord(record?.client);
+  const product = asRecord(record?.productDetails);
+  const costs = asRecord(record?.costs);
+
+  return {
+    ...base,
+    client: {
+      id: client?.id == null ? null : getNumber(client.id),
+      fullName: getText(client?.fullName) || base.customer,
+      phone: getText(client?.phone) || base.customerPhone,
+      historyUrl: getText(client?.historyUrl) || null,
+    },
+    productDetails: {
+      type: getText(product?.type) || base.product,
+      quantity: getNumber(product?.quantity, base.quantity),
+      colors: getText(product?.colors) || null,
+      sizes: getText(product?.sizes) || null,
+      notes: getText(product?.notes) || null,
+    },
+    workflow: getArrayFromPayload(record?.workflow).map((item) => {
+      const row = asRecord(item);
+      return {
+        statusCode: statusAliases[getText(row?.statusCode)] ?? "NEW",
+        reached: getBoolean(row?.reached),
+        current: getBoolean(row?.current),
+        date: getText(row?.date) || null,
+        responsible: getText(row?.responsible) || null,
+        comment: getText(row?.comment) || null,
+      };
+    }),
+    workers: getArrayFromPayload(record?.workers).map((item) => {
+      const row = asRecord(item);
+      return {
+        id: getNumber(row?.id),
+        workerId: getNumber(row?.workerId),
+        fullName: getText(row?.fullName),
+        role: getText(row?.role),
+        stageCode: statusAliases[getText(row?.stageCode)] ?? "NEW",
+        assignedDate: getText(row?.assignedDate),
+        completedPieces: getNumber(row?.completedPieces),
+        laborCost: getNumber(row?.laborCost),
+        notes: getText(row?.notes) || null,
+      };
+    }),
+    materials: getArrayFromPayload(record?.materials).map((item) => {
+      const row = asRecord(item);
+      return {
+        id: getNumber(row?.id),
+        inventoryItemId:
+          row?.inventoryItemId == null ? null : getNumber(row.inventoryItemId),
+        name: getText(row?.name),
+        quantityUsed: getNumber(row?.quantityUsed),
+        unit: getText(row?.unit),
+        unitCost: getNumber(row?.unitCost),
+        totalCost: getNumber(row?.totalCost),
+        notes: getText(row?.notes) || null,
+      };
+    }),
+    costs: {
+      materialCost: getNumber(costs?.materialCost),
+      laborCost: getNumber(costs?.laborCost),
+      totalCost: getNumber(costs?.totalCost),
+      salePrice: getNumber(costs?.salePrice),
+      profit: getNumber(costs?.profit),
+    },
+  };
+}
+
 export { palette };

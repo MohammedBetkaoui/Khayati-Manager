@@ -1,123 +1,124 @@
-import { FilePlus2, Hammer, PackageCheck, AlarmClockOff, Coins } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { palette, prodText } from "../../pages/production-data";
+import {
+  AlarmClockOff,
+  Coins,
+  FilePlus2,
+  Hammer,
+  PackageCheck,
+  type LucideIcon,
+} from "lucide-react";
 import { useLanguage } from "../../language-context";
+import {
+  palette,
+  productionText,
+  type DashboardStats,
+} from "../../pages/production-data";
 
-type Item = {
+type CardItem = {
   key: string;
   icon: LucideIcon;
   label: string;
   value: string;
-  helper: string;
-  frHelper: string;
+  accent: string;
   tint: string;
-  color: string;
 };
 
-export function SummaryCards({
-  newCount,
-  inProduction,
-  ready,
-  late,
-  monthCost,
-}: {
-  newCount: number;
-  inProduction: number;
-  ready: number;
-  late: number;
-  monthCost: string;
-}) {
+export function SummaryCards({ stats }: { stats: DashboardStats }) {
   const { lang } = useLanguage();
-  const t = prodText[lang].summary;
-  const fr = prodText.fr.summary;
-
-  const items: Item[] = [
+  const text = productionText[lang];
+  const items: CardItem[] = [
     {
       key: "new",
       icon: FilePlus2,
-      label: t.new,
-      value: String(newCount),
-      helper: t.newHelp,
-      frHelper: fr.new,
-      tint: "rgba(107,138,160,0.14)",
-      color: "#5a778c",
+      label: text.cards.new,
+      value: String(stats.newOrders),
+      accent: "#5a778c",
+      tint: "rgba(107,138,160,.14)",
     },
     {
-      key: "prod",
+      key: "production",
       icon: Hammer,
-      label: t.prod,
-      value: String(inProduction),
-      helper: t.prodHelp,
-      frHelper: fr.prod,
-      tint: "rgba(18,60,74,0.08)",
-      color: palette.primary,
+      label: text.cards.production,
+      value: String(stats.inProduction),
+      accent: palette.primary,
+      tint: "rgba(18,60,74,.09)",
     },
     {
       key: "ready",
       icon: PackageCheck,
-      label: t.ready,
-      value: String(ready),
-      helper: t.readyHelp,
-      frHelper: fr.ready,
-      tint: "rgba(77,138,106,0.12)",
-      color: "#4d8a6a",
+      label: text.cards.ready,
+      value: String(stats.ready),
+      accent: "#4d8a6a",
+      tint: "rgba(77,138,106,.13)",
     },
     {
       key: "late",
       icon: AlarmClockOff,
-      label: t.late,
-      value: String(late),
-      helper: t.lateHelp,
-      frHelper: fr.late,
-      tint: "rgba(201,138,134,0.16)",
-      color: "#b46a66",
+      label: text.cards.late,
+      value: String(stats.late),
+      accent: "#b46a66",
+      tint: "rgba(180,106,102,.14)",
     },
     {
       key: "cost",
       icon: Coins,
-      label: t.cost,
-      value: monthCost,
-      helper: t.costHelp,
-      frHelper: fr.cost,
-      tint: "rgba(195,154,91,0.16)",
-      color: "#a87d3c",
+      label: text.cards.cost,
+      value: `${stats.monthlyCost.toLocaleString()} ${text.currency}`,
+      accent: "#a87d3c",
+      tint: "rgba(168,125,60,.14)",
     },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-      {items.map((it) => {
-        const Icon = it.icon;
+      {items.map((item) => {
+        const Icon = item.icon;
         return (
           <div
-            key={it.key}
+            key={item.key}
+            className="animate-in fade-in slide-in-from-bottom-2 duration-300"
             style={{
               backgroundColor: palette.surface,
-              borderRadius: 18,
               border: `1px solid ${palette.border}`,
-              boxShadow: "0 2px 10px -6px rgba(18, 60, 74, 0.12)",
+              borderRadius: 18,
+              boxShadow: "0 8px 24px -20px rgba(18,60,74,.38)",
               padding: 16,
             }}
           >
             <div className="flex items-center gap-3">
               <div
                 className="flex shrink-0 items-center justify-center"
-                style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: it.tint, color: it.color }}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 13,
+                  backgroundColor: item.tint,
+                  color: item.accent,
+                }}
               >
                 <Icon size={20} strokeWidth={1.9} />
               </div>
               <div className="min-w-0">
-                <div style={{ fontSize: 12.5, color: palette.muted, fontWeight: 500 }}>{it.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: palette.text, lineHeight: 1.25 }}>
-                  {it.value}
+                <div
+                  className="truncate"
+                  style={{
+                    color: palette.muted,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                  }}
+                >
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    color: palette.text,
+                    fontSize: item.key === "cost" ? 18 : 23,
+                    fontWeight: 800,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {item.value}
                 </div>
               </div>
-            </div>
-            <div
-              className="mt-3 pt-2.5"
-              style={{ borderTop: `1px solid ${palette.border}`, fontSize: 11.5, color: palette.muted, lineHeight: 1.5 }}
-            >
-              {lang === "ar" ? it.helper : it.frHelper}
             </div>
           </div>
         );

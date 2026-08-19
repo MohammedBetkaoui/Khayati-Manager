@@ -1,123 +1,168 @@
 import { useEffect, useState } from "react";
-import { prodText, stageOrder, stageLabels, taskLabels, type Bilingual, type Order, type StageId } from "../../pages/production-data";
 import { useLanguage } from "../../language-context";
+import { fetchJson } from "../../lib/api";
+import {
+  statusFlow,
+  statusLabels,
+  type OrderStatusCode,
+  type WorkerOption,
+} from "../../pages/production-data";
 import { Button, Field, Select, TextInput } from "../kit";
 import { ModalShell, Textarea } from "./modal-shell";
 
 export function AssignWorkersModal({
   open,
   onClose,
-  defaultOrderId,
-  orders,
+  orderId,
   workers,
+  defaultStage,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
-  defaultOrderId?: string | null;
-  orders: Order[];
-  workers: Bilingual[];
+  orderId: number | null;
+  workers: WorkerOption[];
+  defaultStage: OrderStatusCode;
+  onSaved: () => void | Promise<void>;
 }) {
   const { lang } = useLanguage();
-  const t = prodText[lang].assignModal;
-
-  const [form, setForm] = useState({
-    order: defaultOrderId ?? orders[0]?.id ?? "",
-    stage: "cutting" as StageId,
-    worker: workers[0]?.ar ?? "",
-    task: "cut",
-    pieces: "",
-    notes: "",
-  });
+  const [workerId, setWorkerId] = useState("");
+  const [stage, setStage] = useState<OrderStatusCode>(defaultStage);
+  const [completedPieces, setCompletedPieces] = useState("0");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const labels =
+    lang === "ar"
+      ? {
+          title: "\u0625\u0633\u0646\u0627\u062f \u0639\u0627\u0645\u0644",
+          worker: "\u0627\u0644\u0639\u0627\u0645\u0644",
+          stage: "\u0627\u0644\u0645\u0631\u062d\u0644\u0629",
+          pieces:
+            "\u0627\u0644\u0642\u0637\u0639 \u0627\u0644\u0645\u0646\u062c\u0632\u0629",
+          notes: "\u0645\u0644\u0627\u062d\u0638\u0627\u062a",
+          cancel: "\u0625\u0644\u063a\u0627\u0621",
+          save: "\u0625\u0633\u0646\u0627\u062f",
+        }
+      : {
+          title: "Assigner un travailleur",
+          worker: "Travailleur",
+          stage: "\u00c9tape",
+          pieces: "Pi\u00e8ces termin\u00e9es",
+          notes: "Notes",
+          cancel: "Annuler",
+          save: "Assigner",
+        };
 
   useEffect(() => {
     if (!open) return;
-    setForm((current) => ({
-      ...current,
-      order: defaultOrderId ?? current.order ?? orders[0]?.id ?? "",
-      worker: current.worker || workers[0]?.ar || "",
-    }));
-  }, [defaultOrderId, open, orders, workers]);
+    setWorkerId(workers[0] ? String(workers[0].id) : "");
+    setStage(defaultStage);
+    setCompletedPieces("0");
+    setNotes("");
+    setError(null);
+  }, [defaultStage, open, workers]);
+
+  async function submit() {
+    if (!orderId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await fetchJson(`/orders/${orderId}/workers`, {
+        method: "POST",
+        body: JSON.stringify({
+          workerId: Number(workerId),
+          stage,
+          completedPieces: Number(completedPieces || 0),
+          notes: notes || undefined,
+        }),
+      });
+      await onSaved();
+      onClose();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Unable to assign worker",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <ModalShell open={open} onClose={onClose} title={t.title} maxWidth={520}>
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={labels.title}
+      maxWidth={500}
+    >
       <form
         className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2"
         onSubmit={(event) => {
           event.preventDefault();
-          onClose();
+          void submit();
         }}
       >
-        <div className="sm:col-span-2">
-          <Field label={t.order}>
-            <Select value={form.order} onChange={(event) => setForm({ ...form, order: event.target.value })}>
-              {orders.length === 0 ? (
-                <option value="">{lang === "ar" ? "لا توجد طلبيات" : "Aucune commande"}</option>
-              ) : (
-                orders.map((order) => (
-                  <option key={order.id} value={order.id}>
-                    #{order.number} — {order.customer[lang]}
-                  </option>
-                ))
-              )}
-            </Select>
-          </Field>
-        </div>
-
-        <Field label={t.stage}>
-          <Select value={form.stage} onChange={(event) => setForm({ ...form, stage: event.target.value as StageId })}>
-            {stageOrder.map((stage) => (
-              <option key={stage} value={stage}>
-                {stageLabels[stage][lang]}
+        <Field label={labels.worker}>
+          <Select
+            value={workerId}
+            onChange={(event) => setWorkerId(event.target.value)}
+          >
+            {workers.map((worker) => (
+              <option key={worker.id} value={worker.id}>
+                {worker.fullName} - {worker.role}
               </option>
             ))}
           </Select>
         </Field>
-
-        <Field label={t.worker}>
-          <Select value={form.worker} onChange={(event) => setForm({ ...form, worker: event.target.value })}>
-            {workers.length === 0 ? (
-              <option value="">{lang === "ar" ? "لا يوجد عمال" : "Aucun ouvrier"}</option>
-            ) : (
-              workers.map((worker) => (
-                <option key={worker.ar} value={worker.ar}>
-                  {worker[lang]}
-                </option>
-              ))
-            )}
-          </Select>
-        </Field>
-
-        <Field label={t.task}>
-          <Select value={form.task} onChange={(event) => setForm({ ...form, task: event.target.value })}>
-            {Object.keys(taskLabels).map((task) => (
-              <option key={task} value={task}>
-                {taskLabels[task][lang]}
+        <Field label={labels.stage}>
+          <Select
+            value={stage}
+            onChange={(event) =>
+              setStage(event.target.value as OrderStatusCode)
+            }
+          >
+            {statusFlow.slice(1, -1).map((item) => (
+              <option key={item} value={item}>
+                {statusLabels[item][lang]}
               </option>
             ))}
           </Select>
         </Field>
-
-        <Field label={t.pieces}>
+        <Field label={labels.pieces}>
           <TextInput
+            min="0"
             type="number"
-            value={form.pieces}
-            onChange={(event) => setForm({ ...form, pieces: event.target.value })}
-            placeholder="0"
+            value={completedPieces}
+            onChange={(event) => setCompletedPieces(event.target.value)}
           />
         </Field>
-
         <div className="sm:col-span-2">
-          <Field label={t.notes}>
-            <Textarea rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          <Field label={labels.notes}>
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
           </Field>
         </div>
-
-        <div className="mt-1 flex items-center justify-end gap-3 sm:col-span-2">
+        {error ? (
+          <div
+            className="sm:col-span-2"
+            style={{ color: "#b46a66", fontSize: 12 }}
+          >
+            {error}
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2 sm:col-span-2">
           <Button variant="secondary" onClick={onClose}>
-            {t.cancel}
+            {labels.cancel}
           </Button>
-          <Button variant="primary" type="submit">
-            {t.save}
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={submitting || !workerId || !orderId}
+          >
+            {labels.save}
           </Button>
         </div>
       </form>

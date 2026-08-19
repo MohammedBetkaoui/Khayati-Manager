@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { palette } from "../../pages/production-data";
 import { useLanguage } from "../../language-context";
@@ -17,16 +17,35 @@ export function ModalShell({
   maxWidth?: number;
 }) {
   const { dir } = useLanguage();
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
   if (!open) return null;
 
   return (
     <div
       dir={dir}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(18,60,74,0.28)", backdropFilter: "blur(2px)" }}
+      style={{
+        backgroundColor: "rgba(18,60,74,0.28)",
+        backdropFilter: "blur(2px)",
+      }}
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundColor: palette.surface,
@@ -43,13 +62,25 @@ export function ModalShell({
           className="flex items-center justify-between px-6 py-5"
           style={{ borderBottom: `1px solid ${palette.border}` }}
         >
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>{title}</h2>
+          <h2
+            id={titleId}
+            style={{ fontSize: 18, fontWeight: 800, color: palette.text }}
+          >
+            {title}
+          </h2>
           <button
             type="button"
+            autoFocus
             aria-label="close"
             onClick={onClose}
             className="flex items-center justify-center transition-colors"
-            style={{ width: 34, height: 34, borderRadius: 10, color: palette.muted, border: `1px solid ${palette.border}` }}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              color: palette.muted,
+              border: `1px solid ${palette.border}`,
+            }}
           >
             <X size={18} />
           </button>
@@ -60,7 +91,9 @@ export function ModalShell({
   );
 }
 
-export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+) {
   return (
     <textarea
       {...props}
