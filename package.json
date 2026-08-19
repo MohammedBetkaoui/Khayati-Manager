@@ -1,0 +1,75 @@
+{
+  "name": "khayati-manager",
+  "private": true,
+  "version": "0.0.1",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run start:dev --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "desktop:dev": "concurrently -k -n BACKEND,FRONTEND,ELECTRON -c yellow,cyan,magenta \"npm run start:dev --prefix backend\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:3000 http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "desktop:build": "npm run build:frontend && npm run build:backend && electron-builder"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/mapped-types": "*",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/typeorm": "^11.0.3",
+    "better-sqlite3": "^12.11.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "electron-updater": "^6.6.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^1.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
+    "png-to-ico": "^3.0.2",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.khayati.manager",
+    "productName": "Khayati Manager",
+    "artifactName": "${productName} Setup.${ext}",
+    "compression": "maximum",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "directories": {
+      "output": "installer"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "backend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/assets",
+        "to": "assets"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.ico",
+      "verifyUpdateCodeSignature": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": null,
+    "generateUpdatesFilesForAllChannels": true
+  }
+}
