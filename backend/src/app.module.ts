@@ -12,6 +12,7 @@ import { ReportsModule } from './reports/reports.module';
 import { SalesModule } from './sales/sales.module';
 import { SettingsModule } from './settings/settings.module';
 import { WorkersModule } from './workers/workers.module';
+import { preparePayrollDatabase } from './database/prepare-payroll-database';
 
 const defaultDatabasePath = join(__dirname, '..', 'database', 'khayati.sqlite');
 const configuredDatabasePath = process.env.KHAYATI_DATABASE_PATH;
@@ -25,6 +26,8 @@ const databaseDir = dirname(databasePath);
 if (!existsSync(databaseDir)) {
   mkdirSync(databaseDir, { recursive: true });
 }
+
+preparePayrollDatabase(databasePath);
 
 @Module({
   imports: [

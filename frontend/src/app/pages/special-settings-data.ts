@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BadgePercent,
   BellRing,
   Boxes,
   CalendarCheck,
@@ -31,7 +30,6 @@ export type SettingSectionId =
   | "piecePrices"
   | "workerRoles"
   | "productionStages"
-  | "bonusRules"
   | "attendance"
   | "stockAlerts"
   | "productTypes"
@@ -96,13 +94,6 @@ export type ProductionStage = {
   description: Bilingual;
 };
 
-export type BonusRule = {
-  type: Bilingual;
-  amount: Bilingual;
-  condition: Bilingual;
-  active: boolean;
-};
-
 export type SimpleSetting = {
   label: Bilingual;
   value: Bilingual;
@@ -115,12 +106,12 @@ export const specialSettingsText: Record<Lang, any> = {
     breadcrumb: "إعدادات خاصة",
     title: "إعدادات خاصة",
     subtitle:
-      "تخصيص قواعد العمل داخل الورشة مثل الأجور، مراحل الإنتاج، أسعار القطع، الخصومات والتنبيهات",
+      "تخصيص قواعد العمل داخل الورشة مثل الأجور، مراحل الإنتاج، الخصومات والتنبيهات",
     menuTitle: "أقسام الإعدادات",
     sectionHint: "اختر القسم لتعديل قواعده",
     wagesTitle: "قواعد حساب الأجور",
     wagesSubtitle:
-      "طرق الدفع المفعلة وكيفية احتساب الغياب، التأخر، الإنتاج والمكافآت.",
+      "تحديد نظام الراتب الشهري أو حسب القطعة وطريقة تطبيق الاقتطاعات.",
     supportingTitle: "أقسام جاهزة للتخصيص",
     supportingSubtitle:
       "معاينات سريعة لباقي قواعد الورشة المرتبطة بالأجور والإنتاج.",
@@ -155,13 +146,11 @@ export const specialSettingsText: Record<Lang, any> = {
       base: "الأجر الأساسي",
       days: "عدد أيام العمل",
       pieces: "عدد القطع",
-      bonuses: "المكافآت",
       deductions: "الخصومات",
       net: "صافي الراتب",
       formula: "120 قطعة × 80 دج = 9,600 دج",
-      productionBonus: "مكافأة إنتاج: 1,000 دج",
       absenceDeduction: "خصم غياب: 500 دج",
-      netValue: "10,100 دج",
+      netValue: "9,100 دج",
       saveChanges: "حفظ التغييرات",
       restoreDefaults: "استرجاع الإعدادات الافتراضية",
       testRule: "تجربة قاعدة الحساب",
@@ -203,7 +192,6 @@ export const specialSettingsText: Record<Lang, any> = {
       piecePrices: "أسعار القطع",
       workerRoles: "أدوار العمال",
       productionStages: "مراحل الإنتاج",
-      bonusRules: "الخصومات والمكافآت",
       attendance: "الحضور والغياب",
       stockAlerts: "تنبيهات المخزون",
       productTypes: "أنواع المنتجات",
@@ -217,12 +205,12 @@ export const specialSettingsText: Record<Lang, any> = {
     breadcrumb: "Paramètres spéciaux",
     title: "Paramètres spéciaux",
     subtitle:
-      "Personnaliser les règles internes de l'atelier : salaires, étapes, prix à la pièce, retenues et alertes",
+      "Personnaliser les règles internes de l'atelier : salaires, étapes, retenues et alertes",
     menuTitle: "Sections des paramètres",
     sectionHint: "Choisissez une section pour ajuster ses règles",
     wagesTitle: "Règles de calcul des salaires",
     wagesSubtitle:
-      "Modes de paiement actifs et calcul des absences, retards, production et primes.",
+      "Définir le salaire mensuel ou à la pièce et l’application des retenues.",
     supportingTitle: "Sections prêtes à configurer",
     supportingSubtitle:
       "Aperçu rapide des règles liées aux salaires et à la production.",
@@ -257,13 +245,11 @@ export const specialSettingsText: Record<Lang, any> = {
       base: "Salaire de base",
       days: "Jours travaillés",
       pieces: "Nombre de pièces",
-      bonuses: "Primes",
       deductions: "Retenues",
       net: "Salaire net",
       formula: "120 pièces × 80 DA = 9 600 DA",
-      productionBonus: "Prime production : 1 000 DA",
       absenceDeduction: "Retenue absence : 500 DA",
-      netValue: "10 100 DA",
+      netValue: "9 100 DA",
       saveChanges: "Enregistrer",
       restoreDefaults: "Restaurer les valeurs",
       testRule: "Tester la règle",
@@ -305,7 +291,6 @@ export const specialSettingsText: Record<Lang, any> = {
       piecePrices: "Prix à la pièce",
       workerRoles: "Rôles des travailleurs",
       productionStages: "Étapes de production",
-      bonusRules: "Retenues et primes",
       attendance: "Présence et absence",
       stockAlerts: "Alertes stock",
       productTypes: "Types de produits",
@@ -340,12 +325,6 @@ export const settingsMenu: SettingMenuItem[] = [
     icon: Route,
     label: { ar: "مراحل الإنتاج", fr: "Étapes" },
     subtitle: { ar: "ترتيب سير العمل", fr: "Ordre de production" },
-  },
-  {
-    id: "bonusRules",
-    icon: BadgePercent,
-    label: { ar: "الخصومات والمكافآت", fr: "Primes et retenues" },
-    subtitle: { ar: "قواعد آلية", fr: "Règles actives" },
   },
   {
     id: "attendance",
@@ -429,93 +408,11 @@ export const summaryCards: SummaryCardItem[] = [
 
 export const salaryRules: SalaryRule[] = [
   {
-    id: "daily",
-    title: { ar: "أجر يومي", fr: "Salaire journalier" },
-    description: {
-      ar: "مبلغ ثابت لكل يوم عمل",
-      fr: "Montant fixe par jour travaillé",
-    },
-    active: true,
-    fields: [
-      {
-        id: "daily-enabled",
-        type: "toggle",
-        label: { ar: "تفعيل هذا النوع", fr: "Activer ce type" },
-        value: { ar: "مفعل للعمال المؤقتين", fr: "Activé pour temporaires" },
-        enabled: true,
-      },
-      {
-        id: "daily-value",
-        type: "input",
-        label: { ar: "قيمة اليوم الافتراضية", fr: "Valeur journée par défaut" },
-        value: { ar: "1,800 دج", fr: "1 800 DA" },
-        helper: {
-          ar: "يمكن تغييرها داخل ملف العامل",
-          fr: "Modifiable par travailleur",
-        },
-      },
-      {
-        id: "daily-absence",
-        type: "select",
-        label: {
-          ar: "هل يتم خصم الغياب تلقائياً؟",
-          fr: "Retenir absence automatiquement ?",
-        },
-        value: { ar: "نعم، حسب قيمة اليوم", fr: "Oui, selon la journée" },
-      },
-      {
-        id: "daily-late",
-        type: "select",
-        label: { ar: "هل يتم احتساب التأخر؟", fr: "Calculer les retards ?" },
-        value: { ar: "بعد 15 دقيقة", fr: "Après 15 minutes" },
-      },
-    ],
-  },
-  {
-    id: "weekly",
-    title: { ar: "أجر أسبوعي", fr: "Salaire hebdomadaire" },
-    description: {
-      ar: "يتم حساب الراتب في نهاية كل أسبوع",
-      fr: "Calculé en fin de semaine",
-    },
-    active: true,
-    fields: [
-      {
-        id: "weekly-enabled",
-        type: "toggle",
-        label: { ar: "تفعيل هذا النوع", fr: "Activer ce type" },
-        value: { ar: "مفعل", fr: "Activé" },
-        enabled: true,
-      },
-      {
-        id: "week-start",
-        type: "select",
-        label: { ar: "بداية الأسبوع", fr: "Début de semaine" },
-        value: { ar: "السبت", fr: "Samedi" },
-      },
-      {
-        id: "weekly-value",
-        type: "input",
-        label: {
-          ar: "قيمة الأسبوع الافتراضية",
-          fr: "Valeur semaine par défaut",
-        },
-        value: { ar: "9,500 دج", fr: "9 500 DA" },
-      },
-      {
-        id: "weekly-absence",
-        type: "select",
-        label: { ar: "طريقة التعامل مع الغياب", fr: "Gestion des absences" },
-        value: { ar: "خصم يومي نسبي", fr: "Retenue journalière" },
-      },
-    ],
-  },
-  {
     id: "monthly",
-    title: { ar: "أجر شهري", fr: "Salaire mensuel" },
+    title: { ar: "راتب شهري بدفعات أسبوعية", fr: "Mensuel par tranches hebdomadaires" },
     description: {
-      ar: "راتب ثابت يتم دفعه كل شهر",
-      fr: "Salaire fixe payé chaque mois",
+      ar: "يبقى الراتب الشهري هو الأساس ويقسم إلى دفعات أسبوعية متوازنة",
+      fr: "Le salaire mensuel reste la base et est réparti en tranches hebdomadaires",
     },
     active: true,
     fields: [
@@ -523,26 +420,20 @@ export const salaryRules: SalaryRule[] = [
         id: "monthly-enabled",
         type: "toggle",
         label: { ar: "تفعيل هذا النوع", fr: "Activer ce type" },
-        value: { ar: "مفعل للمشرفين", fr: "Activé pour superviseurs" },
+        value: { ar: "مفعل", fr: "Activé" },
         enabled: true,
       },
       {
-        id: "monthly-pay-day",
+        id: "monthly-installments",
         type: "select",
-        label: { ar: "يوم الدفع الافتراضي", fr: "Jour de paiement" },
-        value: { ar: "آخر يوم في الشهر", fr: "Dernier jour du mois" },
+        label: { ar: "عدد الدفعات المعتاد", fr: "Nombre habituel de tranches" },
+        value: { ar: "4 دفعات", fr: "4 tranches" },
       },
       {
         id: "monthly-value",
         type: "input",
-        label: { ar: "قيمة الراتب الافتراضية", fr: "Salaire mensuel défaut" },
-        value: { ar: "45,000 دج", fr: "45 000 DA" },
-      },
-      {
-        id: "monthly-absence",
-        type: "select",
-        label: { ar: "خصم الغياب", fr: "Retenue absence" },
-        value: { ar: "حسب عدد أيام الشهر", fr: "Selon jours du mois" },
+        label: { ar: "مصدر القيمة", fr: "Source du montant" },
+        value: { ar: "من عقد العامل", fr: "Fiche du travailleur" },
       },
     ],
   },
@@ -563,70 +454,13 @@ export const salaryRules: SalaryRule[] = [
         enabled: true,
       },
       {
-        id: "piece-default-price",
+        id: "piece-period-price",
         type: "input",
-        label: { ar: "سعر القطعة الافتراضي", fr: "Prix pièce par défaut" },
-        value: { ar: "80 دج", fr: "80 DA" },
-      },
-      {
-        id: "piece-product-price",
-        type: "select",
         label: {
-          ar: "هل يختلف السعر حسب نوع المنتج؟",
-          fr: "Prix selon produit ?",
+          ar: "طريقة تحديد السعر",
+          fr: "Saisie du prix",
         },
-        value: { ar: "نعم، من جدول أسعار القطع", fr: "Oui, selon le tableau" },
-      },
-      {
-        id: "piece-target-bonus",
-        type: "select",
-        label: {
-          ar: "هل توجد مكافأة عند تجاوز هدف معين؟",
-          fr: "Prime après objectif ?",
-        },
-        value: { ar: "نعم، بعد 120 قطعة", fr: "Oui, après 120 pièces" },
-      },
-    ],
-  },
-  {
-    id: "mixed",
-    title: { ar: "أجر مختلط", fr: "Salaire mixte" },
-    description: {
-      ar: "راتب ثابت مع مكافأة حسب الإنتاج",
-      fr: "Fixe avec prime selon production",
-    },
-    active: true,
-    fields: [
-      {
-        id: "mixed-enabled",
-        type: "toggle",
-        label: { ar: "تفعيل هذا النوع", fr: "Activer ce type" },
-        value: { ar: "مفعل", fr: "Activé" },
-        enabled: true,
-      },
-      {
-        id: "mixed-base",
-        type: "input",
-        label: { ar: "الراتب الأساسي", fr: "Salaire de base" },
-        value: { ar: "25,000 دج", fr: "25 000 DA" },
-      },
-      {
-        id: "mixed-extra-piece",
-        type: "input",
-        label: { ar: "سعر القطعة الإضافية", fr: "Prix pièce additionnelle" },
-        value: { ar: "50 دج", fr: "50 DA" },
-      },
-      {
-        id: "mixed-target",
-        type: "input",
-        label: { ar: "هدف الإنتاج", fr: "Objectif production" },
-        value: { ar: "100 قطعة", fr: "100 pièces" },
-      },
-      {
-        id: "mixed-bonus",
-        type: "input",
-        label: { ar: "مكافأة تجاوز الهدف", fr: "Prime dépassement" },
-        value: { ar: "1,000 دج", fr: "1 000 DA" },
+        value: { ar: "يُدخل عند كل راتب أسبوعي", fr: "Saisi pour chaque paie" },
       },
     ],
   },
@@ -786,39 +620,6 @@ export const productionStages: ProductionStage[] = [
   },
 ];
 
-export const bonusRules: BonusRule[] = [
-  {
-    type: { ar: "خصم غياب", fr: "Retenue absence" },
-    amount: { ar: "قيمة يوم كامل", fr: "Journée complète" },
-    condition: { ar: "غياب بدون تبرير", fr: "Absence non justifiée" },
-    active: true,
-  },
-  {
-    type: { ar: "خصم تأخر", fr: "Retenue retard" },
-    amount: { ar: "200 دج / ساعة", fr: "200 DA / heure" },
-    condition: { ar: "بعد هامش 15 دقيقة", fr: "Après marge 15 min" },
-    active: true,
-  },
-  {
-    type: { ar: "مكافأة إنتاج", fr: "Prime production" },
-    amount: { ar: "1,000 دج", fr: "1 000 DA" },
-    condition: { ar: "أكثر من 120 قطعة", fr: "Plus de 120 pièces" },
-    active: true,
-  },
-  {
-    type: { ar: "مكافأة جودة", fr: "Prime qualité" },
-    amount: { ar: "5%", fr: "5 %" },
-    condition: { ar: "بدون أخطاء في الشهر", fr: "Aucune erreur mensuelle" },
-    active: true,
-  },
-  {
-    type: { ar: "خصم خطأ في العمل", fr: "Retenue erreur" },
-    amount: { ar: "حسب التكلفة", fr: "Selon coût" },
-    condition: { ar: "تلف قطعة أو إعادة عمل", fr: "Pièce abîmée ou reprise" },
-    active: true,
-  },
-];
-
 export const attendanceSettings: SimpleSetting[] = [
   {
     label: { ar: "وقت بداية العمل", fr: "Début du travail" },
@@ -924,7 +725,6 @@ export const sectionIcons: Record<SettingSectionId, LucideIcon> = {
   piecePrices: Coins,
   workerRoles: UserRound,
   productionStages: Route,
-  bonusRules: BadgePercent,
   attendance: CalendarCheck,
   stockAlerts: BellRing,
   productTypes: Tags,
@@ -936,7 +736,6 @@ export const modalSectionOptions: Bilingual[] = [
   { ar: "الأجور", fr: "Salaires" },
   { ar: "أسعار القطع", fr: "Prix à la pièce" },
   { ar: "الخصومات", fr: "Retenues" },
-  { ar: "المكافآت", fr: "Primes" },
   { ar: "التنبيهات", fr: "Alertes" },
   { ar: "الإنتاج", fr: "Production" },
 ];

@@ -2,19 +2,16 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import {
   AttendanceStatus,
-  PaymentStatus,
   ProductionTaskType,
   SalaryType,
-  WorkerRole,
   WorkerStatus,
 } from '../common/enums';
-import { Payroll } from '../payroll/entities/payroll.entity';
+import { PayrollService } from '../payroll/payroll.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { CreateProductionDto } from './dto/create-production.dto';
 import { CreateWorkerDto } from './dto/create-worker.dto';
@@ -60,7 +57,7 @@ const MAX_LIMIT = 100;
 const PRODUCTIVITY_TARGET = 180;
 
 @Injectable()
-export class WorkersService implements OnModuleInit {
+export class WorkersService {
   constructor(
     @InjectRepository(Worker)
     private readonly workersRepository: Repository<Worker>,
@@ -68,21 +65,18 @@ export class WorkersService implements OnModuleInit {
     private readonly attendanceRepository: Repository<Attendance>,
     @InjectRepository(WorkerProduction)
     private readonly productionRepository: Repository<WorkerProduction>,
-    @InjectRepository(Payroll)
-    private readonly payrollRepository: Repository<Payroll>,
+    private readonly payrollService: PayrollService,
   ) {}
 
-  async onModuleInit() {
-    await this.seedWorkersIfEmpty();
-  }
-
   async create(dto: CreateWorkerDto) {
+    this.validateMonthlySalary(dto.salaryType, dto.monthlySalary ?? 0);
     const worker = this.workersRepository.create({
       fullName: dto.fullName.trim(),
       phone: this.normalizeOptionalText(dto.phone),
       role: dto.role,
       salaryType: dto.salaryType,
-      salaryValue: dto.salaryValue ?? 0,
+      monthlySalary:
+        dto.salaryType === SalaryType.MONTHLY ? (dto.monthlySalary ?? 0) : 0,
       startDate: this.normalizeDate(dto.startDate),
       status: dto.status ?? WorkerStatus.ACTIVE,
       notes: this.normalizeOptionalText(dto.notes),
@@ -99,6 +93,12 @@ export class WorkersService implements OnModuleInit {
     const sortOrder = query.sortOrder ?? 'ASC';
 
     const qb = this.workersRepository.createQueryBuilder('worker');
+
+    if (!query.includeArchived && !query.status) {
+      qb.andWhere('worker.status != :archived', {
+        archived: WorkerStatus.ARCHIVED,
+      });
+    }
 
     if (query.search?.trim()) {
       const search = `%${query.search.trim()}%`;
@@ -157,9 +157,12 @@ export class WorkersService implements OnModuleInit {
       worker.salaryType = dto.salaryType;
     }
 
-    if (dto.salaryValue !== undefined) {
-      worker.salaryValue = dto.salaryValue;
+    if (dto.monthlySalary !== undefined) {
+      worker.monthlySalary = dto.monthlySalary;
     }
+
+    if (worker.salaryType === SalaryType.PIECE) worker.monthlySalary = 0;
+    this.validateMonthlySalary(worker.salaryType, worker.monthlySalary);
 
     if (dto.startDate !== undefined) {
       worker.startDate = this.normalizeDate(dto.startDate);
@@ -167,6 +170,8 @@ export class WorkersService implements OnModuleInit {
 
     if (dto.status !== undefined) {
       worker.status = dto.status;
+      worker.archivedAt =
+        dto.status === WorkerStatus.ARCHIVED ? new Date() : null;
     }
 
     if (dto.notes !== undefined) {
@@ -179,10 +184,12 @@ export class WorkersService implements OnModuleInit {
 
   async remove(id: number) {
     const worker = await this.findWorkerOrFail(id);
-    await this.workersRepository.remove(worker);
+    worker.status = WorkerStatus.ARCHIVED;
+    worker.archivedAt = new Date();
+    await this.workersRepository.save(worker);
 
     return {
-      deleted: true,
+      archived: true,
       id,
     };
   }
@@ -193,7 +200,9 @@ export class WorkersService implements OnModuleInit {
 
     const [totalWorkers, activeWorkers, presentToday, absentToday, piecesRaw] =
       await Promise.all([
-        this.workersRepository.count(),
+        this.workersRepository.count({
+          where: { status: Not(WorkerStatus.ARCHIVED) },
+        }),
         this.workersRepository.count({
           where: { status: WorkerStatus.ACTIVE },
         }),
@@ -230,10 +239,10 @@ export class WorkersService implements OnModuleInit {
 
   async getProfile(id: number) {
     const worker = await this.findWorkerOrFail(id);
-    const [attendanceSummary, productionSummary, lastSalary] = await Promise.all([
+    const [attendanceSummary, productionSummary, financial] = await Promise.all([
       this.getAttendanceSummary(id),
       this.getProductionSummary(id),
-      this.getLastSalary(id),
+      this.payrollService.getWorkerFinancialProfile(id),
     ]);
 
     return {
@@ -243,14 +252,18 @@ export class WorkersService implements OnModuleInit {
         phone: worker.phone,
         role: worker.role,
         salaryType: worker.salaryType,
-        salaryValue: worker.salaryValue,
+        monthlySalary: worker.monthlySalary,
         startDate: worker.startDate,
         status: worker.status,
         notes: worker.notes,
       },
       attendanceSummary,
       productionSummary,
-      lastSalary,
+      financialSummary: financial.summary,
+      payrolls: financial.payrolls,
+      salaryPayments: financial.payments,
+      advances: financial.advances,
+      loans: financial.loans,
     };
   }
 
@@ -348,7 +361,7 @@ export class WorkersService implements OnModuleInit {
 
   async createProduction(workerId: number, dto: CreateProductionDto) {
     const worker = await this.findWorkerOrFail(workerId);
-    const piecePrice = dto.piecePrice ?? worker.salaryValue ?? 0;
+    const piecePrice = dto.piecePrice ?? 0;
 
     const production = this.productionRepository.create({
       worker,
@@ -422,168 +435,6 @@ export class WorkersService implements OnModuleInit {
     return this.serializeProduction(saved, workerId);
   }
 
-  private async seedWorkersIfEmpty() {
-    const existingWorkers = await this.workersRepository.count();
-    if (existingWorkers > 0) {
-      return;
-    }
-
-    const today = new Date();
-    const todayKey = this.toDateKey(today);
-    const yesterdayKey = this.toDateKey(this.shiftDate(today, -1));
-    const twoDaysAgoKey = this.toDateKey(this.shiftDate(today, -2));
-    const fiveDaysAgoKey = this.toDateKey(this.shiftDate(today, -5));
-    const { start, end } = this.currentMonthRange();
-
-    const workers = await this.workersRepository.save([
-      this.workersRepository.create({
-        fullName: 'Ahmed Ben Ali',
-        phone: '0550000000',
-        role: WorkerRole.TAILOR,
-        salaryType: SalaryType.PIECE,
-        salaryValue: 80,
-        startDate: '2026-01-10',
-        status: WorkerStatus.ACTIVE,
-        notes: 'Travailleur modele sur la couture finale.',
-      }),
-      this.workersRepository.create({
-        fullName: 'Fatima Zohra',
-        phone: '0551000000',
-        role: WorkerRole.IRONING,
-        salaryType: SalaryType.DAILY,
-        salaryValue: 2500,
-        startDate: '2026-02-14',
-        status: WorkerStatus.ACTIVE,
-        notes: 'Responsable du controle de finition et du repassage.',
-      }),
-      this.workersRepository.create({
-        fullName: 'Youssef Hamdi',
-        phone: '0552000000',
-        role: WorkerRole.CUTTER,
-        salaryType: SalaryType.WEEKLY,
-        salaryValue: 14000,
-        startDate: '2026-03-03',
-        status: WorkerStatus.ACTIVE,
-        notes: 'Specialise dans la coupe des tissus epais.',
-      }),
-    ]);
-
-    const [ahmed, fatima, youssef] = workers;
-
-    await this.attendanceRepository.save([
-      this.attendanceRepository.create({
-        worker: ahmed,
-        date: todayKey,
-        status: AttendanceStatus.PRESENT,
-        checkIn: '08:00',
-        checkOut: '17:15',
-        lateMinutes: 0,
-        notes: 'Production normale.',
-      }),
-      this.attendanceRepository.create({
-        worker: fatima,
-        date: todayKey,
-        status: AttendanceStatus.LATE,
-        checkIn: '08:25',
-        checkOut: '17:10',
-        lateMinutes: 25,
-        notes: 'Retard du matin signale.',
-      }),
-      this.attendanceRepository.create({
-        worker: youssef,
-        date: todayKey,
-        status: AttendanceStatus.ABSENT,
-        lateMinutes: 0,
-        notes: 'Absence justifiee.',
-      }),
-      this.attendanceRepository.create({
-        worker: ahmed,
-        date: yesterdayKey,
-        status: AttendanceStatus.PRESENT,
-        checkIn: '08:03',
-        checkOut: '17:05',
-        lateMinutes: 3,
-      }),
-      this.attendanceRepository.create({
-        worker: fatima,
-        date: yesterdayKey,
-        status: AttendanceStatus.PRESENT,
-        checkIn: '07:58',
-        checkOut: '17:00',
-        lateMinutes: 0,
-      }),
-      this.attendanceRepository.create({
-        worker: youssef,
-        date: twoDaysAgoKey,
-        status: AttendanceStatus.LATE,
-        checkIn: '08:18',
-        checkOut: '16:55',
-        lateMinutes: 18,
-      }),
-    ]);
-
-    await this.productionRepository.save([
-      this.productionRepository.create({
-        worker: ahmed,
-        date: todayKey,
-        taskType: ProductionTaskType.SEWING,
-        piecesCompleted: 45,
-        piecePrice: 80,
-        totalAmount: this.calculateTotalAmount(45, 80),
-        notes: 'Serie de chemises terminee.',
-      }),
-      this.productionRepository.create({
-        worker: ahmed,
-        date: fiveDaysAgoKey,
-        taskType: ProductionTaskType.SEWING,
-        piecesCompleted: 38,
-        piecePrice: 80,
-        totalAmount: this.calculateTotalAmount(38, 80),
-      }),
-      this.productionRepository.create({
-        worker: fatima,
-        date: yesterdayKey,
-        taskType: ProductionTaskType.IRONING,
-        piecesCompleted: 32,
-        piecePrice: 35,
-        totalAmount: this.calculateTotalAmount(32, 35),
-      }),
-      this.productionRepository.create({
-        worker: youssef,
-        date: twoDaysAgoKey,
-        taskType: ProductionTaskType.CUTTING,
-        piecesCompleted: 54,
-        piecePrice: 40,
-        totalAmount: this.calculateTotalAmount(54, 40),
-      }),
-    ]);
-
-    await this.payrollRepository.save(
-      this.payrollRepository.create({
-        worker: ahmed,
-        periodStart: start,
-        periodEnd: end,
-        salaryType: SalaryType.PIECE,
-        baseSalary: 0,
-        workedDays: 22,
-        absentDays: 1,
-        lateHours: 1.5,
-        piecesCompleted: 83,
-        piecePrice: 80,
-        productionAmount: 6640,
-        bonuses: 1800,
-        deductions: 300,
-        advances: 500,
-        netSalary: 7640,
-        paidAmount: 4000,
-        remainingAmount: 3640,
-        paymentStatus: PaymentStatus.PARTIALLY_PAID,
-        paymentDate: todayKey,
-        notes: 'Paie de demonstration pour le profil worker.',
-      }),
-    );
-  }
-
   private async buildWorkerResponse(worker: Worker) {
     const metrics = await this.getWorkerMetrics([worker.id]);
     return this.serializeWorker(worker, metrics.get(worker.id));
@@ -600,7 +451,7 @@ export class WorkersService implements OnModuleInit {
       phone: worker.phone,
       role: worker.role,
       salaryType: worker.salaryType,
-      salaryValue: worker.salaryValue,
+      monthlySalary: worker.monthlySalary,
       startDate: worker.startDate,
       status: worker.status,
       notes: worker.notes,
@@ -756,24 +607,6 @@ export class WorkersService implements OnModuleInit {
     };
   }
 
-  private async getLastSalary(workerId: number) {
-    const payroll = await this.payrollRepository
-      .createQueryBuilder('payroll')
-      .where('payroll.workerId = :workerId', { workerId })
-      .orderBy('payroll.periodEnd', 'DESC')
-      .addOrderBy('payroll.createdAt', 'DESC')
-      .getOne();
-
-    if (!payroll) {
-      return null;
-    }
-
-    return {
-      amount: payroll.netSalary,
-      status: payroll.paymentStatus,
-    };
-  }
-
   private async findWorkerOrFail(id: number) {
     const worker = await this.workersRepository.findOne({ where: { id } });
     if (!worker) {
@@ -881,7 +714,7 @@ export class WorkersService implements OnModuleInit {
       'phone',
       'role',
       'salaryType',
-      'salaryValue',
+      'monthlySalary',
       'startDate',
       'status',
       'createdAt',
@@ -909,12 +742,6 @@ export class WorkersService implements OnModuleInit {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
-  }
-
-  private shiftDate(base: Date, days: number) {
-    const next = new Date(base);
-    next.setDate(next.getDate() + days);
-    return next;
   }
 
   private currentMonthRange() {
@@ -947,6 +774,14 @@ export class WorkersService implements OnModuleInit {
       qb.andWhere(`${column} <= :endDate`, {
         endDate: this.normalizeDate(filters.endDate),
       });
+    }
+  }
+
+  private validateMonthlySalary(salaryType: SalaryType, amount: number) {
+    if (salaryType === SalaryType.MONTHLY && amount <= 0) {
+      throw new BadRequestException(
+        'A monthly worker must have a monthly salary greater than zero.',
+      );
     }
   }
 }

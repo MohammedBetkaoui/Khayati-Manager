@@ -1,420 +1,103 @@
-import {
-  User,
-  Briefcase,
-  Calendar,
-  CalendarDays,
-  Coins,
-  CheckCircle2,
-  Printer,
-  ArrowDownUp,
-  PlusCircle,
-  X,
-  AlertCircle,
-  Clock,
-  Scissors,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import {
-  palette,
-  salaryText,
-  paymentStatusColors,
-  paymentStatusLabels,
-  salaryTypeLabels,
-  roleLabels,
-} from "../../pages/salary-data";
-import type { PayrollRecord } from "../../pages/salary-data";
+import { Ban, CalendarDays, Coins, HandCoins, Landmark, Wallet, X } from "lucide-react";
 import { useLanguage } from "../../language-context";
+import {
+  money,
+  palette,
+  payrollStatusCode,
+  payrollStatusColors,
+  payrollStatusLabels,
+  salaryTypeCode,
+  salaryTypeLabels,
+  type PayrollRecord,
+} from "../../pages/salary-data";
 import { Badge, Button } from "../kit";
 
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3" style={{ fontSize: 12.5 }}>
-      <span className="flex items-center gap-1.5" style={{ color: palette.muted }}>
-        <Icon size={14} strokeWidth={1.9} />
-        {label}
-      </span>
-      <span style={{ fontWeight: 600, color: palette.text, textAlign: "end" }}>{value}</span>
-    </div>
-  );
-}
-
-function SectionTitle({
-  icon: Icon,
-  children,
-}: {
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-1.5" style={{ marginBottom: 10 }}>
-      <Icon size={14} strokeWidth={2} style={{ color: palette.primary }} />
-      <span style={{ fontSize: 12, fontWeight: 800, color: palette.text, letterSpacing: 0.1 }}>
-        {children}
-      </span>
-    </div>
-  );
-}
-
-function CostLine({
-  label,
-  value,
-  cur,
-  strong,
-  color,
-}: {
-  label: string;
-  value: number;
-  cur: string;
-  strong?: boolean;
-  color?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between" style={{ fontSize: 12.5 }}>
-      <span style={{ color: palette.muted }}>{label}</span>
-      <span style={{ fontWeight: strong ? 800 : 600, color: color ?? palette.text }}>
-        {value.toLocaleString()}{" "}
-        <span style={{ fontSize: 10.5, fontWeight: 600, color: palette.muted }}>{cur}</span>
-      </span>
-    </div>
-  );
+function AmountLine({ label, value, color = palette.text }: { label: string; value: string; color?: string }) {
+  return <div className="flex items-center justify-between gap-4 text-sm"><span style={{ color: palette.muted }}>{label}</span><strong style={{ color }}>{value}</strong></div>;
 }
 
 export function SalaryDetailsBar({
   record,
   onClose,
   onPay,
-  onAdvance,
-  onBonus,
+  onCancel,
 }: {
   record: PayrollRecord;
   onClose: () => void;
   onPay: () => void;
-  onAdvance: () => void;
-  onBonus: () => void;
+  onCancel: () => void;
 }) {
   const { lang } = useLanguage();
-  const t = salaryText[lang];
-  const tp = t.preview;
-  const cur = t.currency;
-
-  const statusColor = paymentStatusColors[record.status];
-  const initials = record.workerName[lang]
-    .split(" ")
-    .slice(0, 2)
-    .map((w: string) => w[0])
-    .join("");
+  const status = payrollStatusCode(record.status);
+  const type = salaryTypeCode(record.salaryType);
 
   return (
-    <div
-      className="relative animate-in fade-in slide-in-from-top-2 duration-200"
+    <section
       style={{
-        backgroundColor: palette.surface,
         borderRadius: 20,
         border: `1px solid ${palette.border}`,
-        boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-        overflow: "hidden",
+        background: `linear-gradient(120deg, ${palette.surface}, ${palette.accent}0a)`,
+        padding: 20,
       }}
     >
-      {/* Top strip: identity + actions */}
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
-        style={{
-          backgroundColor: "rgba(18,60,74,0.04)",
-          borderBottom: `1px solid ${palette.border}`,
-        }}
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Avatar */}
-          <div
-            className="flex items-center justify-center shrink-0"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              backgroundColor: palette.accentSoft,
-              color: palette.accent,
-              fontWeight: 700,
-              fontSize: 14,
-            }}
-          >
-            {initials}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 style={{ color: palette.text, fontSize: 18, fontWeight: 800 }}>{record.workerName}</h2>
+            <Badge bg={`${payrollStatusColors[status]}18`} fg={payrollStatusColors[status]}>{payrollStatusLabels[status][lang]}</Badge>
+            <Badge bg={`${palette.primary}12`} fg={palette.primary}>{salaryTypeLabels[type][lang]}</Badge>
           </div>
-          <span style={{ fontSize: 11.5, color: palette.muted }}>{tp.title}</span>
-          <span
-            style={{ width: 1, height: 22, backgroundColor: palette.border }}
-            className="hidden sm:block"
-          />
-          <span style={{ fontSize: 15, fontWeight: 700, color: palette.text }}>
-            {record.workerName[lang]}
-          </span>
-          <Badge bg={`${palette.primary}12`} fg={palette.primary}>
-            {roleLabels[record.role][lang]}
-          </Badge>
-          <Badge bg={`${palette.accent}1f`} fg={palette.accent}>
-            {salaryTypeLabels[record.salaryType][lang]}
-          </Badge>
-          <Badge bg={`${statusColor}1f`} fg={statusColor} dot={statusColor}>
-            {paymentStatusLabels[record.status][lang]}
-          </Badge>
+          <div className="mt-2 flex items-center gap-2" style={{ color: palette.muted, fontSize: 13 }}><CalendarDays size={15} />{record.periodStart} → {record.periodEnd}</div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={onPay} disabled={record.status === "paid"}>
-            <CheckCircle2 size={15} />
-            {tp.actions.confirmPay}
-          </Button>
-          <Button variant="secondary" onClick={() => {}}>
-            <Printer size={15} />
-            {tp.actions.print}
-          </Button>
-          <Button variant="secondary" onClick={onAdvance}>
-            <ArrowDownUp size={15} />
-            {tp.actions.addAdvance}
-          </Button>
-          <Button variant="secondary" onClick={onBonus}>
-            <PlusCircle size={15} />
-            {tp.actions.addBonus}
-          </Button>
-          <button
-            type="button"
-            aria-label="close"
-            onClick={onClose}
-            className="flex items-center justify-center transition-colors hover:opacity-70"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              color: palette.muted,
-              border: `1px solid ${palette.border}`,
-            }}
-          >
-            <X size={16} />
-          </button>
+        <div className="flex items-center gap-2">
+          {record.remainingAmount > 0 && status !== "cancelled" ? <Button variant="primary" onClick={onPay}><Wallet size={15} />{lang === "ar" ? "تسجيل دفع" : "Enregistrer un paiement"}</Button> : null}
+          {record.paidAmount === 0 && status !== "cancelled" ? <Button variant="secondary" onClick={onCancel}><Ban size={15} />{lang === "ar" ? "إلغاء مسجل" : "Annuler avec trace"}</Button> : null}
+          <button type="button" aria-label="close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ color: palette.muted, border: `1px solid ${palette.border}` }}><X size={17} /></button>
         </div>
       </div>
 
-      {/* Columns grid */}
-      <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 xl:grid-cols-4">
-        {/* Col 1: Worker identity */}
-        <div
-          className="flex flex-col gap-2.5 xl:border-e xl:pe-5"
-          style={{ borderColor: palette.border }}
-        >
-          <SectionTitle icon={User}>{tp.workerName}</SectionTitle>
-          <InfoRow icon={User} label={tp.workerName} value={record.workerName[lang]} />
-          <InfoRow
-            icon={Briefcase}
-            label={tp.role}
-            value={
-              <Badge bg={`${palette.primary}12`} fg={palette.primary}>
-                {roleLabels[record.role][lang]}
-              </Badge>
-            }
-          />
-          <InfoRow
-            icon={Coins}
-            label={tp.type}
-            value={
-              <Badge bg={`${palette.accent}1f`} fg={palette.accent}>
-                {salaryTypeLabels[record.salaryType][lang]}
-              </Badge>
-            }
-          />
-          <InfoRow icon={Calendar} label={tp.period} value={record.period} />
-          {record.paymentDate && (
-            <InfoRow
-              icon={CalendarDays}
-              label={tp.payDate}
-              value={<span style={{ direction: "ltr" }}>{record.paymentDate}</span>}
-            />
-          )}
-        </div>
-
-        {/* Col 2: Work statistics */}
-        <div
-          className="flex flex-col gap-2.5 xl:border-e xl:pe-5"
-          style={{ borderColor: palette.border }}
-        >
-          <SectionTitle icon={CalendarDays}>{tp.workDays}</SectionTitle>
-          <InfoRow
-            icon={CalendarDays}
-            label={tp.workDays}
-            value={
-              <span style={{ fontWeight: 700 }}>
-                {record.workDays}{" "}
-                <span style={{ fontSize: 11, fontWeight: 500, color: palette.muted }}>
-                  {lang === "ar" ? "يوم" : "j"}
-                </span>
-              </span>
-            }
-          />
-          <InfoRow
-            icon={AlertCircle}
-            label={tp.absentDays}
-            value={
-              <span style={{ fontWeight: 700, color: record.absentDays > 0 ? "#b46a66" : palette.text }}>
-                {record.absentDays}{" "}
-                <span style={{ fontSize: 11, fontWeight: 500, color: palette.muted }}>
-                  {lang === "ar" ? "يوم" : "j"}
-                </span>
-              </span>
-            }
-          />
-          <InfoRow
-            icon={Clock}
-            label={tp.lateHours}
-            value={
-              <span style={{ fontWeight: 700, color: record.lateHours > 0 ? "#a87d3c" : palette.text }}>
-                {record.lateHours}{" "}
-                <span style={{ fontSize: 11, fontWeight: 500, color: palette.muted }}>
-                  {lang === "ar" ? "س" : "h"}
-                </span>
-              </span>
-            }
-          />
-          {(record.salaryType === "piece" || record.salaryType === "mixed") && (
-            <>
-              <InfoRow
-                icon={Scissors}
-                label={tp.piecesCount}
-                value={
-                  <span style={{ fontWeight: 700 }}>
-                    {record.piecesCount}{" "}
-                    <span style={{ fontSize: 11, fontWeight: 500, color: palette.muted }}>
-                      {lang === "ar" ? "قطعة" : "pcs"}
-                    </span>
-                  </span>
-                }
-              />
-              <InfoRow
-                icon={Coins}
-                label={tp.pieceRate}
-                value={
-                  <span style={{ fontWeight: 700 }}>
-                    {record.pieceRate}{" "}
-                    <span style={{ fontSize: 10.5, fontWeight: 500, color: palette.muted }}>{cur}</span>
-                  </span>
-                }
-              />
-            </>
-          )}
-        </div>
-
-        {/* Col 3: Financial breakdown */}
-        <div
-          className="flex flex-col gap-1.5 xl:border-e xl:pe-5"
-          style={{ borderColor: palette.border }}
-        >
-          <SectionTitle icon={Coins}>{tp.netSalary}</SectionTitle>
-          <CostLine label={tp.baseSalary} value={record.baseSalary} cur={cur} />
-          {record.bonuses > 0 && (
-            <CostLine label={`${tp.bonus} (+)`} value={record.bonuses} cur={cur} color="#4d8a6a" />
-          )}
-          {record.deductions > 0 && (
-            <CostLine label={`${tp.deduction} (−)`} value={record.deductions} cur={cur} color="#b46a66" />
-          )}
-          {record.advances > 0 && (
-            <CostLine label={`${tp.advance} (−)`} value={record.advances} cur={cur} color="#a87d3c" />
-          )}
-          <div style={{ height: 1, backgroundColor: palette.borderStrong, margin: "4px 0" }} />
-          <CostLine
-            label={tp.netSalary}
-            value={record.netSalary}
-            cur={cur}
-            strong
-            color={palette.primary}
-          />
-          <div style={{ height: 1, backgroundColor: palette.border, margin: "4px 0" }} />
-          <CostLine
-            label={lang === "ar" ? "المدفوع" : "Payé"}
-            value={record.paidAmount}
-            cur={cur}
-            color="#4d8a6a"
-          />
-          <CostLine
-            label={lang === "ar" ? "المتبقي" : "Reste"}
-            value={record.netSalary - record.paidAmount}
-            cur={cur}
-            strong
-            color={record.netSalary - record.paidAmount > 0 ? "#b46a66" : palette.muted}
-          />
-        </div>
-
-        {/* Col 4: Status + notes */}
-        <div className="flex flex-col gap-3">
-          <SectionTitle icon={CheckCircle2}>{tp.status}</SectionTitle>
-
-          <div
-            className="flex items-center justify-between rounded-lg p-3"
-            style={{
-              backgroundColor: `${statusColor}10`,
-              border: `1px solid ${statusColor}30`,
-            }}
-          >
-            <span style={{ fontSize: 13, color: palette.muted }}>{tp.status}</span>
-            <Badge bg={`${statusColor}1f`} fg={statusColor} dot={statusColor}>
-              {paymentStatusLabels[record.status][lang]}
-            </Badge>
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl p-4" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+          <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><Coins size={16} color={palette.accent} />{lang === "ar" ? "أساس الحساب" : "Base du calcul"}</div>
+          <div className="space-y-2.5">
+            {type === "monthly" ? (
+              <>
+                <AmountLine label={lang === "ar" ? "الراتب الشهري" : "Salaire mensuel"} value={money(record.monthlySalary, lang)} />
+                <AmountLine label={lang === "ar" ? "الدفعة" : "Tranche"} value={`${record.installmentNumber}/${record.installmentsInMonth}`} />
+              </>
+            ) : (
+              <>
+                <AmountLine label={lang === "ar" ? "القطع" : "Pièces"} value={record.piecesCompleted.toLocaleString()} />
+                <AmountLine label={lang === "ar" ? "سعر القطعة" : "Prix par pièce"} value={money(record.piecePrice, lang)} />
+              </>
+            )}
+            <AmountLine label={lang === "ar" ? "المبلغ المحسوب" : "Montant calculé"} value={money(record.grossAmount, lang)} color={palette.primary} />
           </div>
+        </div>
 
-          {record.advances > 0 && (
-            <div
-              className="flex items-start gap-2 rounded-lg p-2.5"
-              style={{
-                backgroundColor: "rgba(168,125,60,0.08)",
-                border: `1px solid rgba(168,125,60,0.2)`,
-                fontSize: 12,
-                color: "#a87d3c",
-              }}
-            >
-              <AlertCircle size={13} className="mt-0.5 shrink-0" />
-              <span>{t.alerts.adv}</span>
-            </div>
-          )}
+        <div className="rounded-2xl p-4" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+          <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><HandCoins size={16} color="#c07d4f" />{lang === "ar" ? "الاقتطاعات الموثقة" : "Retenues tracées"}</div>
+          <div className="space-y-2.5">
+            <AmountLine label={lang === "ar" ? "خصم السلف" : "Avances déduites"} value={money(record.advanceDeduction, lang)} />
+            <AmountLine label={lang === "ar" ? "خصم القروض" : "Prêts remboursés"} value={money(record.loanDeduction, lang)} />
+            <AmountLine label={lang === "ar" ? "اقتطاعات أخرى" : "Autres retenues"} value={money(record.otherDeductions, lang)} />
+            <AmountLine label={lang === "ar" ? "الصافي المستحق" : "Net dû"} value={money(record.amountDue, lang)} color="#a87d3c" />
+          </div>
+        </div>
 
-          {record.absentDays > 0 && (
-            <div
-              className="flex items-start gap-2 rounded-lg p-2.5"
-              style={{
-                backgroundColor: "rgba(180,106,102,0.08)",
-                border: `1px solid rgba(180,106,102,0.2)`,
-                fontSize: 12,
-                color: "#b46a66",
-              }}
-            >
-              <AlertCircle size={13} className="mt-0.5 shrink-0" />
-              <span>{t.alerts.absReview}</span>
+        <div className="rounded-2xl p-4" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+          <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><Landmark size={16} color="#4f6a99" />{lang === "ar" ? "سجل الدفع" : "Règlements"}</div>
+          {record.payments?.length ? (
+            <div className="space-y-2">
+              {record.payments.map((payment) => (
+                <div key={payment.id} className="flex items-center justify-between gap-3 text-sm"><span style={{ color: palette.muted }}>{payment.date} · {payment.method}</span><strong style={{ color: "#4d8a6a" }}>{money(payment.amount, lang)}</strong></div>
+              ))}
             </div>
-          )}
-
-          {record.notes[lang] ? (
-            <div>
-              <div style={{ fontSize: 11, color: palette.muted, marginBottom: 4 }}>{tp.notes}</div>
-              <div
-                style={{
-                  backgroundColor: palette.bg,
-                  borderRadius: 10,
-                  border: `1px solid ${palette.border}`,
-                  padding: "8px 10px",
-                  fontSize: 11.5,
-                  color: palette.text,
-                  lineHeight: 1.55,
-                }}
-              >
-                {record.notes[lang]}
-              </div>
-            </div>
-          ) : null}
+          ) : <p className="text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "لم يسجل أي دفع بعد." : "Aucun paiement enregistré."}</p>}
+          <div className="mt-3 border-t pt-3" style={{ borderColor: palette.border }}><AmountLine label={lang === "ar" ? "الباقي" : "Reste"} value={money(record.remainingAmount, lang)} color={record.remainingAmount > 0 ? "#b46a66" : "#4d8a6a"} /></div>
         </div>
       </div>
-    </div>
+      {record.notes ? <p className="mt-4 text-sm" style={{ color: palette.muted }}>{record.notes}</p> : null}
+    </section>
   );
 }

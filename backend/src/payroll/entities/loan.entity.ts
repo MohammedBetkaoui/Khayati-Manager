@@ -7,26 +7,27 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AdvanceType, BalanceStatus } from '../../common/enums';
+import { LoanStatus } from '../../common/enums';
 import { Worker } from '../../workers/entities/worker.entity';
-import { PayrollAdvanceDeduction } from './payroll-advance-deduction.entity';
+import { LoanRepayment } from './loan-repayment.entity';
+import { PayrollLoanDeduction } from './payroll-loan-deduction.entity';
 
-@Entity('advances')
-export class Advance {
+@Entity('worker_loans')
+export class Loan {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @ManyToOne(() => Worker, (worker) => worker.advances, {
+  @ManyToOne(() => Worker, (worker) => worker.loans, {
     nullable: false,
     onDelete: 'RESTRICT',
   })
   worker!: Worker;
 
   @Column({ type: 'real' })
-  amount!: number;
+  initialAmount!: number;
 
   @Column({ type: 'real', default: 0 })
-  deductedAmount!: number;
+  repaidAmount!: number;
 
   @Column({ type: 'real' })
   remainingAmount!: number;
@@ -34,17 +35,17 @@ export class Advance {
   @Column({ type: 'date' })
   date!: string;
 
-  @Column({ type: 'simple-enum', enum: AdvanceType, default: AdvanceType.SALARY })
-  type!: AdvanceType;
-
-  @Column({ type: 'simple-enum', enum: BalanceStatus, default: BalanceStatus.OPEN })
-  status!: BalanceStatus;
+  @Column({ type: 'simple-enum', enum: LoanStatus, default: LoanStatus.OPEN })
+  status!: LoanStatus;
 
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 
-  @OneToMany(() => PayrollAdvanceDeduction, (item) => item.advance)
-  deductions!: PayrollAdvanceDeduction[];
+  @OneToMany(() => LoanRepayment, (repayment) => repayment.loan)
+  repayments!: LoanRepayment[];
+
+  @OneToMany(() => PayrollLoanDeduction, (item) => item.loan)
+  payrollDeductions!: PayrollLoanDeduction[];
 
   @CreateDateColumn()
   createdAt!: Date;

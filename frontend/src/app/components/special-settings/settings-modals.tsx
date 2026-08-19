@@ -51,7 +51,7 @@ export function AddRuleModal({
         <Field label={t.ruleName}>
           <TextInput
             placeholder={
-              lang === "ar" ? "مثال: مكافأة جودة" : "Ex : Prime qualité"
+              lang === "ar" ? "مثال: خصم غياب" : "Ex : Retenue absence"
             }
           />
         </Field>
@@ -64,8 +64,8 @@ export function AddRuleModal({
           <TextInput
             placeholder={
               lang === "ar"
-                ? "مكافأة / خصم / تنبيه"
-                : "Prime / retenue / alerte"
+                ? "خصم / تنبيه"
+                : "Retenue / alerte"
             }
           />
         </Field>

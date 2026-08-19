@@ -60,6 +60,10 @@ export class WorkerFilterDto {
   sortBy?: string;
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  includeArchived?: boolean;
+
+  @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.toUpperCase() : value,
   )

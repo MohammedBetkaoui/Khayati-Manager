@@ -39,7 +39,7 @@ export class CreateWorkerDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  salaryValue?: number;
+  monthlySalary?: number;
 
   @IsDateString()
   startDate!: string;

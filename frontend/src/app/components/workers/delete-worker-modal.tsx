@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import { Archive, X } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
 import { Button } from "../kit";
@@ -16,13 +16,13 @@ export function DeleteWorkerModal({
   const { lang, dir } = useLanguage();
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const title = lang === "ar" ? "تأكيد الحذف" : "Confirmer la suppression";
+  const title = lang === "ar" ? "تأكيد الأرشفة" : "Confirmer l’archivage";
   const desc =
     lang === "ar"
-      ? "هل أنت متأكد أنك تريد حذف هذا العامل؟ لا يمكن التراجع عن هذا الإجراء."
-      : "Êtes-vous sûr de vouloir supprimer ce travailleur ? Cette action est irréversible.";
+      ? "سيختفي العامل من القائمة النشطة مع الاحتفاظ بملفه وكامل تاريخه المالي."
+      : "Le travailleur quittera la liste active, mais son profil et tout son historique financier seront conservés.";
   const cancel = lang === "ar" ? "إلغاء" : "Annuler";
-  const confirm = lang === "ar" ? "حذف" : "Supprimer";
+  const confirm = lang === "ar" ? "أرشفة" : "Archiver";
 
   if (!open) return null;
 
@@ -47,7 +47,7 @@ export function DeleteWorkerModal({
       >
         <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: `1px solid ${palette.border}` }}>
           <h2 className="flex items-center gap-2" style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>
-            <Trash2 size={20} color={palette.rose} />
+            <Archive size={20} color={palette.rose} />
             {title}
           </h2>
           <button
@@ -92,7 +92,7 @@ export function DeleteWorkerModal({
                 cursor: "pointer",
               }}
             >
-              {isDeleting ? (lang === "ar" ? "جاري الحذف..." : "Suppression...") : confirm}
+              {isDeleting ? (lang === "ar" ? "جاري الأرشفة..." : "Archivage...") : confirm}
             </button>
           </div>
         </div>

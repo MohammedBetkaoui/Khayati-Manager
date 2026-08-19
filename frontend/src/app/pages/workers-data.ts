@@ -9,8 +9,8 @@ export type RoleId =
   | "seller"
   | "supervisor";
 
-export type SalaryId = "daily" | "weekly" | "monthly" | "piece" | "mixed";
-export type StatusId = "active" | "leave" | "stopped";
+export type SalaryId = "monthly" | "piece";
+export type StatusId = "active" | "leave" | "inactive" | "archived";
 
 type Bilingual = { ar: string; fr: string };
 
@@ -35,23 +35,22 @@ export const roleColors: Record<RoleId, { bg: string; fg: string }> = {
 };
 
 export const salaryLabels: Record<SalaryId, Bilingual> = {
-  daily: { ar: "يومي", fr: "Journalier" },
-  weekly: { ar: "أسبوعي", fr: "Hebdomadaire" },
   monthly: { ar: "شهري", fr: "Mensuel" },
   piece: { ar: "حسب القطعة", fr: "À la pièce" },
-  mixed: { ar: "مختلط", fr: "Mixte" },
 };
 
 export const statusLabels: Record<StatusId, Bilingual> = {
   active: { ar: "نشط", fr: "Actif" },
   leave: { ar: "في عطلة", fr: "En congé" },
-  stopped: { ar: "متوقف", fr: "Arrêté" },
+  inactive: { ar: "غير نشط", fr: "Inactif" },
+  archived: { ar: "مؤرشف", fr: "Archivé" },
 };
 
 export const statusColors: Record<StatusId, string> = {
   active: "#4d8a6a",
   leave: "#c39a5b",
-  stopped: "#b46a66",
+  inactive: "#b46a66",
+  archived: "#6b6a62",
 };
 
 export type Attendance = "present" | "absent";
@@ -63,7 +62,7 @@ export type Worker = {
   phone: string;
   startDate: string;
   salaryType: SalaryId;
-  salaryValue?: number;
+  monthlySalary?: number;
   salaryRate: Bilingual;
   attendance: Attendance;
   pieces: number;
@@ -114,14 +113,14 @@ export const ar = {
   view: "عرض",
   edit: "تعديل",
   notes: "ملاحظات",
-  delete: "حذف",
+  delete: "أرشفة",
   emptyPanelTitle: "لم يتم اختيار عامل",
   emptyPanelText: "اختر عاملاً من القائمة لعرض تفاصيله الكاملة.",
   panel: {
     phone: "رقم الهاتف",
     start: "تاريخ البداية",
     salaryType: "نوع الأجر",
-    salaryRate: "قيمة الأجر",
+    salaryRate: "الراتب الشهري",
     attendance: "ملخص الحضور",
     pieces: "إجمالي القطع",
     performance: "مستوى الأداء",
@@ -146,7 +145,7 @@ export const ar = {
     role: "الوظيفة",
     startDate: "تاريخ بداية العمل",
     salaryType: "نوع الأجر",
-    salaryRate: "قيمة الأجر",
+    salaryRate: "الراتب الشهري",
     notes: "ملاحظات",
     status: "الحالة",
     save: "حفظ",
@@ -200,14 +199,14 @@ export const fr: typeof ar = {
   view: "Voir",
   edit: "Modifier",
   notes: "Notes",
-  delete: "Supprimer",
+  delete: "Archiver",
   emptyPanelTitle: "Aucun travailleur sélectionné",
   emptyPanelText: "Sélectionnez un travailleur dans la liste pour voir ses détails.",
   panel: {
     phone: "Téléphone",
     start: "Date de début",
     salaryType: "Type de salaire",
-    salaryRate: "Montant du salaire",
+    salaryRate: "Salaire mensuel",
     attendance: "Résumé de présence",
     pieces: "Total des pièces",
     performance: "Niveau de performance",
@@ -232,7 +231,7 @@ export const fr: typeof ar = {
     role: "Poste",
     startDate: "Date de début",
     salaryType: "Type de salaire",
-    salaryRate: "Montant du salaire",
+    salaryRate: "Salaire mensuel",
     notes: "Notes",
     status: "Statut",
     save: "Enregistrer",

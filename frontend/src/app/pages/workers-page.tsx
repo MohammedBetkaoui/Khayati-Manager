@@ -35,7 +35,7 @@ type ApiWorker = {
   phone?: string | null;
   role: string;
   salaryType: string;
-  salaryValue?: number | string | null;
+  monthlySalary?: number | string | null;
   startDate?: string | null;
   status?: string | null;
   notes?: string | null;
@@ -103,11 +103,8 @@ const roleFromApi = Object.fromEntries(
 ) as Record<string, RoleId>;
 
 const salaryToApi: Record<SalaryId, string> = {
-  daily: "يومي",
-  weekly: "أسبوعي",
   monthly: "شهري",
   piece: "حسب القطعة",
-  mixed: "مختلط",
 };
 
 const salaryFromApi = Object.fromEntries(
@@ -117,7 +114,8 @@ const salaryFromApi = Object.fromEntries(
 const statusToApi: Record<StatusId, string> = {
   active: "نشط",
   leave: "في عطلة",
-  stopped: "متوقف",
+  inactive: "غير نشط",
+  archived: "مؤرشف",
 };
 
 const statusFromApi = Object.fromEntries(
@@ -131,11 +129,8 @@ const attendanceToApi: Record<AttendanceForm["status"], ApiAttendanceStatus> = {
 };
 
 const salaryUnits: Record<SalaryId, { ar: string; fr: string }> = {
-  daily: { ar: "يوم", fr: "jour" },
-  weekly: { ar: "أسبوع", fr: "semaine" },
   monthly: { ar: "شهر", fr: "mois" },
-  piece: { ar: "قطعة", fr: "pièce" },
-  mixed: { ar: "أساسي", fr: "base" },
+  piece: { ar: "متغير حسب الأسبوع", fr: "variable par semaine" },
 };
 
 function numeric(value: unknown) {
@@ -149,6 +144,12 @@ function parseSalaryValue(value: string) {
 }
 
 function formatSalaryRate(salaryType: SalaryId, value: unknown) {
+  if (salaryType === "piece") {
+    return {
+      ar: "السعر يحدد عند كل راتب",
+      fr: "Prix défini à chaque paie",
+    };
+  }
   const amount = numeric(value).toLocaleString("fr-DZ");
   const unit = salaryUnits[salaryType];
   return {
@@ -163,7 +164,7 @@ function mapApiWorker(worker: ApiWorker): Worker {
   const status = statusFromApi[worker.status ?? ""] ?? "active";
   const attendanceStatus = worker.attendanceStatusToday ?? "";
   const totalPieces = numeric(worker.totalPiecesCompleted);
-  const salaryValue = numeric(worker.salaryValue);
+  const monthlySalary = numeric(worker.monthlySalary);
 
   return {
     id: String(worker.id),
@@ -172,8 +173,8 @@ function mapApiWorker(worker: ApiWorker): Worker {
     phone: worker.phone ?? "",
     startDate: worker.startDate ? worker.startDate.slice(0, 10) : "-",
     salaryType,
-    salaryValue,
-    salaryRate: formatSalaryRate(salaryType, salaryValue),
+    monthlySalary,
+    salaryRate: formatSalaryRate(salaryType, monthlySalary),
     attendance: attendanceStatus === "حاضر" || attendanceStatus === "متأخر" ? "present" : "absent",
     pieces: totalPieces,
     productivity: Math.max(0, Math.min(100, Math.round(numeric(worker.productivityPercent)))),
@@ -192,7 +193,7 @@ function workerToForm(worker: Worker): AddWorkerForm {
     role: worker.role,
     startDate: worker.startDate === "-" ? "" : worker.startDate,
     salaryType: worker.salaryType,
-    salaryRate: String(worker.salaryValue ?? parseSalaryValue(worker.salaryRate.ar)),
+    monthlySalary: String(worker.monthlySalary ?? parseSalaryValue(worker.salaryRate.ar)),
     notes: worker.note.ar === "لا توجد ملاحظات" ? "" : worker.note.ar,
     status: worker.status,
   };
@@ -204,7 +205,8 @@ function workerPayloadFromForm(form: AddWorkerForm) {
     phone: form.phone.trim(),
     role: roleToApi[form.role],
     salaryType: salaryToApi[form.salaryType],
-    salaryValue: parseSalaryValue(form.salaryRate),
+    monthlySalary:
+      form.salaryType === "monthly" ? parseSalaryValue(form.monthlySalary) : 0,
     startDate: form.startDate,
     status: statusToApi[form.status],
     notes: form.notes.trim(),

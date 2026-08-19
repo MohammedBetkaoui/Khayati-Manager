@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { WorkerProduction } from '../workers/entities/worker-production.entity';
 import { Worker } from '../workers/entities/worker.entity';
 import { Advance } from './entities/advance.entity';
-import { BonusDeduction } from './entities/bonus-deduction.entity';
+import { LoanRepayment } from './entities/loan-repayment.entity';
+import { Loan } from './entities/loan.entity';
+import { PayrollAdvanceDeduction } from './entities/payroll-advance-deduction.entity';
+import { PayrollLoanDeduction } from './entities/payroll-loan-deduction.entity';
 import { Payroll } from './entities/payroll.entity';
+import { SalaryPayment } from './entities/salary-payment.entity';
 import { PayrollService } from './payroll.service';
 import { PayrollController } from './payroll.controller';
 
@@ -13,12 +16,16 @@ import { PayrollController } from './payroll.controller';
     TypeOrmModule.forFeature([
       Payroll,
       Advance,
-      BonusDeduction,
+      SalaryPayment,
+      Loan,
+      LoanRepayment,
+      PayrollAdvanceDeduction,
+      PayrollLoanDeduction,
       Worker,
-      WorkerProduction,
     ]),
   ],
   controllers: [PayrollController],
   providers: [PayrollService],
+  exports: [PayrollService],
 })
 export class PayrollModule {}

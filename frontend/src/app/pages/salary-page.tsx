@@ -1,324 +1,166 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Info, UserRound } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, CalendarRange, ChevronLeft, ChevronRight, HandCoins, Landmark, Plus, Search, UserRound } from "lucide-react";
 import { useNavigate } from "react-router";
+import { Button, Select, TextInput } from "../components/kit";
 import { PageBackground } from "../components/page-background";
-import { useLanguage } from "../language-context";
-import { palette, salaryText, type PayrollRecord, type PaymentStatus, type SalaryType, type WorkerRole } from "./salary-data";
-import { Button } from "../components/kit";
-import { SummaryCards } from "../components/salary/summary-cards";
 import { PayrollTable } from "../components/salary/payroll-table";
 import { SalaryDetailsBar } from "../components/salary/salary-details-bar";
-import {
-  CalculateSalaryModal,
-  AdvanceModal,
-  BonusDeductionModal,
-  PaymentModal,
-} from "../components/salary/salary-modals";
-import { asRecord, fetchJson, getArrayFromPayload, getNumber, getText } from "../lib/api";
+import { SummaryCards } from "../components/salary/summary-cards";
+import { AdvanceModal, CalculateSalaryModal, LoanModal, PaymentModal } from "../components/salary/salary-modals";
+import { useLanguage } from "../language-context";
+import { fetchJson, getArrayFromPayload } from "../lib/api";
+import { palette, type DashboardStats, type PayrollRecord, type WorkerOption } from "./salary-data";
 
-const roleMap: Record<string, WorkerRole> = {
-  TAILOR: "tailor",
-  ASSISTANT: "assistant",
-  CUTTER: "cutter",
-  IRONING: "ironer",
-  PACKAGING: "packer",
-  SELLER: "seller",
-  SUPERVISOR: "supervisor",
-  "خياط": "tailor",
-  "مساعد": "assistant",
-  "قاطع قماش": "cutter",
-  "مسؤول كي": "ironer",
-  "مسؤول تغليف": "packer",
-  "بائع": "seller",
-  "مشرف": "supervisor",
-};
+const emptyStats: DashboardStats = { activeWorkers: 0, salariesDueThisWeek: 0, paidThisWeek: 0, remainingToPay: 0, activeAdvances: 0, activeLoans: 0 };
 
-const salaryTypeMap: Record<string, SalaryType> = {
-  DAILY: "daily",
-  WEEKLY: "weekly",
-  MONTHLY: "monthly",
-  PIECE: "piece",
-  MIXED: "mixed",
-  "يومي": "daily",
-  "أسبوعي": "weekly",
-  "شهري": "monthly",
-  "حسب القطعة": "piece",
-  "مختلط": "mixed",
-};
-
-const paymentStatusMap: Record<string, PaymentStatus> = {
-  PAID: "paid",
-  PARTIAL: "partial",
-  PARTIALLY_PAID: "partial",
-  UNPAID: "unpaid",
-  "مدفوع": "paid",
-  "مدفوع جزئياً": "partial",
-  "غير مدفوع": "unpaid",
-};
-
-function formatPeriod(start: string, end: string) {
-  if (start && end) {
-    return `${start} - ${end}`;
-  }
-
-  return start || end || "-";
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function mapPayrollRecord(raw: unknown): PayrollRecord {
-  const record = asRecord(raw);
-  const workerName = getText(record?.workerName) || getText(record?.fullName) || getText(record?.worker) || "Sans nom";
-  const notes = getText(record?.notes);
+function currentWeek() {
+  const now = new Date();
+  const day = now.getDay() || 7;
+  const start = new Date(now);
+  start.setDate(now.getDate() - day + 1);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: dateKey(start), end: dateKey(end) };
+}
 
-  return {
-    id: getText(record?.id) || getText(record?.number) || crypto.randomUUID(),
-    workerName: { ar: workerName, fr: workerName },
-    role: roleMap[getText(record?.role)] ?? "assistant",
-    salaryType: salaryTypeMap[getText(record?.salaryType)] ?? "monthly",
-    period: formatPeriod(getText(record?.periodStart), getText(record?.periodEnd)) || getText(record?.period),
-    workDays: getNumber(record?.workDays ?? record?.workedDays),
-    absentDays: getNumber(record?.absentDays),
-    lateHours: getNumber(record?.lateHours),
-    piecesCount: getNumber(record?.piecesCount ?? record?.piecesCompleted),
-    pieceRate: getNumber(record?.pieceRate),
-    baseSalary: getNumber(record?.baseSalary),
-    bonuses: getNumber(record?.bonuses),
-    deductions: getNumber(record?.deductions),
-    advances: getNumber(record?.advances),
-    netSalary: getNumber(record?.netSalary),
-    paidAmount: getNumber(record?.paidAmount),
-    paymentDate: getText(record?.paymentDate) || null,
-    status: paymentStatusMap[getText(record?.status ?? record?.paymentStatus)] ?? "unpaid",
-    notes: { ar: notes, fr: notes },
-  };
+function shiftWeek(value: string, amount: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + amount * 7);
+  return dateKey(date);
 }
 
 export function SalaryPage() {
   const { lang, dir } = useLanguage();
-  const t = salaryText[lang];
-  const cur = t.currency;
   const navigate = useNavigate();
-
+  const initialWeek = useMemo(currentWeek, []);
+  const [startDate, setStartDate] = useState(initialWeek.start);
+  const [endDate, setEndDate] = useState(initialWeek.end);
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const [salaryType, setSalaryType] = useState("all");
+  const [status, setStatus] = useState("all");
   const [records, setRecords] = useState<PayrollRecord[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState("all");
+  const [workers, setWorkers] = useState<WorkerOption[]>([]);
+  const [stats, setStats] = useState<DashboardStats>(emptyStats);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [payrollOpen, setPayrollOpen] = useState(false);
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [paymentRecord, setPaymentRecord] = useState<PayrollRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [calcOpen, setCalcOpen] = useState(false);
-  const [advOpen, setAdvOpen] = useState(false);
-  const [bonOpen, setBonOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ startDate, endDate, page: "1", limit: "100" });
+    if (deferredSearch.trim()) params.set("search", deferredSearch.trim());
+    if (salaryType !== "all") params.set("salaryType", salaryType);
+    if (status !== "all") params.set("status", status);
+    return params.toString();
+  }, [deferredSearch, endDate, salaryType, startDate, status]);
 
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
-      setLoading(true);
-      setError(null);
-
+      setLoading(true); setError(null);
       try {
-        const payload = await fetchJson<unknown>("/payroll");
+        const [payrollPayload, statsPayload, workersPayload] = await Promise.all([
+          fetchJson<unknown>(`/payroll?${query}`),
+          fetchJson<DashboardStats>(`/payroll/dashboard?startDate=${startDate}&endDate=${endDate}`),
+          fetchJson<unknown>(`/workers?status=${encodeURIComponent("نشط")}&limit=100&sortBy=fullName&sortOrder=ASC`),
+        ]);
         if (cancelled) return;
-
-        const nextRecords = getArrayFromPayload(payload).map(mapPayrollRecord);
+        const nextRecords = getArrayFromPayload(payrollPayload) as PayrollRecord[];
         setRecords(nextRecords);
-        setSelectedId((current) => current ?? nextRecords[0]?.id ?? null);
-      } catch (err) {
-        if (cancelled) return;
-        setRecords([]);
-        setSelectedId(null);
-        setError(err instanceof Error ? err.message : "Unable to load payroll.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+        setStats(statsPayload);
+        setWorkers(getArrayFromPayload(workersPayload) as WorkerOption[]);
+        setSelectedId((current) => nextRecords.some((item) => item.id === current) ? current : nextRecords[0]?.id ?? null);
+      } catch (caught) {
+        if (!cancelled) { setRecords([]); setStats(emptyStats); setError(caught instanceof Error ? caught.message : "Unable to load payroll."); }
+      } finally { if (!cancelled) setLoading(false); }
     }
-
     void load();
+    return () => { cancelled = true; };
+  }, [endDate, query, refreshKey, startDate]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const filteredRecords = useMemo(() => {
-    return records.filter((record) => {
-      if (tab === "paid" && record.status !== "paid") return false;
-      if (tab === "unpaid" && record.status === "paid") return false;
-      if (tab === "advances" && record.advances === 0) return false;
-      if (tab === "bonuses" && record.bonuses === 0 && record.deductions === 0) return false;
-      return true;
-    });
-  }, [records, tab]);
-
-  const selectedRecord = records.find((record) => record.id === selectedId) ?? null;
-  const totalSalaries = `${records.reduce((sum, record) => sum + record.netSalary, 0).toLocaleString()} ${cur}`;
-  const paidSalaries = `${records.reduce((sum, record) => sum + record.paidAmount, 0).toLocaleString()} ${cur}`;
-  const unpaidSalaries = `${records.reduce((sum, record) => sum + Math.max(0, record.netSalary - record.paidAmount), 0).toLocaleString()} ${cur}`;
-  const totalAdvances = `${records.reduce((sum, record) => sum + record.advances, 0).toLocaleString()} ${cur}`;
-  const netBonuses = `${records.reduce((sum, record) => sum + record.bonuses - record.deductions, 0).toLocaleString()} ${cur}`;
-
+  const selected = records.find((record) => record.id === selectedId) ?? null;
   const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
   const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
+  const refresh = () => setRefreshKey((value) => value + 1);
 
-  const tabs = [
-    { id: "all", label: t.tabs.all },
-    { id: "paid", label: t.tabs.paid },
-    { id: "unpaid", label: t.tabs.unpaid },
-    { id: "advances", label: t.tabs.advances },
-    { id: "bonuses", label: t.tabs.bonuses },
-    { id: "reports", label: t.tabs.reports },
-  ];
+  function moveWeek(amount: number) {
+    setStartDate((value) => shiftWeek(value, amount));
+    setEndDate((value) => shiftWeek(value, amount));
+  }
+
+  async function cancelPayroll(record: PayrollRecord) {
+    const reason = window.prompt(lang === "ar" ? "سبب الإلغاء (سيبقى مسجلاً في التاريخ):" : "Motif de l’annulation (conservé dans l’historique) :");
+    if (!reason?.trim()) return;
+    try {
+      await fetchJson(`/payroll/${record.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
+      refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to cancel payroll.");
+    }
+  }
 
   return (
     <PageBackground>
       <div className="flex flex-wrap items-start justify-between gap-4 pt-7">
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="flex items-center justify-center transition-colors hover:opacity-80"
-            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
-          >
-            <BackArrow size={20} />
-          </button>
+          <button type="button" onClick={() => navigate("/")} className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}><BackArrow size={20} /></button>
           <div>
-            <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-              <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
-                {t.breadcrumbHome}
-              </button>
-              <CrumbChevron size={14} />
-              <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
-            </div>
-            <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
-              {t.title}
-            </h1>
-            <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
+            <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}><button type="button" onClick={() => navigate("/")}>{lang === "ar" ? "الرئيسية" : "Accueil"}</button><CrumbChevron size={14} /><span style={{ color: palette.text, fontWeight: 600 }}>{lang === "ar" ? "تسيير الرواتب" : "Gestion des salaires"}</span></div>
+            <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>{lang === "ar" ? "تسيير الرواتب الأسبوعية" : "Gestion des paies hebdomadaires"}</h1>
+            <p className="mt-1" style={{ fontSize: 13.5, color: palette.muted }}>{lang === "ar" ? "حساب الأجور، الدفعات الجزئية، السلف والقروض مع حفظ السجل المالي كاملاً." : "Calculs, paiements partiels, avances et prêts avec un historique financier durable."}</p>
           </div>
         </div>
-        <Button variant="primary" onClick={() => navigate("/worker-profile")}>
-          <UserRound size={15} />
-          {lang === "ar" ? "فتح ملف العامل" : "Ouvrir fiche travailleur"}
-        </Button>
+        <Button variant="secondary" onClick={() => navigate("/worker-profile")}><UserRound size={15} />{lang === "ar" ? "ملفات العمال" : "Dossiers travailleurs"}</Button>
       </div>
 
-      <div className="mt-6">
-        <SummaryCards
-          totalSalaries={totalSalaries}
-          paidSalaries={paidSalaries}
-          unpaidSalaries={unpaidSalaries}
-          totalAdvances={totalAdvances}
-          netBonuses={netBonuses}
-        />
-      </div>
+      <div className="mt-6"><SummaryCards stats={stats} /></div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-1.5">
-        {tabs.map((item) => {
-          const active = item.id === tab;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className="transition-colors"
-              style={{
-                padding: "9px 16px",
-                borderRadius: 12,
-                fontSize: 14,
-                fontWeight: active ? 700 : 500,
-                color: active ? "#fff" : palette.muted,
-                backgroundColor: active ? palette.primary : palette.surface,
-                border: `1px solid ${active ? palette.primary : palette.border}`,
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {selectedRecord ? (
-        <div className="mt-5">
-          <SalaryDetailsBar
-            record={selectedRecord}
-            onClose={() => setSelectedId(null)}
-            onPay={() => setPayOpen(true)}
-            onAdvance={() => setAdvOpen(true)}
-            onBonus={() => setBonOpen(true)}
-          />
-        </div>
-      ) : null}
-
-      <div className="mt-5 pb-10">
-        {loading ? (
-          <div className="mb-4 text-sm" style={{ color: palette.muted }}>
-            {lang === "ar" ? "جاري تحميل بيانات الرواتب..." : "Chargement des donnees de paie..."}
+      <section className="mt-5 rounded-[20px] p-4" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => moveWeek(-1)}><ChevronLeft size={16} />{lang === "ar" ? "الأسبوع السابق" : "Semaine précédente"}</Button>
+            <div className="flex items-center gap-2 rounded-xl px-3" style={{ height: 40, backgroundColor: palette.bg, color: palette.text }}><CalendarRange size={16} color={palette.accent} /><input aria-label="start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="bg-transparent text-sm outline-none" /><span>→</span><input aria-label="end date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="bg-transparent text-sm outline-none" /></div>
+            <Button variant="secondary" onClick={() => moveWeek(1)}>{lang === "ar" ? "الأسبوع التالي" : "Semaine suivante"}<ChevronRight size={16} /></Button>
+            <Button variant="ghost" onClick={() => { const week = currentWeek(); setStartDate(week.start); setEndDate(week.end); }}>{lang === "ar" ? "الأسبوع الحالي" : "Cette semaine"}</Button>
           </div>
-        ) : null}
-        {!loading && error ? (
-          <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
-            {lang === "ar" ? "تعذر تحميل الرواتب من الواجهة الخلفية." : "Impossible de charger les salaires depuis l'API."}
-          </div>
-        ) : null}
-
-        <div
-          style={{
-            backgroundColor: palette.surface,
-            borderRadius: 20,
-            border: `1px solid ${palette.border}`,
-            boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-            overflow: "hidden",
-          }}
-        >
-          <PayrollTable records={filteredRecords} selectedId={selectedId} onSelect={setSelectedId} />
-        </div>
-
-        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div
-            style={{
-              backgroundColor: palette.surface,
-              borderRadius: 16,
-              border: `1px solid ${palette.border}`,
-              padding: "16px 20px",
-            }}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <Info size={16} style={{ color: palette.primary }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: palette.text }}>{t.helpers.title}</span>
-            </div>
-            <ul className="flex flex-col gap-2" style={{ fontSize: 12, color: palette.muted }}>
-              <li><span className="font-semibold" style={{ color: palette.text }}>{t.helpers.daily.split(":")[0]}:</span> {t.helpers.daily.split(":")[1]}</li>
-              <li><span className="font-semibold" style={{ color: palette.text }}>{t.helpers.weekly.split(":")[0]}:</span> {t.helpers.weekly.split(":")[1]}</li>
-              <li><span className="font-semibold" style={{ color: palette.text }}>{t.helpers.monthly.split(":")[0]}:</span> {t.helpers.monthly.split(":")[1]}</li>
-              <li><span className="font-semibold" style={{ color: palette.text }}>{t.helpers.piece.split(":")[0]}:</span> {t.helpers.piece.split(":")[1]}</li>
-              <li><span className="font-semibold" style={{ color: palette.text }}>{t.helpers.mixed.split(":")[0]}:</span> {t.helpers.mixed.split(":")[1]}</li>
-            </ul>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "#fffdf9",
-              borderRadius: 16,
-              border: "1px solid #eaddcb",
-              padding: "16px 20px",
-            }}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <AlertCircle size={16} style={{ color: "#a87d3c" }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#a87d3c" }}>{t.alerts.title}</span>
-            </div>
-            <ul className="flex flex-col gap-2" style={{ fontSize: 12, color: "#8a6d3f" }}>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.adv}</li>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.latePay}</li>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.absReview}</li>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.pieceCalc}</li>
-            </ul>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setAdvanceOpen(true)}><HandCoins size={15} />{lang === "ar" ? "سلفة" : "Avance"}</Button>
+            <Button variant="secondary" onClick={() => setLoanOpen(true)}><Landmark size={15} />{lang === "ar" ? "قرض" : "Prêt"}</Button>
+            <Button variant="primary" onClick={() => setPayrollOpen(true)}><Plus size={16} />{lang === "ar" ? "راتب جديد" : "Nouvelle paie"}</Button>
           </div>
         </div>
-      </div>
 
-      <CalculateSalaryModal open={calcOpen} onClose={() => setCalcOpen(false)} />
-      <AdvanceModal open={advOpen} onClose={() => setAdvOpen(false)} />
-      <BonusDeductionModal open={bonOpen} onClose={() => setBonOpen(false)} />
-      <PaymentModal open={payOpen} onClose={() => setPayOpen(false)} record={selectedRecord} />
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_220px_220px]">
+          <div className="relative"><Search size={16} className="absolute top-1/2 -translate-y-1/2" style={{ insetInlineStart: 13, color: palette.muted }} /><TextInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder={lang === "ar" ? "البحث عن عامل..." : "Rechercher un travailleur..."} style={{ paddingInlineStart: 38 }} /></div>
+          <Select value={salaryType} onChange={(event) => setSalaryType(event.target.value)}><option value="all">{lang === "ar" ? "كل أنواع الأجر" : "Tous les types"}</option><option value="MONTHLY">{lang === "ar" ? "شهري" : "Mensuel"}</option><option value="PIECE">{lang === "ar" ? "حسب القطعة" : "À la pièce"}</option></Select>
+          <Select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">{lang === "ar" ? "كل الحالات" : "Tous les statuts"}</option><option value="CALCULATED">{lang === "ar" ? "محسوب" : "Calculé"}</option><option value="PARTIALLY_PAID">{lang === "ar" ? "جزئي" : "Partiel"}</option><option value="PAID">{lang === "ar" ? "مدفوع" : "Payé"}</option><option value="CANCELLED">{lang === "ar" ? "ملغى" : "Annulé"}</option></Select>
+        </div>
+      </section>
+
+      {error ? <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#b46a66", backgroundColor: "rgba(180,106,102,.1)" }}>{error}</div> : null}
+      {selected ? <div className="mt-5"><SalaryDetailsBar record={selected} onClose={() => setSelectedId(null)} onPay={() => setPaymentRecord(selected)} onCancel={() => void cancelPayroll(selected)} /></div> : null}
+
+      <section className="mt-5 mb-10 overflow-hidden rounded-[20px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${palette.border}` }}><h2 style={{ color: palette.text, fontWeight: 800 }}>{lang === "ar" ? "قائمة الرواتب" : "Paies de la période"}</h2>{loading ? <span className="text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "جاري التحميل..." : "Chargement..."}</span> : <span className="text-sm" style={{ color: palette.muted }}>{records.length}</span>}</div>
+        <PayrollTable records={records} selectedId={selectedId} onSelect={setSelectedId} onPay={setPaymentRecord} />
+      </section>
+
+      <CalculateSalaryModal open={payrollOpen} onClose={() => setPayrollOpen(false)} onSaved={refresh} workers={workers} periodStart={startDate} periodEnd={endDate} />
+      <AdvanceModal open={advanceOpen} onClose={() => setAdvanceOpen(false)} onSaved={refresh} workers={workers} />
+      <LoanModal open={loanOpen} onClose={() => setLoanOpen(false)} onSaved={refresh} workers={workers} />
+      <PaymentModal open={Boolean(paymentRecord)} onClose={() => setPaymentRecord(null)} onSaved={refresh} record={paymentRecord} />
     </PageBackground>
   );
 }

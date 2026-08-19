@@ -7,6 +7,7 @@ export * from './finished-product.enum';
 export * from './inventory.enum';
 export * from './payment-method.enum';
 export * from './payment-status.enum';
+export * from './payroll.enum';
 export * from './production-task-type.enum';
 export * from './salary-type.enum';
 export * from './worker-role.enum';

@@ -108,7 +108,6 @@ export function RulePreviewPanel({ lang }: { lang: Lang }) {
           <PreviewRow label={t.base} value={lang === "ar" ? "9,600 دج" : "9 600 DA"} />
           <PreviewRow label={t.days} value={lang === "ar" ? "22 يوم" : "22 jours"} />
           <PreviewRow label={t.pieces} value={lang === "ar" ? "120 قطعة" : "120 pièces"} />
-          <PreviewRow label={t.bonuses} value={lang === "ar" ? "+1,000 دج" : "+1 000 DA"} />
           <PreviewRow label={t.deductions} value={lang === "ar" ? "-500 دج" : "-500 DA"} />
           <PreviewRow label={t.net} value={t.netValue} strong />
         </div>
@@ -125,7 +124,6 @@ export function RulePreviewPanel({ lang }: { lang: Lang }) {
       >
         <div style={{ fontSize: 12.5, color: "#7c633d", lineHeight: 1.8 }}>
           <div>{t.formula}</div>
-          <div>{t.productionBonus}</div>
           <div>{t.absenceDeduction}</div>
         </div>
       </div>

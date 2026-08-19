@@ -1,21 +1,28 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { PaymentStatus, SalaryType } from '../../common/enums';
+import { PayrollStatus, SalaryType } from '../../common/enums';
 import { Worker } from '../../workers/entities/worker.entity';
+import { PayrollAdvanceDeduction } from './payroll-advance-deduction.entity';
+import { PayrollLoanDeduction } from './payroll-loan-deduction.entity';
+import { SalaryPayment } from './salary-payment.entity';
 
 @Entity('payrolls')
+@Index(['worker', 'periodStart', 'periodEnd'])
 export class Payroll {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @ManyToOne(() => Worker, (worker) => worker.payrolls, {
-    onDelete: 'CASCADE',
+    nullable: false,
+    onDelete: 'RESTRICT',
   })
   worker!: Worker;
 
@@ -25,20 +32,20 @@ export class Payroll {
   @Column({ type: 'date' })
   periodEnd!: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  salaryMonth?: string | null;
+
   @Column({ type: 'simple-enum', enum: SalaryType })
-  salaryType!: SalaryType;
+  salaryTypeSnapshot!: SalaryType;
 
   @Column({ type: 'real', default: 0 })
-  baseSalary!: number;
+  monthlySalarySnapshot!: number;
 
   @Column({ type: 'integer', default: 0 })
-  workedDays!: number;
+  installmentsInMonth!: number;
 
   @Column({ type: 'integer', default: 0 })
-  absentDays!: number;
-
-  @Column({ type: 'real', default: 0 })
-  lateHours!: number;
+  installmentNumber!: number;
 
   @Column({ type: 'integer', default: 0 })
   piecesCompleted!: number;
@@ -47,19 +54,19 @@ export class Payroll {
   piecePrice!: number;
 
   @Column({ type: 'real', default: 0 })
-  productionAmount!: number;
+  grossAmount!: number;
 
   @Column({ type: 'real', default: 0 })
-  bonuses!: number;
+  advanceDeduction!: number;
 
   @Column({ type: 'real', default: 0 })
-  deductions!: number;
+  loanDeduction!: number;
 
   @Column({ type: 'real', default: 0 })
-  advances!: number;
+  otherDeductions!: number;
 
   @Column({ type: 'real', default: 0 })
-  netSalary!: number;
+  amountDue!: number;
 
   @Column({ type: 'real', default: 0 })
   paidAmount!: number;
@@ -67,18 +74,26 @@ export class Payroll {
   @Column({ type: 'real', default: 0 })
   remainingAmount!: number;
 
-  @Column({
-    type: 'simple-enum',
-    enum: PaymentStatus,
-    default: PaymentStatus.UNPAID,
-  })
-  paymentStatus!: PaymentStatus;
-
-  @Column({ type: 'date', nullable: true })
-  paymentDate?: string;
+  @Column({ type: 'simple-enum', enum: PayrollStatus })
+  status!: PayrollStatus;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  cancelledAt?: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  cancellationReason?: string | null;
+
+  @OneToMany(() => SalaryPayment, (payment) => payment.payroll)
+  payments!: SalaryPayment[];
+
+  @OneToMany(() => PayrollAdvanceDeduction, (item) => item.payroll)
+  advanceDeductions!: PayrollAdvanceDeduction[];
+
+  @OneToMany(() => PayrollLoanDeduction, (item) => item.payroll)
+  loanDeductions!: PayrollLoanDeduction[];
 
   @CreateDateColumn()
   createdAt!: Date;

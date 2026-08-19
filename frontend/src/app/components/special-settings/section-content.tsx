@@ -1,5 +1,4 @@
 import {
-  BadgePercent,
   Boxes,
   CalendarCheck,
   Coins,
@@ -19,7 +18,6 @@ import { Badge, Button, TextInput } from "../kit";
 import { SalaryRuleCard, ToggleSwitch } from "./salary-rule-card";
 import {
   attendanceSettings,
-  bonusRules,
   invoiceSettings,
   measurementUnits,
   piecePrices,
@@ -505,38 +503,6 @@ function ProductionStagesContent({
   );
 }
 
-function BonusRulesContent({ lang }: { lang: Lang }) {
-  const t = specialSettingsText[lang];
-  return (
-    <SectionShell
-      title={t.sections.bonusRules}
-      subtitle={
-        lang === "ar"
-          ? "تحديد الخصومات والمكافآت وشروط تطبيقها."
-          : "Définir les retenues, primes et conditions."
-      }
-      icon={BadgePercent}
-      action={
-        <PrimarySmallButton>
-          <Plus size={15} />
-          {t.addRule}
-        </PrimarySmallButton>
-      }
-    >
-      <SettingsTable
-        headers={[t.ruleType, t.amount, t.condition, t.status, t.actions]}
-        rows={bonusRules.map((rule) => [
-          <strong>{rule.type[lang]}</strong>,
-          rule.amount[lang],
-          rule.condition[lang],
-          <ToggleSwitch checked={rule.active} />,
-          <Button variant="ghost">{t.edit}</Button>,
-        ])}
-      />
-    </SectionShell>
-  );
-}
-
 function SimpleSettingsContent({
   lang,
   title,
@@ -703,10 +669,6 @@ export function SpecialSettingsSectionContent({
 
   if (active === "productionStages") {
     return <ProductionStagesContent lang={lang} onAddStage={onAddStage} />;
-  }
-
-  if (active === "bonusRules") {
-    return <BonusRulesContent lang={lang} />;
   }
 
   if (active === "attendance") {

@@ -1,123 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Coins, Scissors, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, Banknote, CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, HandCoins, Landmark, PackageCheck, UserRound, WalletCards } from "lucide-react";
 import { useNavigate } from "react-router";
-import { Badge, Select } from "../components/kit";
+import { LoanRepaymentModal } from "../components/salary/salary-modals";
+import { Badge, Button, Select } from "../components/kit";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
 import { asRecord, fetchJson, getArrayFromPayload, getNumber, getText } from "../lib/api";
+import { money, payrollStatusCode, payrollStatusColors, payrollStatusLabels, salaryTypeCode, salaryTypeLabels, type BalanceRecord, type PayrollRecord, type SalaryPayment } from "./salary-data";
 
-type WorkerOption = {
-  id: number;
-  fullName: string;
-};
+type WorkerOption = { id: number; fullName: string; status: string };
+type WorkerInfo = { id: number; fullName: string; phone: string; role: string; salaryType: string; monthlySalary: number; startDate: string; status: string; notes: string };
+type FinancialSummary = { totalPaid: number; paidThisMonth: number; lastPayment: { amount: number; date: string } | null; outstandingAdvances: number; outstandingLoans: number; totalToRecover: number; paymentCount: number; totalPieces: number; piecesThisMonth: number; averageWeeklyPieces: number };
+type AttendanceRow = { id: number; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number };
+type LoanRecord = BalanceRecord & { repayments?: { id: number; amount: number; date: string; method: string }[] };
+type ProfilePayload = { worker: WorkerInfo; financialSummary: FinancialSummary; payrolls: PayrollRecord[]; salaryPayments: SalaryPayment[]; advances: BalanceRecord[]; loans: LoanRecord[] };
+type Tab = "payrolls" | "payments" | "advances" | "loans" | "attendance";
 
-type WorkerProfile = {
-  id: number;
-  fullName: string;
-  phone: string;
-  role: string;
-  salaryType: string;
-  salaryValue: number;
-  startDate: string;
-  status: string;
-  notes: string;
-};
+const emptySummary: FinancialSummary = { totalPaid: 0, paidThisMonth: 0, lastPayment: null, outstandingAdvances: 0, outstandingLoans: 0, totalToRecover: 0, paymentCount: 0, totalPieces: 0, piecesThisMonth: 0, averageWeeklyPieces: 0 };
 
-type AttendanceSummary = {
-  presentDays: number;
-  absentDays: number;
-  lateDays: number;
-};
-
-type ProductionSummary = {
-  totalPieces: number;
-  totalAmount: number;
-};
-
-type AttendanceRow = {
-  id: string;
-  date: string;
-  status: string;
-  checkIn: string;
-  checkOut: string;
-  lateMinutes: number;
-};
-
-type ProductionRow = {
-  id: string;
-  date: string;
-  taskType: string;
-  piecesCompleted: number;
-  totalAmount: number;
-};
-
-const emptyProfile: WorkerProfile = {
-  id: 0,
-  fullName: "",
-  phone: "",
-  role: "",
-  salaryType: "",
-  salaryValue: 0,
-  startDate: "",
-  status: "",
-  notes: "",
-};
-
-function SummaryCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <div
-      style={{
-        backgroundColor: palette.surface,
-        borderRadius: 18,
-        border: `1px solid ${palette.border}`,
-        boxShadow: "0 2px 10px -6px rgba(18, 60, 74, 0.12)",
-        padding: 16,
-      }}
-    >
-      <div style={{ fontSize: 12, color: palette.muted }}>{label}</div>
-      <div style={{ marginTop: 6, fontSize: 20, fontWeight: 800, color: accent }}>{value}</div>
-    </div>
-  );
-}
-
-function mapWorkerOption(raw: unknown): WorkerOption {
-  const record = asRecord(raw);
-  return {
-    id: getNumber(record?.id),
-    fullName: getText(record?.fullName) || getText(record?.name) || "Sans nom",
-  };
-}
-
-function mapAttendanceRow(raw: unknown): AttendanceRow {
-  const record = asRecord(raw);
-  return {
-    id: getText(record?.id) || crypto.randomUUID(),
-    date: getText(record?.date) || "-",
-    status: getText(record?.status) || "-",
-    checkIn: getText(record?.checkIn) || "-",
-    checkOut: getText(record?.checkOut) || "-",
-    lateMinutes: getNumber(record?.lateMinutes),
-  };
-}
-
-function mapProductionRow(raw: unknown): ProductionRow {
-  const record = asRecord(raw);
-  return {
-    id: getText(record?.id) || crypto.randomUUID(),
-    date: getText(record?.date) || "-",
-    taskType: getText(record?.taskType) || "-",
-    piecesCompleted: getNumber(record?.piecesCompleted),
-    totalAmount: getNumber(record?.totalAmount),
-  };
+function SummaryCard({ label, value, icon: Icon, color }: { label: string; value: string; icon: typeof Banknote; color: string }) {
+  return <div className="rounded-[18px] p-4" style={{ background: `linear-gradient(145deg, ${palette.surface}, ${color}0b)`, border: `1px solid ${palette.border}` }}><div className="flex items-center justify-between gap-2"><span className="text-xs" style={{ color: palette.muted }}>{label}</span><span className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ color, backgroundColor: `${color}14` }}><Icon size={16} /></span></div><div className="mt-4 text-lg font-extrabold" style={{ color: palette.text }}>{value}</div></div>;
 }
 
 export function WorkerProfilePage() {
@@ -125,354 +28,105 @@ export function WorkerProfilePage() {
   const navigate = useNavigate();
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
-  const [profile, setProfile] = useState<WorkerProfile>(emptyProfile);
-  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary>({ presentDays: 0, absentDays: 0, lateDays: 0 });
-  const [productionSummary, setProductionSummary] = useState<ProductionSummary>({ totalPieces: 0, totalAmount: 0 });
-  const [lastSalary, setLastSalary] = useState<{ amount: number; status: string } | null>(null);
-  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
-  const [productionRows, setProductionRows] = useState<ProductionRow[]>([]);
+  const [profile, setProfile] = useState<ProfilePayload | null>(null);
+  const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
+  const [tab, setTab] = useState<Tab>("payrolls");
+  const [loanToRepay, setLoanToRepay] = useState<LoanRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadWorkers() {
-      setLoading(true);
-      setError(null);
-
       try {
-        const payload = await fetchJson<unknown>("/workers?limit=100&sortBy=fullName&sortOrder=ASC");
+        const payload = await fetchJson<unknown>("/workers?limit=100&includeArchived=true&sortBy=fullName&sortOrder=ASC");
         if (cancelled) return;
-        const nextWorkers = getArrayFromPayload(payload).map(mapWorkerOption).filter((worker) => worker.id > 0);
-        setWorkers(nextWorkers);
-        setSelectedWorkerId((current) => current ?? nextWorkers[0]?.id ?? null);
-      } catch (err) {
-        if (cancelled) return;
-        setWorkers([]);
-        setSelectedWorkerId(null);
-        setError(err instanceof Error ? err.message : "Unable to load workers.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+        const next = getArrayFromPayload(payload).map((raw) => { const row = asRecord(raw); return { id: getNumber(row?.id), fullName: getText(row?.fullName), status: getText(row?.status) }; }).filter((item) => item.id > 0);
+        setWorkers(next);
+        setSelectedWorkerId((current) => current ?? next[0]?.id ?? null);
+      } catch (caught) { if (!cancelled) setError(caught instanceof Error ? caught.message : "Unable to load workers."); }
     }
-
     void loadWorkers();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!selectedWorkerId) {
-      setProfile(emptyProfile);
-      setAttendanceRows([]);
-      setProductionRows([]);
-      setAttendanceSummary({ presentDays: 0, absentDays: 0, lateDays: 0 });
-      setProductionSummary({ totalPieces: 0, totalAmount: 0 });
-      setLastSalary(null);
-      return;
-    }
-
+    if (!selectedWorkerId) { setProfile(null); setAttendance([]); setLoading(false); return; }
     let cancelled = false;
-
-    async function safeLoad(path: string) {
-      try {
-        return await fetchJson<unknown>(path);
-      } catch {
-        return null;
-      }
-    }
-
     async function loadProfile() {
-      setDetailLoading(true);
-
-      const [profilePayload, attendancePayload, productionPayload] = await Promise.all([
-        safeLoad(`/workers/${selectedWorkerId}/profile`),
-        safeLoad(`/workers/${selectedWorkerId}/attendance?limit=20`),
-        safeLoad(`/workers/${selectedWorkerId}/production?limit=20`),
-      ]);
-
-      if (cancelled) return;
-
-      const profileRecord = asRecord(profilePayload);
-      const workerRecord = asRecord(profileRecord?.worker);
-      const attendanceRecord = asRecord(profileRecord?.attendanceSummary);
-      const productionRecord = asRecord(profileRecord?.productionSummary);
-      const salaryRecord = asRecord(profileRecord?.lastSalary);
-
-      setProfile({
-        id: getNumber(workerRecord?.id),
-        fullName: getText(workerRecord?.fullName),
-        phone: getText(workerRecord?.phone),
-        role: getText(workerRecord?.role),
-        salaryType: getText(workerRecord?.salaryType),
-        salaryValue: getNumber(workerRecord?.salaryValue),
-        startDate: getText(workerRecord?.startDate),
-        status: getText(workerRecord?.status),
-        notes: getText(workerRecord?.notes),
-      });
-      setAttendanceSummary({
-        presentDays: getNumber(attendanceRecord?.presentDays),
-        absentDays: getNumber(attendanceRecord?.absentDays),
-        lateDays: getNumber(attendanceRecord?.lateDays),
-      });
-      setProductionSummary({
-        totalPieces: getNumber(productionRecord?.totalPieces),
-        totalAmount: getNumber(productionRecord?.totalAmount),
-      });
-      setLastSalary(
-        salaryRecord
-          ? {
-              amount: getNumber(salaryRecord.amount),
-              status: getText(salaryRecord.status),
-            }
-          : null,
-      );
-      setAttendanceRows(getArrayFromPayload(attendancePayload).map(mapAttendanceRow));
-      setProductionRows(getArrayFromPayload(productionPayload).map(mapProductionRow));
-      setDetailLoading(false);
+      setLoading(true); setError(null);
+      try {
+        const [profilePayload, attendancePayload] = await Promise.all([
+          fetchJson<ProfilePayload>(`/workers/${selectedWorkerId}/profile`),
+          fetchJson<unknown>(`/workers/${selectedWorkerId}/attendance?limit=100`),
+        ]);
+        if (cancelled) return;
+        setProfile(profilePayload);
+        setAttendance(getArrayFromPayload(attendancePayload) as AttendanceRow[]);
+      } catch (caught) { if (!cancelled) { setProfile(null); setAttendance([]); setError(caught instanceof Error ? caught.message : "Unable to load profile."); } }
+      finally { if (!cancelled) setLoading(false); }
     }
-
     void loadProfile();
+    return () => { cancelled = true; };
+  }, [refreshKey, selectedWorkerId]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedWorkerId]);
-
-  const selectedWorker = useMemo(
-    () => workers.find((worker) => worker.id === selectedWorkerId) ?? null,
-    [selectedWorkerId, workers],
-  );
-
+  const worker = profile?.worker;
+  const summary = profile?.financialSummary ?? emptySummary;
+  const salaryType = worker ? salaryTypeCode(worker.salaryType) : "monthly";
   const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
   const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
+  const archived = worker?.status === "مؤرشف" || worker?.status === "ARCHIVED";
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: "payrolls", label: lang === "ar" ? "سجل الرواتب" : "Salaires", count: profile?.payrolls.length ?? 0 },
+    { id: "payments", label: lang === "ar" ? "الدفعات" : "Paiements", count: profile?.salaryPayments.length ?? 0 },
+    { id: "advances", label: lang === "ar" ? "السلف" : "Avances", count: profile?.advances.length ?? 0 },
+    { id: "loans", label: lang === "ar" ? "القروض" : "Prêts", count: profile?.loans.length ?? 0 },
+    { id: "attendance", label: lang === "ar" ? "الحضور" : "Présence", count: attendance.length },
+  ];
 
-  return (
-    <PageBackground>
-      <div className="flex flex-wrap items-start justify-between gap-4 pt-7">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => navigate("/workers")}
-            className="flex items-center justify-center transition-colors hover:opacity-80"
-            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
-          >
-            <BackArrow size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-              <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
-                {lang === "ar" ? "الرئيسية" : "Accueil"}
-              </button>
-              <CrumbChevron size={14} />
-              <button type="button" onClick={() => navigate("/workers")} className="transition-colors hover:opacity-80">
-                {lang === "ar" ? "تسيير العمال" : "Gestion des travailleurs"}
-              </button>
-              <CrumbChevron size={14} />
-              <span style={{ color: palette.text, fontWeight: 600 }}>{lang === "ar" ? "ملف العامل" : "Fiche travailleur"}</span>
-            </div>
-            <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
-              {lang === "ar" ? "ملف العامل" : "Fiche travailleur"}
-            </h1>
-            <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 700 }}>
-              {lang === "ar"
-                ? "البيانات هنا تأتي مباشرة من API العمال، الحضور، والإنتاج."
-                : "Les donnees affichees ici proviennent directement des APIs workers, attendance et production."}
-            </p>
-          </div>
-        </div>
+  return <PageBackground>
+    <div className="flex flex-wrap items-start justify-between gap-4 pt-7">
+      <div className="flex items-center gap-4"><button type="button" onClick={() => navigate("/workers")} className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}><BackArrow size={20} /></button><div><div className="flex items-center gap-1.5 text-xs" style={{ color: palette.muted }}><button type="button" onClick={() => navigate("/workers")}>{lang === "ar" ? "العمال" : "Travailleurs"}</button><CrumbChevron size={14} /><span style={{ color: palette.text, fontWeight: 700 }}>{lang === "ar" ? "الملف المهني والمالي" : "Dossier professionnel et financier"}</span></div><h1 className="mt-1 text-2xl font-extrabold" style={{ color: palette.text }}>{lang === "ar" ? "ملف العامل" : "Fiche du travailleur"}</h1></div></div>
+      <div className="flex min-w-[280px] items-center gap-2"><Select value={selectedWorkerId ?? ""} onChange={(event) => setSelectedWorkerId(Number(event.target.value))}>{workers.map((item) => <option key={item.id} value={item.id}>{item.fullName}{item.status === "مؤرشف" ? (lang === "ar" ? " · مؤرشف" : " · archivé") : ""}</option>)}</Select>{!archived ? <Button variant="primary" onClick={() => navigate("/salary")}><WalletCards size={15} />{lang === "ar" ? "عملية مالية" : "Opération financière"}</Button> : null}</div>
+    </div>
 
-        <div style={{ minWidth: 260 }}>
-          <Select
-            value={selectedWorkerId ? String(selectedWorkerId) : ""}
-            onChange={(event) => setSelectedWorkerId(event.target.value ? Number(event.target.value) : null)}
-          >
-            {workers.length === 0 ? (
-              <option value="">{lang === "ar" ? "لا يوجد عمال" : "Aucun travailleur"}</option>
-            ) : (
-              workers.map((worker) => (
-                <option key={worker.id} value={worker.id}>
-                  {worker.fullName}
-                </option>
-              ))
-            )}
-          </Select>
-        </div>
+    {error ? <div className="mt-5 rounded-xl px-4 py-3 text-sm" style={{ color: "#b46a66", backgroundColor: "rgba(180,106,102,.1)" }}>{error}</div> : null}
+    {loading ? <div className="mt-8 text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "جاري تحميل الملف..." : "Chargement du dossier..."}</div> : null}
+
+    {worker && !loading ? <>
+      <section className="mt-6 rounded-[22px] p-5" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex items-center gap-4"><div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ color: palette.primary, backgroundColor: palette.accentSoft }}><UserRound size={25} /></div><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-extrabold" style={{ color: palette.text }}>{worker.fullName}</h2><Badge bg={archived ? "rgba(107,106,98,.14)" : "rgba(77,138,106,.14)"} fg={archived ? "#6b6a62" : "#4d8a6a"}>{worker.status}</Badge></div><p className="mt-1 text-sm" style={{ color: palette.muted }}>{worker.role} · {salaryTypeLabels[salaryType][lang]}</p></div></div><div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm"><span style={{ color: palette.muted }}>{lang === "ar" ? "الهاتف" : "Téléphone"}</span><strong>{worker.phone || "-"}</strong><span style={{ color: palette.muted }}>{lang === "ar" ? "تاريخ الدخول" : "Date d’entrée"}</span><strong>{worker.startDate}</strong><span style={{ color: palette.muted }}>{lang === "ar" ? "العقد" : "Base contractuelle"}</span><strong>{salaryType === "monthly" ? money(worker.monthlySalary, lang) : (lang === "ar" ? "سعر متغير أسبوعياً" : "Prix variable par semaine")}</strong></div></div>
+        {worker.notes ? <p className="mt-4 border-t pt-4 text-sm" style={{ borderColor: palette.border, color: palette.muted }}>{worker.notes}</p> : null}
+        {archived ? <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#6b6a62", backgroundColor: "rgba(107,106,98,.1)" }}>{lang === "ar" ? "هذا العامل مؤرشف: ملفه وتاريخه محفوظان، ولا يمكن إنشاء عمليات مالية جديدة له." : "Ce travailleur est archivé : son dossier reste consultable, mais aucune nouvelle opération financière n’est autorisée."}</div> : null}
+      </section>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <SummaryCard label={lang === "ar" ? "إجمالي المدفوع" : "Total versé"} value={money(summary.totalPaid, lang)} icon={Banknote} color="#4d8a6a" />
+        <SummaryCard label={lang === "ar" ? "مدفوع هذا الشهر" : "Versé ce mois"} value={money(summary.paidThisMonth, lang)} icon={CalendarDays} color={palette.primary} />
+        <SummaryCard label={lang === "ar" ? "آخر دفعة" : "Dernier paiement"} value={summary.lastPayment ? money(summary.lastPayment.amount, lang) : "-"} icon={CircleDollarSign} color="#a87d3c" />
+        <SummaryCard label={lang === "ar" ? "السلف المتبقية" : "Avances en cours"} value={money(summary.outstandingAdvances, lang)} icon={HandCoins} color="#c07d4f" />
+        <SummaryCard label={lang === "ar" ? "القروض المتبقية" : "Prêts en cours"} value={money(summary.outstandingLoans, lang)} icon={Landmark} color="#4f6a99" />
+        <SummaryCard label={lang === "ar" ? "عدد الدفعات" : "Paiements"} value={String(summary.paymentCount)} icon={WalletCards} color="#8b6d9c" />
+        <SummaryCard label={lang === "ar" ? "قطع هذا الشهر" : "Pièces ce mois"} value={String(summary.piecesThisMonth)} icon={PackageCheck} color="#b46a66" />
       </div>
 
-      {loading ? (
-        <div className="mt-6 text-sm" style={{ color: palette.muted }}>
-          {lang === "ar" ? "جاري تحميل قائمة العمال..." : "Chargement de la liste des travailleurs..."}
-        </div>
-      ) : null}
-      {!loading && error ? (
-        <div className="mt-6 text-sm" style={{ color: "#b46a66" }}>
-          {lang === "ar" ? "تعذر تحميل بيانات العمال." : "Impossible de charger les donnees des travailleurs."}
-        </div>
-      ) : null}
+      <section className="mt-5 mb-10 overflow-hidden rounded-[22px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="flex gap-1 overflow-x-auto px-4 pt-3" style={{ borderBottom: `1px solid ${palette.border}` }}>{tabs.map((item) => <button key={item.id} type="button" onClick={() => setTab(item.id)} className="whitespace-nowrap px-4 py-3 text-sm font-bold" style={{ color: tab === item.id ? palette.primary : palette.muted, borderBottom: tab === item.id ? `2px solid ${palette.primary}` : "2px solid transparent" }}>{item.label} <span className="ms-1 text-xs">{item.count}</span></button>)}</div>
+        <div className="p-5">{tab === "payrolls" ? <PayrollHistory rows={profile.payrolls} lang={lang} /> : null}{tab === "payments" ? <PaymentHistory rows={profile.salaryPayments} lang={lang} /> : null}{tab === "advances" ? <AdvanceHistory rows={profile.advances} lang={lang} /> : null}{tab === "loans" ? <LoanHistory rows={profile.loans} lang={lang} onRepay={setLoanToRepay} archived={archived} /> : null}{tab === "attendance" ? <AttendanceHistory rows={attendance} lang={lang} /> : null}</div>
+      </section>
+    </> : null}
 
-      {!loading && !selectedWorker ? (
-        <div
-          className="mt-6 rounded-2xl border p-6 text-sm"
-          style={{ borderColor: palette.border, backgroundColor: palette.surface, color: palette.muted }}
-        >
-          {lang === "ar"
-            ? "لا يوجد عامل لعرض ملفه حالياً. أضف عاملاً من صفحة العمال أو أعد تشغيل seed workers."
-            : "Aucun travailleur disponible pour afficher une fiche. Ajoutez un travailleur depuis la page workers ou relancez le seed workers."}
-        </div>
-      ) : null}
-
-      {selectedWorker ? (
-        <>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            <SummaryCard label={lang === "ar" ? "الاسم" : "Nom"} value={profile.fullName || selectedWorker.fullName} accent={palette.primary} />
-            <SummaryCard label={lang === "ar" ? "الدور" : "Role"} value={profile.role || "-"} accent="#6b8aa0" />
-            <SummaryCard label={lang === "ar" ? "أيام الحضور" : "Jours presents"} value={String(attendanceSummary.presentDays)} accent="#4d8a6a" />
-            <SummaryCard label={lang === "ar" ? "أيام الغياب" : "Jours absents"} value={String(attendanceSummary.absentDays)} accent="#b46a66" />
-            <SummaryCard label={lang === "ar" ? "القطع المنجزة" : "Pieces realisees"} value={String(productionSummary.totalPieces)} accent="#a87d3c" />
-            <SummaryCard label={lang === "ar" ? "آخر راتب" : "Dernier salaire"} value={`${lastSalary?.amount?.toLocaleString?.() ?? 0} ${lang === "ar" ? "د.ج" : "DA"}`} accent={palette.accent} />
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <section
-              style={{
-                backgroundColor: palette.surface,
-                borderRadius: 22,
-                border: `1px solid ${palette.border}`,
-                boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-                padding: 20,
-              }}
-            >
-              <div className="mb-4 flex items-center gap-2">
-                <UserRound size={18} style={{ color: palette.primary }} />
-                <span style={{ fontSize: 15, fontWeight: 800, color: palette.text }}>{lang === "ar" ? "معلومات العامل" : "Informations du travailleur"}</span>
-              </div>
-
-              <div className="flex flex-col gap-3 text-sm">
-                <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "الهاتف" : "Telephone"}</span><span>{profile.phone || "-"}</span></div>
-                <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "نوع الأجر" : "Type de salaire"}</span><span>{profile.salaryType || "-"}</span></div>
-                <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "قيمة الأجر" : "Valeur"}</span><span>{profile.salaryValue.toLocaleString()} {lang === "ar" ? "د.ج" : "DA"}</span></div>
-                <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "تاريخ البداية" : "Date de debut"}</span><span>{profile.startDate || "-"}</span></div>
-                <div className="flex items-center justify-between">
-                  <span style={{ color: palette.muted }}>{lang === "ar" ? "الحالة" : "Statut"}</span>
-                  <Badge bg={`${palette.primary}12`} fg={palette.primary}>{profile.status || "-"}</Badge>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-xl border p-4" style={{ borderColor: palette.border, backgroundColor: palette.bg }}>
-                <div className="mb-2 flex items-center gap-2">
-                  <Coins size={16} style={{ color: "#4d8a6a" }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: palette.text }}>{lang === "ar" ? "ملخص الراتب والإنتاج" : "Resume salaire et production"}</span>
-                </div>
-                <div className="flex flex-col gap-2 text-sm">
-                  <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "إجمالي المبلغ المنتج" : "Montant production"}</span><span>{productionSummary.totalAmount.toLocaleString()} {lang === "ar" ? "د.ج" : "DA"}</span></div>
-                  <div className="flex items-center justify-between"><span style={{ color: palette.muted }}>{lang === "ar" ? "حالة آخر راتب" : "Statut dernier salaire"}</span><span>{lastSalary?.status || "-"}</span></div>
-                </div>
-              </div>
-
-              {profile.notes ? (
-                <div className="mt-5 rounded-xl border p-4 text-sm" style={{ borderColor: palette.border, backgroundColor: palette.bg }}>
-                  <div className="mb-2 font-semibold" style={{ color: palette.text }}>{lang === "ar" ? "ملاحظات" : "Notes"}</div>
-                  <div style={{ color: palette.muted, lineHeight: 1.7 }}>{profile.notes}</div>
-                </div>
-              ) : null}
-            </section>
-
-            <section className="flex flex-col gap-5">
-              <div
-                style={{
-                  backgroundColor: palette.surface,
-                  borderRadius: 22,
-                  border: `1px solid ${palette.border}`,
-                  boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-                  padding: 20,
-                }}
-              >
-                <div className="mb-4 flex items-center gap-2">
-                  <CalendarDays size={18} style={{ color: palette.primary }} />
-                  <span style={{ fontSize: 15, fontWeight: 800, color: palette.text }}>{lang === "ar" ? "آخر الحضور" : "Dernieres presences"}</span>
-                </div>
-                {detailLoading ? (
-                  <div style={{ color: palette.muted, fontSize: 13 }}>{lang === "ar" ? "جاري تحميل التفاصيل..." : "Chargement des details..."}</div>
-                ) : attendanceRows.length === 0 ? (
-                  <div style={{ color: palette.muted, fontSize: 13 }}>{lang === "ar" ? "لا توجد سجلات حضور." : "Aucune presence enregistree."}</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${palette.border}`, color: palette.muted }}>
-                          <th className="pb-2 text-start">{lang === "ar" ? "التاريخ" : "Date"}</th>
-                          <th className="pb-2 text-start">{lang === "ar" ? "الحالة" : "Statut"}</th>
-                          <th className="pb-2 text-start">{lang === "ar" ? "دخول" : "Entree"}</th>
-                          <th className="pb-2 text-start">{lang === "ar" ? "خروج" : "Sortie"}</th>
-                          <th className="pb-2 text-end">{lang === "ar" ? "تأخر" : "Retard"}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {attendanceRows.map((row) => (
-                          <tr key={row.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
-                            <td className="py-2">{row.date}</td>
-                            <td className="py-2">{row.status}</td>
-                            <td className="py-2">{row.checkIn}</td>
-                            <td className="py-2">{row.checkOut}</td>
-                            <td className="py-2 text-end">{row.lateMinutes}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: palette.surface,
-                  borderRadius: 22,
-                  border: `1px solid ${palette.border}`,
-                  boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.16)",
-                  padding: 20,
-                }}
-              >
-                <div className="mb-4 flex items-center gap-2">
-                  <Scissors size={18} style={{ color: "#a87d3c" }} />
-                  <span style={{ fontSize: 15, fontWeight: 800, color: palette.text }}>{lang === "ar" ? "آخر الإنتاج" : "Derniere production"}</span>
-                </div>
-                {detailLoading ? (
-                  <div style={{ color: palette.muted, fontSize: 13 }}>{lang === "ar" ? "جاري تحميل التفاصيل..." : "Chargement des details..."}</div>
-                ) : productionRows.length === 0 ? (
-                  <div style={{ color: palette.muted, fontSize: 13 }}>{lang === "ar" ? "لا توجد سجلات إنتاج." : "Aucune production enregistree."}</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${palette.border}`, color: palette.muted }}>
-                          <th className="pb-2 text-start">{lang === "ar" ? "التاريخ" : "Date"}</th>
-                          <th className="pb-2 text-start">{lang === "ar" ? "المهمة" : "Tache"}</th>
-                          <th className="pb-2 text-end">{lang === "ar" ? "القطع" : "Pieces"}</th>
-                          <th className="pb-2 text-end">{lang === "ar" ? "المبلغ" : "Montant"}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {productionRows.map((row) => (
-                          <tr key={row.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
-                            <td className="py-2">{row.date}</td>
-                            <td className="py-2">{row.taskType}</td>
-                            <td className="py-2 text-end">{row.piecesCompleted}</td>
-                            <td className="py-2 text-end">{row.totalAmount.toLocaleString()} {lang === "ar" ? "د.ج" : "DA"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-        </>
-      ) : null}
-    </PageBackground>
-  );
+    <LoanRepaymentModal open={Boolean(loanToRepay)} onClose={() => setLoanToRepay(null)} onSaved={() => setRefreshKey((value) => value + 1)} loan={loanToRepay} />
+  </PageBackground>;
 }
+
+function Empty({ lang }: { lang: "ar" | "fr" }) { return <div className="flex min-h-[180px] items-center justify-center text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "لا توجد بيانات مسجلة." : "Aucune donnée enregistrée."}</div>; }
+function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) { return <div className="overflow-x-auto"><table className="w-full" style={{ minWidth: 760, borderCollapse: "collapse" }}><thead><tr style={{ backgroundColor: palette.bg }}>{headers.map((item) => <th key={item} className="px-3 py-3 text-start text-xs" style={{ color: palette.muted }}>{item}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
+const rowStyle = { borderTop: `1px solid ${palette.border}` };
+
+function PayrollHistory({ rows, lang }: { rows: PayrollRecord[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["الفترة", "النوع", "القطع / السعر", "المحسوب", "الاقتطاعات", "المدفوع", "الباقي", "الحالة"] : ["Période", "Type", "Pièces / prix", "Calculé", "Retenues", "Payé", "Reste", "Statut"]}>{rows.map((row) => { const status = payrollStatusCode(row.status); const type = salaryTypeCode(row.salaryType); return <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.periodStart} → {row.periodEnd}</td><td className="px-3 py-3 text-sm">{salaryTypeLabels[type][lang]}</td><td className="px-3 py-3 text-sm">{type === "piece" ? `${row.piecesCompleted} × ${money(row.piecePrice, lang)}` : `${row.installmentNumber}/${row.installmentsInMonth}`}</td><td className="px-3 py-3 text-sm font-bold">{money(row.grossAmount, lang)}</td><td className="px-3 py-3 text-sm">{money(row.totalDeductions, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: "#4d8a6a" }}>{money(row.paidAmount, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: row.remainingAmount ? "#b46a66" : palette.muted }}>{money(row.remainingAmount, lang)}</td><td className="px-3 py-3"><Badge bg={`${payrollStatusColors[status]}16`} fg={payrollStatusColors[status]}>{payrollStatusLabels[status][lang]}</Badge></td></tr>; })}</Table>; }
+function PaymentHistory({ rows, lang }: { rows: SalaryPayment[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ", "الطريقة", "المرجع", "ملاحظات"] : ["Date", "Montant", "Mode", "Référence", "Notes"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm font-bold" style={{ color: "#4d8a6a" }}>{money(row.amount, lang)}</td><td className="px-3 py-3 text-sm">{row.method}</td><td className="px-3 py-3 text-sm">{row.reference || "-"}</td><td className="px-3 py-3 text-sm">{row.notes || "-"}</td></tr>)}</Table>; }
+function AdvanceHistory({ rows, lang }: { rows: BalanceRecord[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ", "المخصوم", "الباقي", "الحالة"] : ["Date", "Montant", "Déduit", "Reste", "Statut"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{money(row.amount ?? 0, lang)}</td><td className="px-3 py-3 text-sm">{money(row.deductedAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm font-bold">{money(row.remainingAmount, lang)}</td><td className="px-3 py-3 text-sm">{row.status}</td></tr>)}</Table>; }
+function LoanHistory({ rows, lang, onRepay, archived }: { rows: LoanRecord[]; lang: "ar" | "fr"; onRepay: (row: LoanRecord) => void; archived: boolean }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ الأصلي", "المسدّد", "الباقي", "الحالة", "الإجراء"] : ["Date", "Montant initial", "Remboursé", "Reste", "Statut", "Action"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{money(row.initialAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm">{money(row.repaidAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm font-bold">{money(row.remainingAmount, lang)}</td><td className="px-3 py-3 text-sm">{row.status}</td><td className="px-3 py-3">{row.remainingAmount > 0 && !archived ? <Button variant="secondary" onClick={() => onRepay(row)}>{lang === "ar" ? "تسجيل تسديد" : "Rembourser"}</Button> : "-"}</td></tr>)}</Table>; }
+function AttendanceHistory({ rows, lang }: { rows: AttendanceRow[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "الحالة", "الدخول", "الخروج", "التأخر"] : ["Date", "Statut", "Entrée", "Sortie", "Retard"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{row.status}</td><td className="px-3 py-3 text-sm">{row.checkIn || "-"}</td><td className="px-3 py-3 text-sm">{row.checkOut || "-"}</td><td className="px-3 py-3 text-sm">{row.lateMinutes} min</td></tr>)}</Table>; }

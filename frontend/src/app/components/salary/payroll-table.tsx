@@ -1,119 +1,80 @@
-import { palette, salaryText, paymentStatusColors, paymentStatusLabels, salaryTypeLabels, roleLabels } from "../../pages/salary-data";
-import type { PayrollRecord } from "../../pages/salary-data";
+import { Eye, Wallet } from "lucide-react";
 import { useLanguage } from "../../language-context";
+import {
+  money,
+  palette,
+  payrollStatusCode,
+  payrollStatusColors,
+  payrollStatusLabels,
+  salaryTypeCode,
+  salaryTypeLabels,
+  type PayrollRecord,
+} from "../../pages/salary-data";
 import { Badge } from "../kit";
 
 export function PayrollTable({
   records,
   selectedId,
   onSelect,
+  onPay,
 }: {
   records: PayrollRecord[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+  onPay: (record: PayrollRecord) => void;
 }) {
-  const { lang, dir } = useLanguage();
-  const t = salaryText[lang].table;
-  const cur = salaryText[lang].currency;
-
-  const thStyle: React.CSSProperties = {
-    padding: "12px 16px",
-    fontSize: 12,
-    fontWeight: 700,
-    color: palette.muted,
-    textAlign: "start",
-    whiteSpace: "nowrap",
-  };
-
-  const tdStyle: React.CSSProperties = {
-    padding: "14px 16px",
-    fontSize: 13.5,
-    color: palette.text,
-    verticalAlign: "middle",
-    whiteSpace: "nowrap",
-  };
+  const { lang } = useLanguage();
+  const labels = lang === "ar"
+    ? ["العامل", "الوظيفة", "نوع الأجر", "الفترة", "المستحق", "المدفوع", "الباقي", "الحالة", "الإجراءات"]
+    : ["Travailleur", "Poste", "Type", "Période", "Dû", "Payé", "Reste", "Statut", "Actions"];
 
   if (records.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8 text-sm text-muted-foreground" style={{ color: palette.muted }}>
-        {t.empty}
+      <div className="flex min-h-[260px] items-center justify-center px-6 text-center" style={{ color: palette.muted }}>
+        {lang === "ar" ? "لا توجد رواتب مسجلة لهذه الفترة." : "Aucune paie enregistrée pour cette période."}
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto custom-scrollbar">
-      <table className="w-full text-start" style={{ borderCollapse: "collapse", minWidth: 1100 }}>
+    <div className="overflow-x-auto">
+      <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 1040 }}>
         <thead>
-          <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
-            <th style={thStyle}>{t.worker}</th>
-            <th style={thStyle}>{t.role}</th>
-            <th style={thStyle}>{t.type}</th>
-            <th style={thStyle}>{t.period}</th>
-            <th style={thStyle}>{t.base}</th>
-            <th style={thStyle}>{t.pieces}</th>
-            <th style={thStyle}>{t.bonus}</th>
-            <th style={thStyle}>{t.deduction}</th>
-            <th style={thStyle}>{t.advance}</th>
-            <th style={thStyle}>{t.net}</th>
-            <th style={thStyle}>{t.status}</th>
+          <tr style={{ backgroundColor: palette.bg }}>
+            {labels.map((label) => (
+              <th key={label} className="px-4 py-3 text-start" style={{ color: palette.muted, fontSize: 12, fontWeight: 700 }}>{label}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {records.map((rec) => {
-            const active = selectedId === rec.id;
-            const statusColor = paymentStatusColors[rec.status];
-            const initials = rec.workerName[lang].split(" ").slice(0, 2).map(w => w[0]).join("");
-
+          {records.map((record) => {
+            const status = payrollStatusCode(record.status);
+            const salaryType = salaryTypeCode(record.salaryType);
             return (
               <tr
-                key={rec.id}
-                onClick={() => onSelect(rec.id)}
-                className="group transition-colors hover:bg-black/5 cursor-pointer"
+                key={record.id}
+                onClick={() => onSelect(record.id)}
+                className="cursor-pointer transition-colors"
                 style={{
-                  borderBottom: `1px solid ${palette.border}`,
-                  backgroundColor: active ? `${palette.primary}08` : "transparent",
+                  borderTop: `1px solid ${palette.border}`,
+                  backgroundColor: selectedId === record.id ? `${palette.accent}0d` : palette.surface,
                 }}
               >
-                <td style={{ ...tdStyle, fontWeight: 700 }}>
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className="flex items-center justify-center shrink-0"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 999,
-                        backgroundColor: palette.accentSoft,
-                        color: palette.accent,
-                        fontSize: 12,
-                      }}
-                    >
-                      {initials}
-                    </span>
-                    <span>{rec.workerName[lang]}</span>
+                <td className="px-4 py-3.5" style={{ fontWeight: 700, color: palette.text }}>{record.workerName}</td>
+                <td className="px-4 py-3.5" style={{ color: palette.muted, fontSize: 13 }}>{record.role || "-"}</td>
+                <td className="px-4 py-3.5"><Badge bg={`${palette.primary}12`} fg={palette.primary}>{salaryTypeLabels[salaryType][lang]}</Badge></td>
+                <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: palette.muted, fontSize: 12.5 }}>{record.periodStart} → {record.periodEnd}</td>
+                <td className="px-4 py-3.5 whitespace-nowrap" style={{ fontWeight: 700 }}>{money(record.amountDue, lang)}</td>
+                <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "#4d8a6a" }}>{money(record.paidAmount, lang)}</td>
+                <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: record.remainingAmount > 0 ? "#b46a66" : palette.muted }}>{money(record.remainingAmount, lang)}</td>
+                <td className="px-4 py-3.5"><Badge bg={`${payrollStatusColors[status]}18`} fg={payrollStatusColors[status]} dot={payrollStatusColors[status]}>{payrollStatusLabels[status][lang]}</Badge></td>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <button type="button" aria-label={lang === "ar" ? "التفاصيل" : "Détails"} onClick={(event) => { event.stopPropagation(); onSelect(record.id); }} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: palette.primary, border: `1px solid ${palette.border}` }}><Eye size={15} /></button>
+                    {record.remainingAmount > 0 && status !== "cancelled" ? (
+                      <button type="button" aria-label={lang === "ar" ? "دفع" : "Payer"} onClick={(event) => { event.stopPropagation(); onPay(record); }} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "#4d8a6a", border: `1px solid ${palette.border}` }}><Wallet size={15} /></button>
+                    ) : null}
                   </div>
-                </td>
-                <td style={tdStyle}>
-                  <Badge bg={`${palette.border}`} fg={palette.muted}>{roleLabels[rec.role][lang]}</Badge>
-                </td>
-                <td style={tdStyle}>
-                  <Badge bg={`${palette.primary}12`} fg={palette.primary}>{salaryTypeLabels[rec.salaryType][lang]}</Badge>
-                </td>
-                <td style={{ ...tdStyle, color: palette.muted, direction: "ltr", textAlign: dir === "rtl" ? "right" : "left" }}>
-                  {rec.period}
-                </td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{rec.baseSalary.toLocaleString()}</td>
-                <td style={{ ...tdStyle, color: palette.muted }}>{rec.piecesCount > 0 ? rec.piecesCount : "-"}</td>
-                <td style={{ ...tdStyle, color: rec.bonuses > 0 ? "#4d8a6a" : palette.muted }}>{rec.bonuses > 0 ? `+${rec.bonuses.toLocaleString()}` : "-"}</td>
-                <td style={{ ...tdStyle, color: rec.deductions > 0 ? "#b46a66" : palette.muted }}>{rec.deductions > 0 ? `-${rec.deductions.toLocaleString()}` : "-"}</td>
-                <td style={{ ...tdStyle, color: rec.advances > 0 ? "#a87d3c" : palette.muted }}>{rec.advances > 0 ? `-${rec.advances.toLocaleString()}` : "-"}</td>
-                <td style={{ ...tdStyle, fontWeight: 800 }}>
-                  {rec.netSalary.toLocaleString()} <span style={{ fontSize: 11, color: palette.muted, fontWeight: 600 }}>{cur}</span>
-                </td>
-                <td style={tdStyle}>
-                  <Badge bg={`${statusColor}1f`} fg={statusColor} dot={statusColor}>
-                    {paymentStatusLabels[rec.status][lang]}
-                  </Badge>
                 </td>
               </tr>
             );

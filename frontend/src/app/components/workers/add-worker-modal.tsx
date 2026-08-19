@@ -19,7 +19,7 @@ export type AddWorkerForm = {
   role: RoleId;
   startDate: string;
   salaryType: SalaryId;
-  salaryRate: string;
+  monthlySalary: string;
   notes: string;
   status: StatusId;
 };
@@ -29,8 +29,8 @@ const initialForm: AddWorkerForm = {
   phone: "",
   role: "tailor",
   startDate: "",
-  salaryType: "daily",
-  salaryRate: "",
+  salaryType: "monthly",
+  monthlySalary: "",
   notes: "",
   status: "active",
 };
@@ -165,13 +165,28 @@ export function AddWorkerModal({
             </Select>
           </Field>
 
-          <Field label={t.salaryRate}>
-            <TextInput
-              value={form.salaryRate}
-              onChange={(e) => setForm({ ...form, salaryRate: e.target.value })}
-              placeholder={lang === "ar" ? "مثال: 45 د.ج / قطعة" : "Ex : 45 DA / pièce"}
-            />
-          </Field>
+          {form.salaryType === "monthly" ? (
+            <Field label={t.salaryRate}>
+              <TextInput
+                required
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.monthlySalary}
+                onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })}
+                placeholder={lang === "ar" ? "مثال: 80000" : "Ex : 80 000"}
+              />
+            </Field>
+          ) : (
+            <div
+              className="flex items-center rounded-xl px-3 text-sm"
+              style={{ minHeight: 40, color: palette.muted, backgroundColor: palette.bg }}
+            >
+              {lang === "ar"
+                ? "يُحدد سعر القطعة عند إنشاء كل راتب أسبوعي."
+                : "Le prix par pièce sera saisi pour chaque paie hebdomadaire."}
+            </div>
+          )}
 
           <Field label={t.status}>
             <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as StatusId })}>

@@ -8,8 +8,9 @@ import {
 } from 'typeorm';
 import { SalaryType, WorkerRole, WorkerStatus } from '../../common/enums';
 import { Advance } from '../../payroll/entities/advance.entity';
-import { BonusDeduction } from '../../payroll/entities/bonus-deduction.entity';
+import { Loan } from '../../payroll/entities/loan.entity';
 import { Payroll } from '../../payroll/entities/payroll.entity';
+import { SalaryPayment } from '../../payroll/entities/salary-payment.entity';
 import { Attendance } from './attendance.entity';
 import { WorkerProduction } from './worker-production.entity';
 
@@ -31,7 +32,7 @@ export class Worker {
   salaryType!: SalaryType;
 
   @Column({ type: 'real', default: 0 })
-  salaryValue!: number;
+  monthlySalary!: number;
 
   @Column({ type: 'date' })
   startDate!: string;
@@ -58,8 +59,14 @@ export class Worker {
   @OneToMany(() => Advance, (advance) => advance.worker)
   advances!: Advance[];
 
-  @OneToMany(() => BonusDeduction, (record) => record.worker)
-  bonusDeductions!: BonusDeduction[];
+  @OneToMany(() => Loan, (loan) => loan.worker)
+  loans!: Loan[];
+
+  @OneToMany(() => SalaryPayment, (payment) => payment.worker)
+  salaryPayments!: SalaryPayment[];
+
+  @Column({ type: 'datetime', nullable: true })
+  archivedAt?: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;
