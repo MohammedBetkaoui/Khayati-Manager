@@ -46,6 +46,9 @@ export class StockMovement {
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  performedBy?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

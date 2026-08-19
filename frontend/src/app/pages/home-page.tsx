@@ -7,8 +7,8 @@ import { DashboardCard } from "../components/dashboard-card";
 
 const routeFor: Record<string, string> = {
   workers: "/workers",
+  clients: "/clients",
   stock: "/stock",
-  production: "/production",
   sales: "/sales",
   salary: "/salary",
   expenses: "/expenses",
@@ -26,7 +26,9 @@ export function HomePage() {
       <StitchDivider className="mt-6" />
 
       <section className="mt-8">
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: palette.text }}>{t.pageTitle}</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: palette.text }}>
+          {t.pageTitle}
+        </h1>
         <p className="mt-1.5" style={{ fontSize: 15, color: palette.muted }}>
           {t.welcome}
         </p>
@@ -48,7 +50,11 @@ export function HomePage() {
 
       <footer
         className="mt-10 pt-5 text-center"
-        style={{ borderTop: `1px solid ${palette.border}`, color: palette.muted, fontSize: 12 }}
+        style={{
+          borderTop: `1px solid ${palette.border}`,
+          color: palette.muted,
+          fontSize: 12,
+        }}
       >
         {t.footer}
       </footer>

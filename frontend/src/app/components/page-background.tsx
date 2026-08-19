@@ -29,7 +29,7 @@ export function PageBackground({ children }: { children: ReactNode }) {
               "repeating-linear-gradient(135deg, rgba(18,60,74,0.035) 0px, rgba(18,60,74,0.035) 2px, transparent 2px, transparent 22px)",
           }}
         />
-        <div className="relative mx-auto flex min-h-full w-full max-w-[1320px] flex-col px-10 py-8">
+        <div className="relative mx-auto flex min-h-full w-full max-w-[1320px] flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
           {children}
         </div>
       </div>

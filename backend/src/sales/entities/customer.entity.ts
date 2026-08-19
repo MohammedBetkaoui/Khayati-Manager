@@ -6,7 +6,7 @@
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Order } from '../../orders/entities/order.entity';
+import { CustomerStatus, CustomerType } from '../../common/enums';
 import { CustomerMeasurement } from './customer-measurement.entity';
 import { CustomerNote } from './customer-note.entity';
 import { Invoice } from './invoice.entity';
@@ -24,10 +24,33 @@ export class Customer {
   phone!: string;
 
   @Column({ type: 'text', nullable: true })
-  address?: string;
+  secondPhone?: string | null;
 
-  @Column({ nullable: true })
-  email?: string;
+  @Column({ type: 'text', nullable: true })
+  address?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  email?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  city?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  wilaya?: string | null;
+
+  @Column({
+    type: 'simple-enum',
+    enum: CustomerType,
+    default: CustomerType.REGULAR,
+  })
+  type!: CustomerType;
+
+  @Column({
+    type: 'simple-enum',
+    enum: CustomerStatus,
+    default: CustomerStatus.ACTIVE,
+  })
+  status!: CustomerStatus;
 
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   firstVisitDate!: string;
@@ -45,10 +68,10 @@ export class Customer {
   totalDebt!: number;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
-  @OneToMany(() => Order, (order) => order.customer)
-  orders!: Order[];
+  @Column({ type: 'datetime', nullable: true })
+  archivedAt?: Date | null;
 
   @OneToMany(() => Invoice, (invoice) => invoice.customer)
   invoices!: Invoice[];

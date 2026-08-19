@@ -10,15 +10,24 @@ import {
   Query,
 } from '@nestjs/common';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
+import { AdjustProductStockDto } from './dto/adjust-product-stock.dto';
+import { CreateFinishedProductDto } from './dto/create-finished-product.dto';
+import { CreateProductionDto } from './dto/create-production.dto';
+import { FinishedProductFilterDto } from './dto/finished-product-filter.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { InventoryFilterDto } from './dto/inventory-filter.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
+import { UpdateFinishedProductDto } from './dto/update-finished-product.dto';
+import { FinishedProductsService } from './finished-products.service';
 import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly finishedProductsService: FinishedProductsService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateInventoryItemDto) {
@@ -58,6 +67,63 @@ export class InventoryController {
   @Get('consumption-analysis')
   getConsumptionAnalysis() {
     return this.inventoryService.getConsumptionAnalysis();
+  }
+
+  @Get('products/stats')
+  getFinishedProductStats() {
+    return this.finishedProductsService.getStats();
+  }
+
+  @Get('products/productions')
+  getProductions(@Query('productId') productId?: string) {
+    return this.finishedProductsService.findProductions(
+      productId ? Number(productId) : undefined,
+    );
+  }
+
+  @Post('products')
+  createFinishedProduct(@Body() dto: CreateFinishedProductDto) {
+    return this.finishedProductsService.create(dto);
+  }
+
+  @Get('products')
+  findFinishedProducts(@Query() query: FinishedProductFilterDto) {
+    return this.finishedProductsService.findAll(query);
+  }
+
+  @Get('products/:id')
+  findFinishedProduct(@Param('id', ParseIntPipe) id: number) {
+    return this.finishedProductsService.findOne(id);
+  }
+
+  @Patch('products/:id')
+  updateFinishedProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateFinishedProductDto,
+  ) {
+    return this.finishedProductsService.update(id, dto);
+  }
+
+  @Delete('products/:id')
+  archiveFinishedProduct(@Param('id', ParseIntPipe) id: number) {
+    return this.finishedProductsService.archive(id);
+  }
+
+  @Post('products/:id/production')
+  createProduction(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateProductionDto,
+  ) {
+    if (dto.productId !== id) dto.productId = id;
+    return this.finishedProductsService.createProduction(dto);
+  }
+
+  @Post('products/:id/stock-adjustment')
+  adjustFinishedProductStock(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdjustProductStockDto,
+  ) {
+    return this.finishedProductsService.adjustStock(id, dto);
   }
 
   @Get()

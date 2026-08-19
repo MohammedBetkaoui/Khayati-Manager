@@ -7,10 +7,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import {
-  InventoryCategory,
-  StockStatus,
-} from '../../common/enums';
+import { InventoryCategory, StockStatus } from '../../common/enums';
 import { enumValueTransform } from './normalize-enum-value';
 
 const inventoryCategoryAliases = {

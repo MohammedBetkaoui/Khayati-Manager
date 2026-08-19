@@ -16,23 +16,36 @@ import { PaymentMethod } from '../../common/enums';
 import { enumValueTransform } from './normalize-enum-value';
 
 export class CreateInvoiceItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  variantId?: number;
+
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  description!: string;
+  description?: string;
 
   @IsOptional()
   @IsString()
   productType?: string;
 
   @Type(() => Number)
-  @IsNumber()
-  @Min(0.01)
+  @IsInt()
+  @Min(1)
   quantity!: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  unitPrice!: number;
+  unitPrice?: number;
 }
 
 export class CreateInvoiceDto {
@@ -67,6 +80,10 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsDateString()
   date?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
 
   @IsOptional()
   @IsString()

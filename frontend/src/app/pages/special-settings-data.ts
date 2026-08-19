@@ -114,13 +114,16 @@ export const specialSettingsText: Record<Lang, any> = {
     breadcrumbHome: "الرئيسية",
     breadcrumb: "إعدادات خاصة",
     title: "إعدادات خاصة",
-    subtitle: "تخصيص قواعد العمل داخل الورشة مثل الأجور، مراحل الإنتاج، أسعار القطع، الخصومات والتنبيهات",
+    subtitle:
+      "تخصيص قواعد العمل داخل الورشة مثل الأجور، مراحل الإنتاج، أسعار القطع، الخصومات والتنبيهات",
     menuTitle: "أقسام الإعدادات",
     sectionHint: "اختر القسم لتعديل قواعده",
     wagesTitle: "قواعد حساب الأجور",
-    wagesSubtitle: "طرق الدفع المفعلة وكيفية احتساب الغياب، التأخر، الإنتاج والمكافآت.",
+    wagesSubtitle:
+      "طرق الدفع المفعلة وكيفية احتساب الغياب، التأخر، الإنتاج والمكافآت.",
     supportingTitle: "أقسام جاهزة للتخصيص",
-    supportingSubtitle: "معاينات سريعة لباقي قواعد الورشة المرتبطة بالأجور والإنتاج.",
+    supportingSubtitle:
+      "معاينات سريعة لباقي قواعد الورشة المرتبطة بالأجور والإنتاج.",
     active: "نشط",
     inactive: "غير نشط",
     enabled: "مفعل",
@@ -213,13 +216,16 @@ export const specialSettingsText: Record<Lang, any> = {
     breadcrumbHome: "Accueil",
     breadcrumb: "Paramètres spéciaux",
     title: "Paramètres spéciaux",
-    subtitle: "Personnaliser les règles internes de l'atelier : salaires, étapes, prix à la pièce, retenues et alertes",
+    subtitle:
+      "Personnaliser les règles internes de l'atelier : salaires, étapes, prix à la pièce, retenues et alertes",
     menuTitle: "Sections des paramètres",
     sectionHint: "Choisissez une section pour ajuster ses règles",
     wagesTitle: "Règles de calcul des salaires",
-    wagesSubtitle: "Modes de paiement actifs et calcul des absences, retards, production et primes.",
+    wagesSubtitle:
+      "Modes de paiement actifs et calcul des absences, retards, production et primes.",
     supportingTitle: "Sections prêtes à configurer",
-    supportingSubtitle: "Aperçu rapide des règles liées aux salaires et à la production.",
+    supportingSubtitle:
+      "Aperçu rapide des règles liées aux salaires et à la production.",
     active: "Actif",
     inactive: "Inactif",
     enabled: "Activé",
@@ -377,7 +383,10 @@ export const summaryCards: SummaryCardItem[] = [
   {
     icon: WalletCards,
     title: { ar: "أنواع الأجور", fr: "Types de salaire" },
-    helper: { ar: "عدد طرق حساب الرواتب المفعلة", fr: "Modes de calcul actifs" },
+    helper: {
+      ar: "عدد طرق حساب الرواتب المفعلة",
+      fr: "Modes de calcul actifs",
+    },
     value: "5",
     frenchSubtitle: "Modes actifs",
     color: palette.primary,
@@ -395,7 +404,10 @@ export const summaryCards: SummaryCardItem[] = [
   {
     icon: Coins,
     title: { ar: "أسعار القطع", fr: "Prix à la pièce" },
-    helper: { ar: "قواعد الدفع حسب المنتج أو المهمة", fr: "Prix par produit ou tâche" },
+    helper: {
+      ar: "قواعد الدفع حسب المنتج أو المهمة",
+      fr: "Prix par produit ou tâche",
+    },
     value: "4",
     frenchSubtitle: "Règles de prix",
     color: "#a87d3c",
@@ -404,7 +416,10 @@ export const summaryCards: SummaryCardItem[] = [
   {
     icon: BellRing,
     title: { ar: "قواعد التنبيهات", fr: "Règles d'alerte" },
-    helper: { ar: "تنبيهات المخزون والتأخير والرواتب", fr: "Stock, retards et salaires" },
+    helper: {
+      ar: "تنبيهات المخزون والتأخير والرواتب",
+      fr: "Stock, retards et salaires",
+    },
     value: "8",
     frenchSubtitle: "Alertes actives",
     color: "#b46a66",
@@ -416,7 +431,10 @@ export const salaryRules: SalaryRule[] = [
   {
     id: "daily",
     title: { ar: "أجر يومي", fr: "Salaire journalier" },
-    description: { ar: "مبلغ ثابت لكل يوم عمل", fr: "Montant fixe par jour travaillé" },
+    description: {
+      ar: "مبلغ ثابت لكل يوم عمل",
+      fr: "Montant fixe par jour travaillé",
+    },
     active: true,
     fields: [
       {
@@ -431,12 +449,18 @@ export const salaryRules: SalaryRule[] = [
         type: "input",
         label: { ar: "قيمة اليوم الافتراضية", fr: "Valeur journée par défaut" },
         value: { ar: "1,800 دج", fr: "1 800 DA" },
-        helper: { ar: "يمكن تغييرها داخل ملف العامل", fr: "Modifiable par travailleur" },
+        helper: {
+          ar: "يمكن تغييرها داخل ملف العامل",
+          fr: "Modifiable par travailleur",
+        },
       },
       {
         id: "daily-absence",
         type: "select",
-        label: { ar: "هل يتم خصم الغياب تلقائياً؟", fr: "Retenir absence automatiquement ?" },
+        label: {
+          ar: "هل يتم خصم الغياب تلقائياً؟",
+          fr: "Retenir absence automatiquement ?",
+        },
         value: { ar: "نعم، حسب قيمة اليوم", fr: "Oui, selon la journée" },
       },
       {
@@ -450,7 +474,10 @@ export const salaryRules: SalaryRule[] = [
   {
     id: "weekly",
     title: { ar: "أجر أسبوعي", fr: "Salaire hebdomadaire" },
-    description: { ar: "يتم حساب الراتب في نهاية كل أسبوع", fr: "Calculé en fin de semaine" },
+    description: {
+      ar: "يتم حساب الراتب في نهاية كل أسبوع",
+      fr: "Calculé en fin de semaine",
+    },
     active: true,
     fields: [
       {
@@ -469,7 +496,10 @@ export const salaryRules: SalaryRule[] = [
       {
         id: "weekly-value",
         type: "input",
-        label: { ar: "قيمة الأسبوع الافتراضية", fr: "Valeur semaine par défaut" },
+        label: {
+          ar: "قيمة الأسبوع الافتراضية",
+          fr: "Valeur semaine par défaut",
+        },
         value: { ar: "9,500 دج", fr: "9 500 DA" },
       },
       {
@@ -483,7 +513,10 @@ export const salaryRules: SalaryRule[] = [
   {
     id: "monthly",
     title: { ar: "أجر شهري", fr: "Salaire mensuel" },
-    description: { ar: "راتب ثابت يتم دفعه كل شهر", fr: "Salaire fixe payé chaque mois" },
+    description: {
+      ar: "راتب ثابت يتم دفعه كل شهر",
+      fr: "Salaire fixe payé chaque mois",
+    },
     active: true,
     fields: [
       {
@@ -516,7 +549,10 @@ export const salaryRules: SalaryRule[] = [
   {
     id: "piece",
     title: { ar: "أجر حسب القطعة", fr: "Salaire à la pièce" },
-    description: { ar: "يتم حساب الراتب حسب عدد القطع المنجزة", fr: "Calculé selon les pièces réalisées" },
+    description: {
+      ar: "يتم حساب الراتب حسب عدد القطع المنجزة",
+      fr: "Calculé selon les pièces réalisées",
+    },
     active: true,
     fields: [
       {
@@ -535,13 +571,19 @@ export const salaryRules: SalaryRule[] = [
       {
         id: "piece-product-price",
         type: "select",
-        label: { ar: "هل يختلف السعر حسب نوع المنتج؟", fr: "Prix selon produit ?" },
+        label: {
+          ar: "هل يختلف السعر حسب نوع المنتج؟",
+          fr: "Prix selon produit ?",
+        },
         value: { ar: "نعم، من جدول أسعار القطع", fr: "Oui, selon le tableau" },
       },
       {
         id: "piece-target-bonus",
         type: "select",
-        label: { ar: "هل توجد مكافأة عند تجاوز هدف معين؟", fr: "Prime après objectif ?" },
+        label: {
+          ar: "هل توجد مكافأة عند تجاوز هدف معين؟",
+          fr: "Prime après objectif ?",
+        },
         value: { ar: "نعم، بعد 120 قطعة", fr: "Oui, après 120 pièces" },
       },
     ],
@@ -549,7 +591,10 @@ export const salaryRules: SalaryRule[] = [
   {
     id: "mixed",
     title: { ar: "أجر مختلط", fr: "Salaire mixte" },
-    description: { ar: "راتب ثابت مع مكافأة حسب الإنتاج", fr: "Fixe avec prime selon production" },
+    description: {
+      ar: "راتب ثابت مع مكافأة حسب الإنتاج",
+      fr: "Fixe avec prime selon production",
+    },
     active: true,
     fields: [
       {
@@ -621,43 +666,73 @@ export const piecePrices: PiecePriceRule[] = [
 export const workerRoles: WorkerRoleRule[] = [
   {
     name: { ar: "خياط", fr: "Tailleur" },
-    description: { ar: "إنجاز الخياطة الأساسية والتعديلات", fr: "Couture et retouches principales" },
-    permissions: { ar: "إنتاج، قطع منجزة، ملاحظات", fr: "Production, pièces, notes" },
+    description: {
+      ar: "إنجاز الخياطة الأساسية والتعديلات",
+      fr: "Couture et retouches principales",
+    },
+    permissions: {
+      ar: "إنتاج، قطع منجزة، ملاحظات",
+      fr: "Production, pièces, notes",
+    },
     active: true,
   },
   {
     name: { ar: "مساعد", fr: "Assistant" },
-    description: { ar: "مساعدة في التحضير والنقل داخل الورشة", fr: "Préparation et soutien atelier" },
-    permissions: { ar: "عرض الطلبات، تحديث بسيط", fr: "Voir commandes, mises à jour" },
+    description: {
+      ar: "مساعدة في التحضير والنقل داخل الورشة",
+      fr: "Préparation et soutien atelier",
+    },
+    permissions: {
+      ar: "عرض الإنتاج، تحديث بسيط",
+      fr: "Voir la production, mises à jour",
+    },
     active: true,
   },
   {
     name: { ar: "قاطع قماش", fr: "Coupeur" },
-    description: { ar: "قص القماش حسب الطلب والمقاسات", fr: "Coupe selon commande et mesures" },
+    description: {
+      ar: "قص القماش حسب خطة الإنتاج والمقاسات",
+      fr: "Coupe selon le plan de production et les mesures",
+    },
     permissions: { ar: "المخزون، القص، القياسات", fr: "Stock, coupe, mesures" },
     active: true,
   },
   {
     name: { ar: "مسؤول كي", fr: "Repasseur" },
-    description: { ar: "مرحلة الكي والتحضير النهائي", fr: "Repassage et finition" },
+    description: {
+      ar: "مرحلة الكي والتحضير النهائي",
+      fr: "Repassage et finition",
+    },
     permissions: { ar: "تحديث مرحلة الكي", fr: "Mise à jour repassage" },
     active: true,
   },
   {
     name: { ar: "مسؤول تغليف", fr: "Emballeur" },
-    description: { ar: "تغليف الطلبات قبل التسليم", fr: "Emballage avant livraison" },
+    description: {
+      ar: "تغليف المنتجات قبل إدخالها إلى المخزون",
+      fr: "Emballage des produits avant leur mise en stock",
+    },
     permissions: { ar: "جاهز، مسلّم", fr: "Prêt, livré" },
     active: true,
   },
   {
     name: { ar: "بائع", fr: "Vendeur" },
-    description: { ar: "إدارة البيع والفواتير والمدفوعات", fr: "Ventes, factures, paiements" },
-    permissions: { ar: "مبيعات، فواتير، عملاء", fr: "Ventes, factures, clients" },
+    description: {
+      ar: "إدارة البيع والفواتير والمدفوعات",
+      fr: "Ventes, factures, paiements",
+    },
+    permissions: {
+      ar: "مبيعات، فواتير، عملاء",
+      fr: "Ventes, factures, clients",
+    },
     active: true,
   },
   {
     name: { ar: "مشرف", fr: "Superviseur" },
-    description: { ar: "متابعة العمال والجودة والإنتاج", fr: "Suivi équipe, qualité, production" },
+    description: {
+      ar: "متابعة العمال والجودة والإنتاج",
+      fr: "Suivi équipe, qualité, production",
+    },
     permissions: { ar: "كامل داخل الورشة", fr: "Accès atelier complet" },
     active: true,
   },
@@ -669,7 +744,10 @@ export const productionStages: ProductionStage[] = [
     order: "01",
     color: "#6b8aa0",
     active: true,
-    description: { ar: "طلب مسجل ولم يبدأ بعد", fr: "Commande enregistrée" },
+    description: {
+      ar: "دفعة إنتاج مسجلة ولم تبدأ بعد",
+      fr: "Lot de production enregistré",
+    },
   },
   {
     name: { ar: "قيد القص", fr: "En coupe" },
@@ -704,7 +782,7 @@ export const productionStages: ProductionStage[] = [
     order: "06",
     color: "#7c6f64",
     active: true,
-    description: { ar: "تم تسليم الطلب", fr: "Commande livrée" },
+    description: { ar: "اكتملت دفعة الإنتاج", fr: "Production terminée" },
   },
 ];
 
@@ -756,10 +834,16 @@ export const attendanceSettings: SimpleSetting[] = [
   },
   {
     label: { ar: "طريقة احتساب الغياب", fr: "Calcul absence" },
-    value: { ar: "خصم من الراتب حسب نوع الأجر", fr: "Retenue selon type de salaire" },
+    value: {
+      ar: "خصم من الراتب حسب نوع الأجر",
+      fr: "Retenue selon type de salaire",
+    },
   },
   {
-    label: { ar: "هل يؤثر الغياب على الراتب؟", fr: "Absence impacte salaire ?" },
+    label: {
+      ar: "هل يؤثر الغياب على الراتب؟",
+      fr: "Absence impacte salaire ?",
+    },
     value: { ar: "نعم، تلقائياً بعد الاعتماد", fr: "Oui, après validation" },
   },
 ];
@@ -874,46 +958,73 @@ export const supportingSections = [
   {
     icon: Shirt,
     title: { ar: "منتجات وأسعار", fr: "Produits et prix" },
-    text: { ar: "ربط كل منتج بسعر المهمة والدور المسؤول.", fr: "Prix par produit, tâche et rôle." },
+    text: {
+      ar: "ربط كل منتج بسعر المهمة والدور المسؤول.",
+      fr: "Prix par produit, tâche et rôle.",
+    },
   },
   {
     icon: Factory,
     title: { ar: "تدفق الإنتاج", fr: "Flux production" },
-    text: { ar: "مراحل مرتبة من الطلب الجديد حتى التسليم.", fr: "Étapes de la commande à la livraison." },
+    text: {
+      ar: "مراحل مرتبة من بدء الدفعة حتى إدخالها إلى المخزون.",
+      fr: "Étapes du lancement d'un lot à sa mise en stock.",
+    },
   },
   {
     icon: ShieldCheck,
     title: { ar: "قواعد الحضور", fr: "Règles présence" },
-    text: { ar: "تأثير الغياب والتأخر على الراتب يظهر قبل الحفظ.", fr: "Impact absence et retard avant validation." },
+    text: {
+      ar: "تأثير الغياب والتأخر على الراتب يظهر قبل الحفظ.",
+      fr: "Impact absence et retard avant validation.",
+    },
   },
   {
     icon: PackageCheck,
     title: { ar: "تنبيهات آمنة", fr: "Alertes utiles" },
-    text: { ar: "حدود مخزون واضحة للأقمشة والخيوط واللوازم.", fr: "Seuils clairs pour matières et fournitures." },
+    text: {
+      ar: "حدود مخزون واضحة للأقمشة والخيوط واللوازم.",
+      fr: "Seuils clairs pour matières et fournitures.",
+    },
   },
   {
     icon: Layers3,
     title: { ar: "تصنيفات ووحدات", fr: "Catégories et unités" },
-    text: { ar: "قوائم جاهزة لمنتجات الورشة ووحدات القياس.", fr: "Listes prêtes pour produits et unités." },
+    text: {
+      ar: "قوائم جاهزة لمنتجات الورشة ووحدات القياس.",
+      fr: "Listes prêtes pour produits et unités.",
+    },
   },
   {
     icon: SlidersHorizontal,
     title: { ar: "إعدادات الفواتير", fr: "Paramètres factures" },
-    text: { ar: "قواعد ترقيم وملاحظات دون تغيير النظام العام.", fr: "Numérotation sans toucher au système global." },
+    text: {
+      ar: "قواعد ترقيم وملاحظات دون تغيير النظام العام.",
+      fr: "Numérotation sans toucher au système global.",
+    },
   },
   {
     icon: ClipboardList,
     title: { ar: "اعتماد القواعد", fr: "Validation règles" },
-    text: { ar: "كل تغيير يمكن معاينته قبل تطبيقه على العمال.", fr: "Aperçu avant application aux travailleurs." },
+    text: {
+      ar: "كل تغيير يمكن معاينته قبل تطبيقه على العمال.",
+      fr: "Aperçu avant application aux travailleurs.",
+    },
   },
   {
     icon: Boxes,
     title: { ar: "مخزون مرتبط", fr: "Stock lié" },
-    text: { ar: "تنبيهات المخزون مرتبطة بسير الإنتاج اليومي.", fr: "Alertes liées au flux de production." },
+    text: {
+      ar: "تنبيهات المخزون مرتبطة بسير الإنتاج اليومي.",
+      fr: "Alertes liées au flux de production.",
+    },
   },
   {
     icon: Settings2,
     title: { ar: "تخصيص داخلي", fr: "Personnalisation interne" },
-    text: { ar: "قواعد خاصة بالورشة فقط، بدون تغيير عام للنظام.", fr: "Règles propres à l'atelier uniquement." },
+    text: {
+      ar: "قواعد خاصة بالورشة فقط، بدون تغيير عام للنظام.",
+      fr: "Règles propres à l'atelier uniquement.",
+    },
   },
 ];

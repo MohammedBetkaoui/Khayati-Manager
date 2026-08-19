@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-react";
 import { useNavigate } from "react-router";
 import { PageBackground } from "../components/page-background";
 import { useLanguage } from "../language-context";
@@ -16,8 +22,18 @@ import {
 import { SummaryCards } from "../components/expenses/summary-cards";
 import { ExpensesTable } from "../components/expenses/expenses-table";
 import { ExpenseDetailsBar } from "../components/expenses/expense-details-bar";
-import { AddExpenseModal, RecurringExpenseModal } from "../components/expenses/expense-modals";
-import { asRecord, fetchJson, getArrayFromPayload, getBoolean, getNumber, getText } from "../lib/api";
+import {
+  AddExpenseModal,
+  RecurringExpenseModal,
+} from "../components/expenses/expense-modals";
+import {
+  asRecord,
+  fetchJson,
+  getArrayFromPayload,
+  getBoolean,
+  getNumber,
+  getText,
+} from "../lib/api";
 
 const categoryMap: Record<string, ExpenseCategory> = {
   fabric: "fabric",
@@ -46,13 +62,14 @@ const linkedToMap: Record<string, LinkedTo> = {
   stock: "stock",
   production: "production",
   salary: "salary",
-  order: "order",
+  sale: "sale",
   general: "general",
 };
 
 function mapExpense(raw: unknown): ExpenseRecord {
   const record = asRecord(raw);
-  const name = getText(record?.name) || getText(record?.title) || "Sans designation";
+  const name =
+    getText(record?.name) || getText(record?.title) || "Sans designation";
   const notes = getText(record?.notes);
 
   return {
@@ -62,12 +79,14 @@ function mapExpense(raw: unknown): ExpenseRecord {
     type: typeMap[getText(record?.type)] ?? "variable",
     date: getText(record?.date) || getText(record?.createdAt) || "-",
     amount: getNumber(record?.amount),
-    paymentMethod: methodMap[getText(record?.paymentMethod ?? record?.method)] ?? "cash",
+    paymentMethod:
+      methodMap[getText(record?.paymentMethod ?? record?.method)] ?? "cash",
     supplier: getText(record?.supplier),
     linkedTo: linkedToMap[getText(record?.linkedTo)] ?? "general",
     isRecurring: getBoolean(record?.isRecurring),
     notes: { ar: notes, fr: notes },
-    lastUpdated: getText(record?.lastUpdated) || getText(record?.updatedAt) || "-",
+    lastUpdated:
+      getText(record?.lastUpdated) || getText(record?.updatedAt) || "-",
   };
 }
 
@@ -103,7 +122,9 @@ export function ExpensesPage() {
         if (cancelled) return;
         setRecords([]);
         setSelectedId(null);
-        setError(err instanceof Error ? err.message : "Unable to load expenses.");
+        setError(
+          err instanceof Error ? err.message : "Unable to load expenses.",
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -119,19 +140,32 @@ export function ExpensesPage() {
   const todayKey = new Date().toISOString().slice(0, 10);
   const currentMonth = todayKey.slice(0, 7);
 
-  const todayTotal = records.filter((record) => record.date.slice(0, 10) === todayKey).reduce((sum, record) => sum + record.amount, 0);
-  const monthTotal = records.filter((record) => record.date.startsWith(currentMonth)).reduce((sum, record) => sum + record.amount, 0);
-  const fixedTotal = records.filter((record) => record.type === "fixed").reduce((sum, record) => sum + record.amount, 0);
+  const todayTotal = records
+    .filter((record) => record.date.slice(0, 10) === todayKey)
+    .reduce((sum, record) => sum + record.amount, 0);
+  const monthTotal = records
+    .filter((record) => record.date.startsWith(currentMonth))
+    .reduce((sum, record) => sum + record.amount, 0);
+  const fixedTotal = records
+    .filter((record) => record.type === "fixed")
+    .reduce((sum, record) => sum + record.amount, 0);
 
-  const categoryTotals = records.reduce<Record<string, number>>((acc, record) => {
-    acc[record.category] = (acc[record.category] ?? 0) + record.amount;
-    return acc;
-  }, {});
+  const categoryTotals = records.reduce<Record<string, number>>(
+    (acc, record) => {
+      acc[record.category] = (acc[record.category] ?? 0) + record.amount;
+      return acc;
+    },
+    {},
+  );
 
-  const topCategoryKey = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] as ExpenseCategory | undefined;
+  const topCategoryKey = Object.entries(categoryTotals).sort(
+    (a, b) => b[1] - a[1],
+  )[0]?.[0] as ExpenseCategory | undefined;
   const topCategory = topCategoryKey
     ? categoryLabels[topCategoryKey][lang]
-    : (lang === "ar" ? "لا توجد بيانات" : "Aucune donnee");
+    : lang === "ar"
+      ? "لا توجد بيانات"
+      : "Aucune donnee";
 
   const filteredRecords = useMemo(() => {
     return records.filter((record) => {
@@ -142,7 +176,8 @@ export function ExpensesPage() {
     });
   }, [records, tab]);
 
-  const selectedRecord = records.find((record) => record.id === selectedId) ?? null;
+  const selectedRecord =
+    records.find((record) => record.id === selectedId) ?? null;
   const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
   const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
 
@@ -162,22 +197,50 @@ export function ExpensesPage() {
           type="button"
           onClick={() => navigate("/")}
           className="flex items-center justify-center transition-colors hover:opacity-80"
-          style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: palette.surface,
+            border: `1px solid ${palette.border}`,
+            color: palette.primary,
+          }}
         >
           <BackArrow size={20} />
         </button>
         <div>
-          <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-            <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
+          <div
+            className="flex items-center gap-1.5"
+            style={{ fontSize: 12.5, color: palette.muted }}
+          >
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="transition-colors hover:opacity-80"
+            >
               {t.breadcrumbHome}
             </button>
             <CrumbChevron size={14} />
-            <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
+            <span style={{ color: palette.text, fontWeight: 600 }}>
+              {t.breadcrumb}
+            </span>
           </div>
-          <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
+          <h1
+            className="mt-1"
+            style={{ fontSize: 24, fontWeight: 800, color: palette.text }}
+          >
             {t.title}
           </h1>
-          <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
+          <p
+            style={{
+              fontSize: 13.5,
+              color: palette.muted,
+              marginTop: 2,
+              maxWidth: 680,
+            }}
+          >
+            {t.subtitle}
+          </p>
         </div>
       </div>
 
@@ -218,19 +281,26 @@ export function ExpensesPage() {
 
       {selectedRecord ? (
         <div className="mt-5">
-          <ExpenseDetailsBar record={selectedRecord} onClose={() => setSelectedId(null)} />
+          <ExpenseDetailsBar
+            record={selectedRecord}
+            onClose={() => setSelectedId(null)}
+          />
         </div>
       ) : null}
 
       <div className="mt-5 pb-10">
         {loading ? (
           <div className="mb-4 text-sm" style={{ color: palette.muted }}>
-            {lang === "ar" ? "جاري تحميل المصاريف..." : "Chargement des depenses..."}
+            {lang === "ar"
+              ? "جاري تحميل المصاريف..."
+              : "Chargement des depenses..."}
           </div>
         ) : null}
         {!loading && error ? (
           <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
-            {lang === "ar" ? "تعذر تحميل المصاريف من الواجهة الخلفية." : "Impossible de charger les depenses depuis l'API."}
+            {lang === "ar"
+              ? "تعذر تحميل المصاريف من الواجهة الخلفية."
+              : "Impossible de charger les depenses depuis l'API."}
           </div>
         ) : null}
 
@@ -243,7 +313,11 @@ export function ExpensesPage() {
             overflow: "hidden",
           }}
         >
-          <ExpensesTable records={filteredRecords} selectedId={selectedId} onSelect={setSelectedId} />
+          <ExpensesTable
+            records={filteredRecords}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
         </div>
 
         <div className="mt-5">
@@ -257,11 +331,20 @@ export function ExpensesPage() {
           >
             <div className="mb-3 flex items-center gap-2">
               <AlertCircle size={16} style={{ color: "#a87d3c" }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#a87d3c" }}>{t.alerts.title}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#a87d3c" }}>
+                {t.alerts.title}
+              </span>
             </div>
-            <ul className="flex flex-col gap-2" style={{ fontSize: 12, color: "#8a6d3f" }}>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.recurringDue}</li>
-              <li className="flex items-start gap-1.5"><span className="mt-0.5">•</span> {t.alerts.laterDue}</li>
+            <ul
+              className="flex flex-col gap-2"
+              style={{ fontSize: 12, color: "#8a6d3f" }}
+            >
+              <li className="flex items-start gap-1.5">
+                <span className="mt-0.5">•</span> {t.alerts.recurringDue}
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="mt-0.5">•</span> {t.alerts.laterDue}
+              </li>
             </ul>
           </div>
         </div>

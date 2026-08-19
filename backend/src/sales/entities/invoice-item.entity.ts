@@ -5,6 +5,8 @@
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { FinishedProduct } from '../../inventory/entities/finished-product.entity';
+import { ProductVariant } from '../../inventory/entities/product-variant.entity';
 import { Invoice } from './invoice.entity';
 
 @Entity('invoice_items')
@@ -17,11 +19,23 @@ export class InvoiceItem {
   })
   invoice!: Invoice;
 
+  @ManyToOne(() => FinishedProduct, { nullable: true, onDelete: 'SET NULL' })
+  product?: FinishedProduct | null;
+
+  @ManyToOne(() => ProductVariant, { nullable: true, onDelete: 'SET NULL' })
+  variant?: ProductVariant | null;
+
   @Column()
   description!: string;
 
   @Column({ nullable: true })
   productType?: string;
+
+  @Column({ type: 'text', nullable: true })
+  productSku?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  variantLabel?: string | null;
 
   @Column({ type: 'real', default: 1 })
   quantity!: number;

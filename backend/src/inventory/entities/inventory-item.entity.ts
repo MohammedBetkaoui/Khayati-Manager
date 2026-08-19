@@ -8,12 +8,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import {
-  InventoryCategory,
-  StockStatus,
-} from '../../common/enums';
-import { OrderMaterial } from '../../orders/entities/order-material.entity';
+import { InventoryCategory, StockStatus } from '../../common/enums';
 import { MaterialConsumption } from './material-consumption.entity';
+import { ProductionMaterial } from './production-material.entity';
 import { StockMovement } from './stock-movement.entity';
 import { Supplier } from './supplier.entity';
 
@@ -24,6 +21,9 @@ export class InventoryItem {
 
   @Column()
   name!: string;
+
+  @Column({ type: 'text', unique: true, nullable: true })
+  reference?: string | null;
 
   @Column({ type: 'simple-enum', enum: InventoryCategory })
   category!: InventoryCategory;
@@ -46,15 +46,22 @@ export class InventoryItem {
   @Column({ type: 'text', nullable: true })
   supplier?: string | null;
 
-  @ManyToOne(() => Supplier, (supplierEntity) => supplierEntity.inventoryItems, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
+  @ManyToOne(
+    () => Supplier,
+    (supplierEntity) => supplierEntity.inventoryItems,
+    {
+      nullable: true,
+      onDelete: 'SET NULL',
+    },
+  )
   @JoinColumn({ name: 'supplierEntityId' })
   supplierEntity?: Supplier | null;
 
   @Column({ type: 'real', default: 0 })
   minStockAlert!: number;
+
+  @Column({ type: 'text', nullable: true })
+  location?: string | null;
 
   @Column({
     type: 'simple-enum',
@@ -69,11 +76,14 @@ export class InventoryItem {
   @OneToMany(() => StockMovement, (movement) => movement.inventoryItem)
   stockMovements!: StockMovement[];
 
-  @OneToMany(() => MaterialConsumption, (consumption) => consumption.inventoryItem)
+  @OneToMany(
+    () => MaterialConsumption,
+    (consumption) => consumption.inventoryItem,
+  )
   materialConsumptions!: MaterialConsumption[];
 
-  @OneToMany(() => OrderMaterial, (usage) => usage.inventoryItem)
-  orderMaterialUsages!: OrderMaterial[];
+  @OneToMany(() => ProductionMaterial, (usage) => usage.inventoryItem)
+  productionMaterialUsages!: ProductionMaterial[];
 
   @CreateDateColumn()
   createdAt!: Date;

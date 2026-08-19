@@ -8,13 +8,23 @@ const allowedOrigins = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ]);
+const viteDevelopmentOrigin =
+  /^http:\/\/(?:localhost|127\.0\.0\.1):51(?:7|8|9)\d$/;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || origin === 'null' || allowedOrigins.has(origin)) {
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allow?: boolean) => void,
+    ) => {
+      if (
+        !origin ||
+        origin === 'null' ||
+        allowedOrigins.has(origin) ||
+        viteDevelopmentOrigin.test(origin)
+      ) {
         callback(null, true);
         return;
       }

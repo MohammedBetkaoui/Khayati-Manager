@@ -2,7 +2,10 @@ export const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
   "http://localhost:3000";
 
-export async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
+export async function fetchJson<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
   const headers = new Headers(options?.headers);
 
   if (options?.body && !headers.has("Content-Type")) {
@@ -15,7 +18,17 @@ export async function fetchJson<T>(path: string, options?: RequestInit): Promise
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const rawMessage = await response.text();
+    let message = rawMessage;
+
+    try {
+      const payload = JSON.parse(rawMessage) as { message?: string | string[] };
+      if (Array.isArray(payload.message)) message = payload.message.join(". ");
+      else if (payload.message) message = payload.message;
+    } catch {
+      // Keep the plain response when the API did not return JSON.
+    }
+
     throw new Error(message || `HTTP ${response.status}`);
   }
 

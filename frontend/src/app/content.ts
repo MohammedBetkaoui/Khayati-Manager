@@ -1,30 +1,25 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Users,
-  Boxes,
-  Receipt,
-  Wallet,
   BarChart3,
-  SlidersHorizontal,
-  ClipboardList,
+  Boxes,
   Calculator,
+  ContactRound,
+  Receipt,
+  SlidersHorizontal,
+  Users,
+  Wallet,
 } from "lucide-react";
 
 export type Lang = "ar" | "fr";
 
-/**
- * Sewing-workshop visual identity.
- * Deep teal primary, warm gold accent, off-white surface, charcoal text.
- * Defined once here and consumed everywhere to keep colors consistent.
- */
 export const palette = {
   bg: "#f5f4f0",
   surface: "#ffffff",
-  primary: "#123c4a", // deep teal / navy
+  primary: "#123c4a",
   primaryHover: "#0d2d38",
-  accent: "#c39a5b", // soft gold
+  accent: "#c39a5b",
   accentSoft: "#efe6d6",
-  rose: "#c98a86", // dusty rose (secondary accent)
+  rose: "#c98a86",
   border: "#e5e2da",
   borderStrong: "#cfcabc",
   text: "#2b2b2b",
@@ -33,24 +28,24 @@ export const palette = {
 
 export const ui = {
   ar: {
-    appName: "خياطتي Manager",
+    appName: "خياطي Manager",
     appSubtitle: "نظام تسيير ورشة الخياطة",
-    pageTitle: "صفحة الاستقبال",
-    welcome: "مرحباً بك، اختر القسم الذي تريد تسييره",
+    pageTitle: "لوحة التسيير",
+    welcome: "اختر القسم الذي تريد تسييره",
     openSection: "فتح القسم",
     userName: "أمينة العلوي",
-    userRole: "مديرة الورشة",
-    footer: "خياطتي Manager — كل الحقوق محفوظة",
+    userRole: "مسؤولة الورشة",
+    footer: "خياطي Manager - كل الحقوق محفوظة",
   },
   fr: {
-    appName: "Khayti Manager",
+    appName: "Khayati Manager",
     appSubtitle: "Système de gestion d'atelier de couture",
-    pageTitle: "Page d'accueil",
-    welcome: "Bienvenue, choisissez la section que vous souhaitez gérer",
+    pageTitle: "Tableau de gestion",
+    welcome: "Choisissez la section que vous souhaitez gérer",
     openSection: "Ouvrir la section",
     userName: "Amina El Alaoui",
     userRole: "Responsable d'atelier",
-    footer: "Khayti Manager — Tous droits réservés",
+    footer: "Khayati Manager - Tous droits réservés",
   },
 } as const;
 
@@ -59,7 +54,7 @@ export type Section = {
   icon: LucideIcon;
   ar: { title: string; sub: string; desc: string };
   fr: { title: string; sub: string; desc: string };
-  tint: string; // icon container background
+  tint: string;
   iconColor: string;
 };
 
@@ -70,15 +65,31 @@ export const sections: Section[] = [
     ar: {
       title: "تسيير العمال",
       sub: "Gestion des travailleurs",
-      desc: "متابعة العمال، الأدوار، الحضور والإنتاج",
+      desc: "متابعة العمال والأدوار والحضور والإنتاجية",
     },
     fr: {
       title: "Gestion des travailleurs",
       sub: "تسيير العمال",
-      desc: "Suivi du personnel, des rôles, des présences et de la production",
+      desc: "Suivi du personnel, des rôles, des présences et de la productivité",
     },
     tint: "rgba(18, 60, 74, 0.08)",
     iconColor: "#123c4a",
+  },
+  {
+    id: "clients",
+    icon: ContactRound,
+    ar: {
+      title: "تسيير الزبائن",
+      sub: "Gestion des clients",
+      desc: "ملفات الزبائن، المبيعات، الدفعات والديون",
+    },
+    fr: {
+      title: "Gestion des clients",
+      sub: "تسيير الزبائن",
+      desc: "Dossiers clients, ventes, paiements et créances",
+    },
+    tint: "rgba(107, 138, 160, 0.14)",
+    iconColor: "#587c92",
   },
   {
     id: "stock",
@@ -86,44 +97,28 @@ export const sections: Section[] = [
     ar: {
       title: "تسيير المخزون",
       sub: "Gestion du stock",
-      desc: "الأقمشة، الخيوط، الأزرار والمواد الأولية",
+      desc: "المواد الأولية، المنتجات الجاهزة وعمليات الإنتاج",
     },
     fr: {
       title: "Gestion du stock",
       sub: "تسيير المخزون",
-      desc: "Tissus, fils, boutons et matières premières",
+      desc: "Matières premières, produits finis et productions",
     },
     tint: "rgba(195, 154, 91, 0.14)",
     iconColor: "#a87d3c",
   },
   {
-    id: "production",
-    icon: ClipboardList,
-    ar: {
-      title: "تسيير الإنتاج والطلبيات",
-      sub: "Gestion de la production",
-      desc: "متابعة الطلبيات ومراحل الإنتاج من الاستلام إلى التسليم",
-    },
-    fr: {
-      title: "Gestion de la production",
-      sub: "تسيير الإنتاج والطلبيات",
-      desc: "Suivi des commandes et des étapes de production jusqu'à la livraison",
-    },
-    tint: "rgba(18, 60, 74, 0.08)",
-    iconColor: "#123c4a",
-  },
-  {
     id: "sales",
     icon: Receipt,
     ar: {
-      title: "المبيعات",
-      sub: "Ventes",
-      desc: "تسجيل المبيعات، الفواتير والمدفوعات",
+      title: "المبيعات والفواتير",
+      sub: "Ventes et factures",
+      desc: "بيع المنتجات المتوفرة وإدارة الفواتير والمدفوعات",
     },
     fr: {
-      title: "Ventes",
-      sub: "المبيعات",
-      desc: "Enregistrement des ventes, factures et paiements",
+      title: "Ventes et factures",
+      sub: "المبيعات والفواتير",
+      desc: "Vente des produits disponibles, factures et paiements",
     },
     tint: "rgba(201, 138, 134, 0.14)",
     iconColor: "#b46a66",
@@ -134,7 +129,7 @@ export const sections: Section[] = [
     ar: {
       title: "تسيير الرواتب",
       sub: "Gestion des salaires",
-      desc: "الرواتب اليومية، الأسبوعية، الشهرية وحسب القطع",
+      desc: "الأجور اليومية والأسبوعية والشهرية وحسب القطعة",
     },
     fr: {
       title: "Gestion des salaires",
@@ -150,12 +145,12 @@ export const sections: Section[] = [
     ar: {
       title: "تسيير المصاريف",
       sub: "Gestion des dépenses",
-      desc: "مراقبة التكاليف الثابتة والمتغيرة وحساب الربح الحقيقي",
+      desc: "مراقبة التكاليف والمصاريف وحساب النتيجة",
     },
     fr: {
       title: "Gestion des dépenses",
       sub: "تسيير المصاريف",
-      desc: "Contrôle des coûts fixes et variables et calcul du bénéfice net",
+      desc: "Suivi des coûts, des dépenses et du résultat",
     },
     tint: "rgba(107, 138, 160, 0.14)",
     iconColor: "#6b8aa0",
@@ -166,12 +161,12 @@ export const sections: Section[] = [
     ar: {
       title: "تحليل البيانات",
       sub: "Analyse des données",
-      desc: "تقارير حول الأرباح، الإنتاجية والمخزون",
+      desc: "تقارير المبيعات، الأرباح، الإنتاج والمخزون",
     },
     fr: {
       title: "Analyse des données",
       sub: "تحليل البيانات",
-      desc: "Rapports sur les bénéfices, la productivité et le stock",
+      desc: "Rapports sur les ventes, les marges, la production et le stock",
     },
     tint: "rgba(195, 154, 91, 0.14)",
     iconColor: "#a87d3c",
@@ -182,12 +177,12 @@ export const sections: Section[] = [
     ar: {
       title: "إعدادات خاصة",
       sub: "Paramètres spéciaux",
-      desc: "قواعد الأجور، أسعار القطع، مراحل الإنتاج والتنبيهات الخاصة بالورشة",
+      desc: "قواعد الأجور والأسعار والتنبيهات الخاصة بالورشة",
     },
     fr: {
       title: "Paramètres spéciaux",
       sub: "إعدادات خاصة",
-      desc: "Règles salariales, prix à la pièce, étapes et alertes de l'atelier",
+      desc: "Règles salariales, prix et alertes propres à l'atelier",
     },
     tint: "rgba(201, 138, 134, 0.14)",
     iconColor: "#b46a66",

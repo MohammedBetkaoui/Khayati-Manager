@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Order } from '../orders/entities/order.entity';
+import { FinishedProduct } from '../inventory/entities/finished-product.entity';
+import { ProductStockMovement } from '../inventory/entities/product-stock-movement.entity';
+import { ProductVariant } from '../inventory/entities/product-variant.entity';
 import { CustomerMeasurement } from './entities/customer-measurement.entity';
 import { CustomerNote } from './entities/customer-note.entity';
 import { Customer } from './entities/customer.entity';
@@ -19,7 +21,9 @@ import { SalesService } from './sales.service';
       Payment,
       CustomerNote,
       CustomerMeasurement,
-      Order,
+      FinishedProduct,
+      ProductVariant,
+      ProductStockMovement,
     ]),
   ],
   controllers: [SalesController],

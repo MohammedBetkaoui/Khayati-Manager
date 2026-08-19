@@ -33,7 +33,7 @@ export class CustomerMeasurement {
   pantsLength?: number;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   date!: string;

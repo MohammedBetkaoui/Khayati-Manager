@@ -1,9 +1,22 @@
-import { palette, expensesText, categoryLabels, typeLabels, methodLabels, linkLabels } from "../../pages/expenses-data";
+import {
+  palette,
+  expensesText,
+  categoryLabels,
+  typeLabels,
+  methodLabels,
+  linkLabels,
+} from "../../pages/expenses-data";
 import { useLanguage } from "../../language-context";
 import { Button, Field, TextInput } from "../kit";
-import { ModalShell, Textarea } from "../production/modal-shell";
+import { ModalShell, Textarea } from "../modal-shell";
 
-export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddExpenseModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const { lang } = useLanguage();
   const t = expensesText[lang].modals.add;
 
@@ -12,24 +25,52 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
       <div className="grid grid-cols-1 gap-5 px-6 py-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Field label={t.name}>
-            <TextInput placeholder={lang === "ar" ? "اسم المصروف..." : "Nom de la dépense..."} />
+            <TextInput
+              placeholder={
+                lang === "ar" ? "اسم المصروف..." : "Nom de la dépense..."
+              }
+            />
           </Field>
         </div>
 
         <Field label={t.category}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
-            {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+            {Object.entries(categoryLabels).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v[lang]}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label={t.type}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
-            {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+            {Object.entries(typeLabels).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v[lang]}
+              </option>
+            ))}
           </select>
         </Field>
 
@@ -39,26 +80,55 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
         <Field label={t.method}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
-            {Object.entries(methodLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+            {Object.entries(methodLabels).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v[lang]}
+              </option>
+            ))}
           </select>
         </Field>
 
         <Field label={t.date}>
-          <TextInput type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+          <TextInput
+            type="date"
+            defaultValue={new Date().toISOString().split("T")[0]}
+          />
         </Field>
         <Field label={t.supplier}>
-          <TextInput placeholder={lang === "ar" ? "اسم المورد..." : "Fournisseur..."} />
+          <TextInput
+            placeholder={lang === "ar" ? "اسم المورد..." : "Fournisseur..."}
+          />
         </Field>
 
         <div className="sm:col-span-2">
           <Field label={t.linkedTo}>
             <select
               className="w-full"
-              style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+              style={{
+                height: 42,
+                padding: "0 14px",
+                borderRadius: 12,
+                border: `1px solid ${palette.border}`,
+                backgroundColor: palette.surface,
+                fontSize: 13.5,
+                outline: "none",
+              }}
             >
-              {Object.entries(linkLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+              {Object.entries(linkLabels).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v[lang]}
+                </option>
+              ))}
             </select>
           </Field>
         </div>
@@ -85,7 +155,13 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
   );
 }
 
-export function RecurringExpenseModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function RecurringExpenseModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const { lang } = useLanguage();
   const t = expensesText[lang].modals.recurring;
 
@@ -94,16 +170,32 @@ export function RecurringExpenseModal({ open, onClose }: { open: boolean; onClos
       <div className="grid grid-cols-1 gap-5 px-6 py-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Field label={t.name}>
-            <TextInput placeholder={lang === "ar" ? "فاتورة كراء، ماء..." : "Loyer, Eau..."} />
+            <TextInput
+              placeholder={
+                lang === "ar" ? "فاتورة كراء، ماء..." : "Loyer, Eau..."
+              }
+            />
           </Field>
         </div>
 
         <Field label={t.category}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
-            {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+            {Object.entries(categoryLabels).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v[lang]}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label={t.amount}>
@@ -113,7 +205,15 @@ export function RecurringExpenseModal({ open, onClose }: { open: boolean; onClos
         <Field label={t.freq}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
             <option value="monthly">{t.freqMonthly}</option>
             <option value="weekly">{t.freqWeekly}</option>
@@ -124,14 +224,29 @@ export function RecurringExpenseModal({ open, onClose }: { open: boolean; onClos
         <Field label={t.method}>
           <select
             className="w-full"
-            style={{ height: 42, padding: "0 14px", borderRadius: 12, border: `1px solid ${palette.border}`, backgroundColor: palette.surface, fontSize: 13.5, outline: "none" }}
+            style={{
+              height: 42,
+              padding: "0 14px",
+              borderRadius: 12,
+              border: `1px solid ${palette.border}`,
+              backgroundColor: palette.surface,
+              fontSize: 13.5,
+              outline: "none",
+            }}
           >
-            {Object.entries(methodLabels).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+            {Object.entries(methodLabels).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v[lang]}
+              </option>
+            ))}
           </select>
         </Field>
 
         <Field label={t.startDate}>
-          <TextInput type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+          <TextInput
+            type="date"
+            defaultValue={new Date().toISOString().split("T")[0]}
+          />
         </Field>
         <div className="flex gap-2">
           <div className="flex-1">

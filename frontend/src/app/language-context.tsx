@@ -5,7 +5,7 @@ type LanguageContextValue = {
   lang: Lang;
   setLang: (lang: Lang) => void;
   dir: "rtl" | "ltr";
-  t: (typeof ui)["ar"];
+  t: (typeof ui)[Lang];
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -18,7 +18,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     dir: lang === "ar" ? "rtl" : "ltr",
     t: ui[lang],
   };
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>
+      {children}
+    </LanguageContext.Provider>
+  );
 }
 
 export function useLanguage() {

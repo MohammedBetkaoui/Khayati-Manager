@@ -38,14 +38,14 @@ export class CreateStockMovementDto {
   reference?: string;
 
   @IsOptional()
-  @IsString()
-  linkedOrderId?: string;
-
-  @IsOptional()
   @IsDateString()
   date?: string;
 
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  performedBy?: string;
 }

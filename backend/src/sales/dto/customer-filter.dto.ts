@@ -1,12 +1,15 @@
 import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import {
   IsDateString,
+  IsEnum,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
+import { CustomerStatus, CustomerType } from '../../common/enums';
+import { enumValueTransform } from './normalize-enum-value';
 
 export class CustomerFilterDto {
   @IsOptional()
@@ -22,6 +25,16 @@ export class CustomerFilterDto {
   date?: string;
 
   @IsOptional()
+  @Transform(enumValueTransform(CustomerType))
+  @IsEnum(CustomerType)
+  type?: CustomerType;
+
+  @IsOptional()
+  @Transform(enumValueTransform(CustomerStatus))
+  @IsEnum(CustomerStatus)
+  status?: CustomerStatus;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -34,8 +47,15 @@ export class CustomerFilterDto {
   limit?: number;
 
   @IsOptional()
-  @IsIn(['fullName', 'lastVisitDate', 'totalPurchases', 'totalDebt'])
-  sortBy?: 'fullName' | 'lastVisitDate' | 'totalPurchases' | 'totalDebt';
+  @IsIn([
+    'fullName',
+    'lastVisitDate',
+    'totalPurchases',
+    'totalDebt',
+    'createdAt',
+  ])
+  sortBy?:
+    'fullName' | 'lastVisitDate' | 'totalPurchases' | 'totalDebt' | 'createdAt';
 
   @IsOptional()
   @Transform(({ value }: TransformFnParams): unknown => {

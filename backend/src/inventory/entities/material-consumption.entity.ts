@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { InventoryItem } from './inventory-item.entity';
+import { ProductionBatch } from './production-batch.entity';
 
 @Entity('material_consumptions')
 export class MaterialConsumption {
@@ -18,14 +19,17 @@ export class MaterialConsumption {
   })
   inventoryItem!: InventoryItem;
 
+  @ManyToOne(() => ProductionBatch, { nullable: true, onDelete: 'SET NULL' })
+  productionBatch?: ProductionBatch | null;
+
   @Column({ type: 'real' })
   quantityUsed!: number;
 
   @Column({ type: 'date' })
   date!: string;
 
-  @Column({ type: 'text', nullable: true })
-  orderId?: string | null;
+  @Column({ name: 'orderId', type: 'text', nullable: true })
+  reference?: string | null;
 
   @Column({ type: 'real', default: 0 })
   cost!: number;

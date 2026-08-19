@@ -4,4 +4,5 @@ export enum PaymentMethod {
   PARTIAL = '\u062f\u0641\u0639 \u062c\u0632\u0626\u064a',
   CHECK = '\u0635\u0643',
   LATER = '\u062f\u0641\u0639 \u0644\u0627\u062d\u0642',
+  OTHER = '\u0623\u062e\u0631\u0649',
 }

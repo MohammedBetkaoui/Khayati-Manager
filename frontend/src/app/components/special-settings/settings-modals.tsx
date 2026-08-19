@@ -1,6 +1,6 @@
 import { Save } from "lucide-react";
 import { Button, Field, Select, TextInput } from "../kit";
-import { ModalShell, Textarea } from "../production/modal-shell";
+import { ModalShell, Textarea } from "../modal-shell";
 import {
   activeStatusOptions,
   modalSectionOptions,
@@ -11,7 +11,13 @@ import {
   type Lang,
 } from "../../pages/special-settings-data";
 
-function SelectOptions({ items, lang }: { items: { ar: string; fr: string }[]; lang: Lang }) {
+function SelectOptions({
+  items,
+  lang,
+}: {
+  items: { ar: string; fr: string }[];
+  lang: Lang;
+}) {
   return (
     <>
       {items.map((item) => (
@@ -23,14 +29,31 @@ function SelectOptions({ items, lang }: { items: { ar: string; fr: string }[]; l
   );
 }
 
-export function AddRuleModal({ open, onClose, lang }: { open: boolean; onClose: () => void; lang: Lang }) {
+export function AddRuleModal({
+  open,
+  onClose,
+  lang,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lang: Lang;
+}) {
   const t = specialSettingsText[lang].modal;
 
   return (
-    <ModalShell open={open} onClose={onClose} title={t.addRuleTitle} maxWidth={620}>
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={t.addRuleTitle}
+      maxWidth={620}
+    >
       <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
         <Field label={t.ruleName}>
-          <TextInput placeholder={lang === "ar" ? "مثال: مكافأة جودة" : "Ex : Prime qualité"} />
+          <TextInput
+            placeholder={
+              lang === "ar" ? "مثال: مكافأة جودة" : "Ex : Prime qualité"
+            }
+          />
         </Field>
         <Field label={t.section}>
           <Select>
@@ -38,13 +61,23 @@ export function AddRuleModal({ open, onClose, lang }: { open: boolean; onClose: 
           </Select>
         </Field>
         <Field label={t.type}>
-          <TextInput placeholder={lang === "ar" ? "مكافأة / خصم / تنبيه" : "Prime / retenue / alerte"} />
+          <TextInput
+            placeholder={
+              lang === "ar"
+                ? "مكافأة / خصم / تنبيه"
+                : "Prime / retenue / alerte"
+            }
+          />
         </Field>
         <Field label={t.value}>
-          <TextInput placeholder={lang === "ar" ? "مثال: 1,000 دج" : "Ex : 1 000 DA"} />
+          <TextInput
+            placeholder={lang === "ar" ? "مثال: 1,000 دج" : "Ex : 1 000 DA"}
+          />
         </Field>
         <Field label={t.condition}>
-          <TextInput placeholder={lang === "ar" ? "عند تجاوز الهدف" : "Après objectif"} />
+          <TextInput
+            placeholder={lang === "ar" ? "عند تجاوز الهدف" : "Après objectif"}
+          />
         </Field>
         <Field label={t.status}>
           <Select>
@@ -70,11 +103,24 @@ export function AddRuleModal({ open, onClose, lang }: { open: boolean; onClose: 
   );
 }
 
-export function AddPiecePriceModal({ open, onClose, lang }: { open: boolean; onClose: () => void; lang: Lang }) {
+export function AddPiecePriceModal({
+  open,
+  onClose,
+  lang,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lang: Lang;
+}) {
   const t = specialSettingsText[lang].modal;
 
   return (
-    <ModalShell open={open} onClose={onClose} title={t.addPieceTitle} maxWidth={620}>
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={t.addPieceTitle}
+      maxWidth={620}
+    >
       <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
         <Field label={t.productType}>
           <Select>
@@ -96,7 +142,9 @@ export function AddPiecePriceModal({ open, onClose, lang }: { open: boolean; onC
           </Select>
         </Field>
         <Field label={t.piecePrice}>
-          <TextInput placeholder={lang === "ar" ? "مثال: 120 دج" : "Ex : 120 DA"} />
+          <TextInput
+            placeholder={lang === "ar" ? "مثال: 120 دج" : "Ex : 120 DA"}
+          />
         </Field>
         <Field label={t.startDate}>
           <TextInput type="date" defaultValue="2026-07-04" />
@@ -125,20 +173,41 @@ export function AddPiecePriceModal({ open, onClose, lang }: { open: boolean; onC
   );
 }
 
-export function AddProductionStageModal({ open, onClose, lang }: { open: boolean; onClose: () => void; lang: Lang }) {
+export function AddProductionStageModal({
+  open,
+  onClose,
+  lang,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lang: Lang;
+}) {
   const t = specialSettingsText[lang].modal;
 
   return (
-    <ModalShell open={open} onClose={onClose} title={t.addStageTitle} maxWidth={560}>
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={t.addStageTitle}
+      maxWidth={560}
+    >
       <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
         <Field label={t.stageName}>
-          <TextInput placeholder={lang === "ar" ? "مثال: مراجعة الجودة" : "Ex : Contrôle qualité"} />
+          <TextInput
+            placeholder={
+              lang === "ar" ? "مثال: مراجعة الجودة" : "Ex : Contrôle qualité"
+            }
+          />
         </Field>
         <Field label={t.stageOrder}>
           <TextInput type="number" defaultValue="7" />
         </Field>
         <Field label={t.stageColor}>
-          <TextInput type="color" defaultValue="#123c4a" style={{ padding: 4 }} />
+          <TextInput
+            type="color"
+            defaultValue="#123c4a"
+            style={{ padding: 4 }}
+          />
         </Field>
         <Field label={t.status}>
           <Select>

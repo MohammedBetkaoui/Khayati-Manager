@@ -16,16 +16,14 @@ export function normalizeEnumValue<T extends EnumShape>(
     return trimmed;
   }
 
-  if (Object.values(enumType).includes(trimmed as T[keyof T])) {
+  if (Object.values(enumType).includes(trimmed)) {
     return trimmed;
   }
 
   const normalizedKey = trimmed.toUpperCase().replace(/[\s-]+/g, '_');
 
   return (
-    enumType[normalizedKey as keyof T] ??
-    aliases[normalizedKey] ??
-    trimmed
+    enumType[normalizedKey as keyof T] ?? aliases[normalizedKey] ?? trimmed
   );
 }
 

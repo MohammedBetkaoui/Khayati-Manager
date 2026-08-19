@@ -85,8 +85,13 @@ function SectionShell({
             <Icon size={20} strokeWidth={1.9} />
           </div>
           <div className="min-w-0">
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>{title}</h2>
-            <p className="truncate" style={{ fontSize: 12.5, color: palette.muted, marginTop: 3 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>
+              {title}
+            </h2>
+            <p
+              className="truncate"
+              style={{ fontSize: 12.5, color: palette.muted, marginTop: 3 }}
+            >
               {subtitle}
             </p>
           </div>
@@ -98,7 +103,13 @@ function SectionShell({
   );
 }
 
-function PrimarySmallButton({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+function PrimarySmallButton({
+  children,
+  onClick,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <button
       type="button"
@@ -122,13 +133,22 @@ function PrimarySmallButton({ children, onClick }: { children: ReactNode; onClic
 function StatusBadge({ active, lang }: { active: boolean; lang: Lang }) {
   const t = specialSettingsText[lang];
   return (
-    <Badge bg={active ? "rgba(77,138,106,0.12)" : palette.bg} fg={active ? "#4d8a6a" : palette.muted}>
+    <Badge
+      bg={active ? "rgba(77,138,106,0.12)" : palette.bg}
+      fg={active ? "#4d8a6a" : palette.muted}
+    >
       {active ? t.active : t.inactive}
     </Badge>
   );
 }
 
-function WagesContent({ lang, onAddRule }: { lang: Lang; onAddRule: () => void }) {
+function WagesContent({
+  lang,
+  onAddRule,
+}: {
+  lang: Lang;
+  onAddRule: () => void;
+}) {
   const t = specialSettingsText[lang];
   return (
     <div className="flex flex-col gap-5">
@@ -169,8 +189,12 @@ function SupportingSections({ lang }: { lang: Lang }) {
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 style={{ fontSize: 17, fontWeight: 800, color: palette.text }}>{t.supportingTitle}</h2>
-          <p style={{ fontSize: 12.5, color: palette.muted, marginTop: 3 }}>{t.supportingSubtitle}</p>
+          <h2 style={{ fontSize: 17, fontWeight: 800, color: palette.text }}>
+            {t.supportingTitle}
+          </h2>
+          <p style={{ fontSize: 12.5, color: palette.muted, marginTop: 3 }}>
+            {t.supportingSubtitle}
+          </p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -200,9 +224,22 @@ function SupportingSections({ lang }: { lang: Lang }) {
                 >
                   <Icon size={17} strokeWidth={1.9} />
                 </span>
-                <div style={{ fontSize: 13, fontWeight: 800, color: palette.text }}>{item.title[lang]}</div>
+                <div
+                  style={{ fontSize: 13, fontWeight: 800, color: palette.text }}
+                >
+                  {item.title[lang]}
+                </div>
               </div>
-              <p style={{ fontSize: 11.5, color: palette.muted, marginTop: 8, lineHeight: 1.6 }}>{item.text[lang]}</p>
+              <p
+                style={{
+                  fontSize: 11.5,
+                  color: palette.muted,
+                  marginTop: 8,
+                  lineHeight: 1.6,
+                }}
+              >
+                {item.text[lang]}
+              </p>
             </div>
           );
         })}
@@ -236,7 +273,10 @@ function SettingsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 620 }}>
+      <table
+        className="w-full"
+        style={{ borderCollapse: "collapse", minWidth: 620 }}
+      >
         <thead>
           <tr>
             {headers.map((head) => (
@@ -262,12 +302,22 @@ function SettingsTable({
   );
 }
 
-function PiecePricesContent({ lang, onAddPiece }: { lang: Lang; onAddPiece: () => void }) {
+function PiecePricesContent({
+  lang,
+  onAddPiece,
+}: {
+  lang: Lang;
+  onAddPiece: () => void;
+}) {
   const t = specialSettingsText[lang];
   return (
     <SectionShell
       title={t.sections.piecePrices}
-      subtitle={lang === "ar" ? "تحديد سعر كل مهمة حسب المنتج والدور المسؤول." : "Définir chaque prix par produit, tâche et rôle."}
+      subtitle={
+        lang === "ar"
+          ? "تحديد سعر كل مهمة حسب المنتج والدور المسؤول."
+          : "Définir chaque prix par produit, tâche et rôle."
+      }
       icon={Coins}
       action={
         <PrimarySmallButton onClick={onAddPiece}>
@@ -281,7 +331,9 @@ function PiecePricesContent({ lang, onAddPiece }: { lang: Lang; onAddPiece: () =
         rows={piecePrices.map((row) => [
           <strong>{row.product[lang]}</strong>,
           row.task[lang],
-          <span style={{ fontWeight: 800, color: palette.primary }}>{row.price[lang]}</span>,
+          <span style={{ fontWeight: 800, color: palette.primary }}>
+            {row.price[lang]}
+          </span>,
           row.role[lang],
           <Badge bg="rgba(77,138,106,0.12)" fg="#4d8a6a">
             {row.status[lang]}
@@ -298,7 +350,11 @@ function WorkerRolesContent({ lang }: { lang: Lang }) {
   return (
     <SectionShell
       title={t.sections.workerRoles}
-      subtitle={lang === "ar" ? "الأدوار الافتراضية والصلاحيات المتاحة داخل الورشة." : "Rôles par défaut et permissions atelier."}
+      subtitle={
+        lang === "ar"
+          ? "الأدوار الافتراضية والصلاحيات المتاحة داخل الورشة."
+          : "Rôles par défaut et permissions atelier."
+      }
       icon={UserRound}
       action={
         <PrimarySmallButton>
@@ -320,15 +376,40 @@ function WorkerRolesContent({ lang }: { lang: Lang }) {
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 style={{ fontSize: 14.5, fontWeight: 800, color: palette.text }}>{role.name[lang]}</h3>
-                <p style={{ fontSize: 12, color: palette.muted, marginTop: 3 }}>{role.description[lang]}</p>
+                <h3
+                  style={{
+                    fontSize: 14.5,
+                    fontWeight: 800,
+                    color: palette.text,
+                  }}
+                >
+                  {role.name[lang]}
+                </h3>
+                <p style={{ fontSize: 12, color: palette.muted, marginTop: 3 }}>
+                  {role.description[lang]}
+                </p>
               </div>
               <StatusBadge active={role.active} lang={lang} />
             </div>
-            <div style={{ fontSize: 12, color: palette.primary, fontWeight: 700, marginTop: 10 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: palette.primary,
+                fontWeight: 700,
+                marginTop: 10,
+              }}
+            >
               {role.permissions[lang]}
             </div>
-            <button type="button" className="mt-3 flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.primary, fontWeight: 700 }}>
+            <button
+              type="button"
+              className="mt-3 flex items-center gap-1.5"
+              style={{
+                fontSize: 12.5,
+                color: palette.primary,
+                fontWeight: 700,
+              }}
+            >
               <Pencil size={14} />
               {t.edit}
             </button>
@@ -339,12 +420,22 @@ function WorkerRolesContent({ lang }: { lang: Lang }) {
   );
 }
 
-function ProductionStagesContent({ lang, onAddStage }: { lang: Lang; onAddStage: () => void }) {
+function ProductionStagesContent({
+  lang,
+  onAddStage,
+}: {
+  lang: Lang;
+  onAddStage: () => void;
+}) {
   const t = specialSettingsText[lang];
   return (
     <SectionShell
       title={t.sections.productionStages}
-      subtitle={lang === "ar" ? "مراحل قابلة للسحب وإعادة الترتيب حسب سير العمل." : "Étapes réordonnables selon le flux de l'atelier."}
+      subtitle={
+        lang === "ar"
+          ? "مراحل قابلة للسحب وإعادة الترتيب حسب سير العمل."
+          : "Étapes réordonnables selon le flux de l'atelier."
+      }
       icon={Route}
       action={
         <PrimarySmallButton onClick={onAddStage}>
@@ -382,10 +473,24 @@ function ProductionStagesContent({ lang, onAddStage }: { lang: Lang; onAddStage:
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: palette.text }}>{stage.name[lang]}</h3>
-                <span style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: stage.color }} />
+                <h3
+                  style={{ fontSize: 14, fontWeight: 800, color: palette.text }}
+                >
+                  {stage.name[lang]}
+                </h3>
+                <span
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: 999,
+                    backgroundColor: stage.color,
+                  }}
+                />
               </div>
-              <p className="truncate" style={{ fontSize: 11.5, color: palette.muted, marginTop: 2 }}>
+              <p
+                className="truncate"
+                style={{ fontSize: 11.5, color: palette.muted, marginTop: 2 }}
+              >
                 {stage.description[lang]}
               </p>
             </div>
@@ -405,7 +510,11 @@ function BonusRulesContent({ lang }: { lang: Lang }) {
   return (
     <SectionShell
       title={t.sections.bonusRules}
-      subtitle={lang === "ar" ? "تحديد الخصومات والمكافآت وشروط تطبيقها." : "Définir les retenues, primes et conditions."}
+      subtitle={
+        lang === "ar"
+          ? "تحديد الخصومات والمكافآت وشروط تطبيقها."
+          : "Définir les retenues, primes et conditions."
+      }
       icon={BadgePercent}
       action={
         <PrimarySmallButton>
@@ -457,9 +566,24 @@ function SimpleSettingsContent({
               padding: 14,
             }}
           >
-            <span style={{ fontSize: 12.5, fontWeight: 800, color: palette.text }}>{item.label[lang]}</span>
-            <TextInput defaultValue={item.value[lang]} style={{ height: 38, backgroundColor: palette.surface, fontSize: 12.5 }} />
-            {item.helper ? <span style={{ fontSize: 11.5, color: palette.muted }}>{item.helper[lang]}</span> : null}
+            <span
+              style={{ fontSize: 12.5, fontWeight: 800, color: palette.text }}
+            >
+              {item.label[lang]}
+            </span>
+            <TextInput
+              defaultValue={item.value[lang]}
+              style={{
+                height: 38,
+                backgroundColor: palette.surface,
+                fontSize: 12.5,
+              }}
+            />
+            {item.helper ? (
+              <span style={{ fontSize: 11.5, color: palette.muted }}>
+                {item.helper[lang]}
+              </span>
+            ) : null}
           </label>
         ))}
       </div>
@@ -497,7 +621,14 @@ function ChipsContent({
               fontWeight: 700,
             }}
           >
-            <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: palette.accent }} />
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                backgroundColor: palette.accent,
+              }}
+            />
             {item[lang]}
           </span>
         ))}
@@ -511,7 +642,11 @@ function WorkflowCard({ lang }: { lang: Lang }) {
   return (
     <SectionShell
       title={t.sections.workflow}
-      subtitle={lang === "ar" ? "قواعد خاصة بكيفية انتقال الطلبات وربطها بالمخزون والرواتب." : "Règles de passage des commandes, stock et salaires."}
+      subtitle={
+        lang === "ar"
+          ? "قواعد خاصة بدفعات الإنتاج وربطها بالمخزون والرواتب."
+          : "Règles des lots de production, du stock et des salaires."
+      }
       icon={Settings2}
     >
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -525,8 +660,19 @@ function WorkflowCard({ lang }: { lang: Lang }) {
               padding: 14,
             }}
           >
-            <div style={{ fontSize: 12, color: palette.muted }}>{item.label[lang]}</div>
-            <div style={{ fontSize: 13.5, color: palette.text, fontWeight: 800, marginTop: 5 }}>{item.value[lang]}</div>
+            <div style={{ fontSize: 12, color: palette.muted }}>
+              {item.label[lang]}
+            </div>
+            <div
+              style={{
+                fontSize: 13.5,
+                color: palette.text,
+                fontWeight: 800,
+                marginTop: 5,
+              }}
+            >
+              {item.value[lang]}
+            </div>
           </div>
         ))}
       </div>
@@ -534,7 +680,13 @@ function WorkflowCard({ lang }: { lang: Lang }) {
   );
 }
 
-export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPiece, onAddStage }: Props) {
+export function SpecialSettingsSectionContent({
+  active,
+  lang,
+  onAddRule,
+  onAddPiece,
+  onAddStage,
+}: Props) {
   const t = specialSettingsText[lang];
 
   if (active === "wages") {
@@ -562,7 +714,11 @@ export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPi
       <SimpleSettingsContent
         lang={lang}
         title={t.sections.attendance}
-        subtitle={lang === "ar" ? "أوقات العمل وطريقة تأثير الغياب والتأخر على الراتب." : "Horaires et impact absence/retard sur salaire."}
+        subtitle={
+          lang === "ar"
+            ? "أوقات العمل وطريقة تأثير الغياب والتأخر على الراتب."
+            : "Horaires et impact absence/retard sur salaire."
+        }
         icon={CalendarCheck}
         items={attendanceSettings}
       />
@@ -574,7 +730,11 @@ export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPi
       <SimpleSettingsContent
         lang={lang}
         title={t.sections.stockAlerts}
-        subtitle={lang === "ar" ? "حدود الحد الأدنى للمواد وتنبيهات قبل النفاد." : "Seuils minimum et alertes avant rupture."}
+        subtitle={
+          lang === "ar"
+            ? "حدود الحد الأدنى للمواد وتنبيهات قبل النفاد."
+            : "Seuils minimum et alertes avant rupture."
+        }
         icon={Boxes}
         items={stockAlertSettings}
         action={
@@ -592,7 +752,11 @@ export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPi
       <ChipsContent
         lang={lang}
         title={t.sections.productTypes}
-        subtitle={lang === "ar" ? "تصنيفات المنتجات التي تستخدم في الطلبات وأسعار القطع." : "Catégories utilisées dans commandes et prix."}
+        subtitle={
+          lang === "ar"
+            ? "تصنيفات المنتجات الجاهزة وأسعار القطع."
+            : "Catégories des produits finis et prix à la pièce."
+        }
         icon={Tags}
         items={productCategories}
       />
@@ -604,7 +768,11 @@ export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPi
       <ChipsContent
         lang={lang}
         title={t.sections.measurementUnits}
-        subtitle={lang === "ar" ? "وحدات القياس المستخدمة في المخزون والإنتاج." : "Unités utilisées dans stock et production."}
+        subtitle={
+          lang === "ar"
+            ? "وحدات القياس المستخدمة في المخزون والإنتاج."
+            : "Unités utilisées dans stock et production."
+        }
         icon={Settings2}
         items={measurementUnits}
       />
@@ -616,7 +784,11 @@ export function SpecialSettingsSectionContent({ active, lang, onAddRule, onAddPi
       <SimpleSettingsContent
         lang={lang}
         title={t.sections.invoiceSettings}
-        subtitle={lang === "ar" ? "إعدادات فواتير الورشة دون تغيير النظام العام." : "Paramètres propres aux factures de l'atelier."}
+        subtitle={
+          lang === "ar"
+            ? "إعدادات فواتير الورشة دون تغيير النظام العام."
+            : "Paramètres propres aux factures de l'atelier."
+        }
         icon={ReceiptText}
         items={invoiceSettings}
       />

@@ -16,7 +16,7 @@ export class Payment {
   id!: number;
 
   @ManyToOne(() => Customer, (customer) => customer.payments, {
-    onDelete: 'CASCADE',
+    onDelete: 'RESTRICT',
   })
   customer!: Customer;
 
@@ -34,11 +34,11 @@ export class Payment {
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   date!: string;
 
-  @Column({ nullable: true })
-  reference?: string;
+  @Column({ type: 'text', nullable: true })
+  reference?: string | null;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

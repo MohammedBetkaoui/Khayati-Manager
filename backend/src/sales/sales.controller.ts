@@ -34,6 +34,11 @@ export class SalesController {
     return this.salesService.findCustomers(query);
   }
 
+  @Get('customers/stats')
+  getCustomerStats() {
+    return this.salesService.getCustomerStats();
+  }
+
   @Post('customers')
   createCustomer(@Body() dto: CreateCustomerDto) {
     return this.salesService.createCustomer(dto);
@@ -91,6 +96,11 @@ export class SalesController {
     @Body() dto: UpdateCustomerDto,
   ) {
     return this.salesService.updateCustomer(id, dto);
+  }
+
+  @Patch('customers/:id/archive')
+  archiveCustomer(@Param('id', ParseIntPipe) id: number) {
+    return this.salesService.archiveCustomer(id);
   }
 
   @Delete('customers/:id')

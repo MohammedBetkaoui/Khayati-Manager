@@ -5,12 +5,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import {
-  InventoryCategory,
-  MovementType,
-  StockStatus,
-} from '../common/enums';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import { InventoryCategory, MovementType, StockStatus } from '../common/enums';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -20,7 +16,6 @@ import { InventoryItem } from './entities/inventory-item.entity';
 import { MaterialConsumption } from './entities/material-consumption.entity';
 import { StockMovement } from './entities/stock-movement.entity';
 import { Supplier } from './entities/supplier.entity';
-import { SelectQueryBuilder } from 'typeorm';
 
 type PaginationPayload = {
   page: number;
@@ -49,6 +44,7 @@ export class InventoryService implements OnModuleInit {
     private readonly suppliersRepository: Repository<Supplier>,
     @InjectRepository(MaterialConsumption)
     private readonly consumptionsRepository: Repository<MaterialConsumption>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
@@ -60,6 +56,7 @@ export class InventoryService implements OnModuleInit {
     const supplierSelection = await this.resolveSupplierSelection(dto);
     const item = this.itemsRepository.create({
       name: this.normalizeRequiredText(dto.name, 'name'),
+      reference: this.normalizeOptionalText(dto.reference),
       category: dto.category,
       type: this.normalizeOptionalText(dto.type),
       color: this.normalizeOptionalText(dto.color),
@@ -69,6 +66,7 @@ export class InventoryService implements OnModuleInit {
       supplier: supplierSelection.supplier,
       supplierEntity: supplierSelection.supplierEntity,
       minStockAlert: dto.minStockAlert,
+      location: this.normalizeOptionalText(dto.location),
       status: this.deriveStatus(dto.quantity, dto.minStockAlert),
       description: this.normalizeOptionalText(dto.description ?? dto.notes),
     });
@@ -112,14 +110,27 @@ export class InventoryService implements OnModuleInit {
     });
 
     if (!item) {
-      throw new NotFoundException(`Inventory item with id ${id} was not found.`);
+      throw new NotFoundException(
+        `Inventory item with id ${id} was not found.`,
+      );
     }
 
     const sortedMovements = [...item.stockMovements].sort((left, right) =>
-      this.compareByDateDesc(left.date, right.date, left.createdAt, right.createdAt),
+      this.compareByDateDesc(
+        left.date,
+        right.date,
+        left.createdAt,
+        right.createdAt,
+      ),
     );
-    const sortedConsumptions = [...item.materialConsumptions].sort((left, right) =>
-      this.compareByDateDesc(left.date, right.date, left.createdAt, right.createdAt),
+    const sortedConsumptions = [...item.materialConsumptions].sort(
+      (left, right) =>
+        this.compareByDateDesc(
+          left.date,
+          right.date,
+          left.createdAt,
+          right.createdAt,
+        ),
     );
 
     return {
@@ -141,6 +152,10 @@ export class InventoryService implements OnModuleInit {
 
     if (dto.name !== undefined) {
       item.name = this.normalizeRequiredText(dto.name, 'name');
+    }
+
+    if (dto.reference !== undefined) {
+      item.reference = this.normalizeOptionalText(dto.reference);
     }
 
     if (dto.category !== undefined) {
@@ -171,8 +186,14 @@ export class InventoryService implements OnModuleInit {
       item.minStockAlert = dto.minStockAlert;
     }
 
+    if (dto.location !== undefined) {
+      item.location = this.normalizeOptionalText(dto.location);
+    }
+
     if (dto.description !== undefined || dto.notes !== undefined) {
-      item.description = this.normalizeOptionalText(dto.description ?? dto.notes);
+      item.description = this.normalizeOptionalText(
+        dto.description ?? dto.notes,
+      );
     }
 
     if (dto.supplierId !== undefined || dto.supplier !== undefined) {
@@ -259,59 +280,68 @@ export class InventoryService implements OnModuleInit {
   }
 
   async createMovement(dto: CreateStockMovementDto) {
-    const item = await this.findItemEntityOrFail(dto.inventoryItemId);
-    const quantity = dto.quantity;
+    return this.dataSource.transaction(async (manager) => {
+      const item = await manager.getRepository(InventoryItem).findOne({
+        where: { id: dto.inventoryItemId },
+      });
+      if (!item) {
+        throw new NotFoundException(
+          `Inventory item with id ${dto.inventoryItemId} was not found.`,
+        );
+      }
 
-    if (dto.type !== MovementType.ADJUSTMENT && quantity <= 0) {
-      throw new BadRequestException(
-        'Movement quantity must be greater than zero for IN and OUT operations.',
+      const quantity = dto.quantity;
+      if (dto.type !== MovementType.ADJUSTMENT && quantity <= 0) {
+        throw new BadRequestException(
+          'Movement quantity must be greater than zero.',
+        );
+      }
+
+      const previousQuantity = item.quantity;
+      const newQuantity = this.calculateQuantityAfterMovement(
+        dto.type,
+        previousQuantity,
+        quantity,
       );
-    }
+      if (newQuantity < 0) {
+        throw new BadRequestException('Stock quantity cannot become negative.');
+      }
 
-    const previousQuantity = item.quantity;
-    const newQuantity = this.calculateQuantityAfterMovement(
-      dto.type,
-      previousQuantity,
-      quantity,
-    );
+      item.quantity = newQuantity;
+      item.status = this.deriveStatus(newQuantity, item.minStockAlert);
+      await manager.getRepository(InventoryItem).save(item);
 
-    if (newQuantity < 0) {
-      throw new BadRequestException('Stock quantity cannot become negative.');
-    }
-
-    item.quantity = newQuantity;
-    item.status = this.deriveStatus(newQuantity, item.minStockAlert);
-    await this.itemsRepository.save(item);
-
-    const movement = this.movementsRepository.create({
-      inventoryItem: item,
-      type: dto.type,
-      quantity,
-      previousQuantity,
-      newQuantity,
-      unitSnapshot: item.unit,
-      reason: this.normalizeOptionalText(dto.reason),
-      reference: this.normalizeOptionalText(dto.reference ?? dto.linkedOrderId),
-      date: this.normalizeDate(dto.date),
-      notes: this.normalizeOptionalText(dto.notes),
-    });
-
-    const savedMovement = await this.movementsRepository.save(movement);
-
-    if (dto.type === MovementType.OUT) {
-      await this.consumptionsRepository.save(
-        this.consumptionsRepository.create({
+      const savedMovement = await manager.getRepository(StockMovement).save(
+        manager.getRepository(StockMovement).create({
           inventoryItem: item,
-          quantityUsed: quantity,
-          date: savedMovement.date,
-          orderId: savedMovement.reference,
-          cost: Math.round(quantity * item.unitPrice),
-          notes: this.normalizeOptionalText(dto.notes ?? dto.reason),
+          type: dto.type,
+          quantity,
+          previousQuantity,
+          newQuantity,
+          unitSnapshot: item.unit,
+          reason: this.normalizeOptionalText(dto.reason),
+          reference: this.normalizeOptionalText(dto.reference),
+          date: this.normalizeDate(dto.date),
+          notes: this.normalizeOptionalText(dto.notes),
+          performedBy: this.normalizeOptionalText(dto.performedBy),
         }),
       );
-    }
 
-    return this.serializeMovement(savedMovement, item);
+      if (dto.type === MovementType.PRODUCTION) {
+        await manager.getRepository(MaterialConsumption).save(
+          manager.getRepository(MaterialConsumption).create({
+            inventoryItem: item,
+            quantityUsed: quantity,
+            date: savedMovement.date,
+            reference: savedMovement.reference,
+            cost: this.roundMoney(quantity * item.unitPrice),
+            notes: this.normalizeOptionalText(dto.notes ?? dto.reason),
+          }),
+        );
+      }
+
+      return this.serializeMovement(savedMovement, item);
+    });
   }
 
   async getMovements(query: InventoryFilterDto = {}) {
@@ -365,7 +395,10 @@ export class InventoryService implements OnModuleInit {
       .addSelect('supplier.address', 'address')
       .addSelect('supplier.notes', 'notes')
       .addSelect('COUNT(item.id)', 'count')
-      .addSelect('COALESCE(SUM(item.quantity * item.unitPrice), 0)', 'totalValue')
+      .addSelect(
+        'COALESCE(SUM(item.quantity * item.unitPrice), 0)',
+        'totalValue',
+      )
       .groupBy('supplier.id')
       .addGroupBy('supplier.name')
       .addGroupBy('supplier.phone')
@@ -400,7 +433,7 @@ export class InventoryService implements OnModuleInit {
   async getConsumptionAnalysis() {
     const { start, end } = this.currentMonthRange();
 
-    const [materials, orders, monthlyCostRow] = await Promise.all([
+    const [materials, productions, monthlyCostRow] = await Promise.all([
       this.consumptionsRepository
         .createQueryBuilder('consumption')
         .leftJoin('consumption.inventoryItem', 'item')
@@ -419,13 +452,13 @@ export class InventoryService implements OnModuleInit {
         }>(),
       this.consumptionsRepository
         .createQueryBuilder('consumption')
-        .select('consumption.orderId', 'orderId')
-        .addSelect('COALESCE(SUM(consumption.cost), 0)', 'orderCost')
+        .select('consumption.reference', 'reference')
+        .addSelect('COALESCE(SUM(consumption.cost), 0)', 'productionCost')
         .where('consumption.date BETWEEN :start AND :end', { start, end })
-        .andWhere('consumption.orderId IS NOT NULL')
-        .andWhere("consumption.orderId != ''")
-        .groupBy('consumption.orderId')
-        .getRawMany<{ orderId: string; orderCost: string }>(),
+        .andWhere('consumption.reference IS NOT NULL')
+        .andWhere("consumption.reference != ''")
+        .groupBy('consumption.reference')
+        .getRawMany<{ reference: string; productionCost: string }>(),
       this.consumptionsRepository
         .createQueryBuilder('consumption')
         .select('COALESCE(SUM(consumption.cost), 0)', 'monthlyCost')
@@ -434,19 +467,19 @@ export class InventoryService implements OnModuleInit {
     ]);
 
     const monthlyCost = Math.round(Number(monthlyCostRow?.monthlyCost ?? 0));
-    const averageOrderCost = orders.length
+    const averageProductionCost = productions.length
       ? Math.round(
-          orders.reduce(
-            (sum, order) => sum + Number(order.orderCost ?? 0),
+          productions.reduce(
+            (sum, production) => sum + Number(production.productionCost ?? 0),
             0,
-          ) / orders.length,
+          ) / productions.length,
         )
       : 0;
 
     return {
       mostConsumedMaterial: materials[0]?.name ?? null,
       monthlyCost,
-      averageOrderCost,
+      averageProductionCost,
     };
   }
 
@@ -478,6 +511,7 @@ export class InventoryService implements OnModuleInit {
     const fabric = await this.itemsRepository.save(
       this.itemsRepository.create({
         name: '\u0642\u0645\u0627\u0634 \u0642\u0637\u0646\u064A',
+        reference: 'MAT-FAB-001',
         category: InventoryCategory.FABRIC,
         type: '\u0642\u0637\u0646 100%',
         color: '\u0623\u0628\u064A\u0636',
@@ -487,14 +521,17 @@ export class InventoryService implements OnModuleInit {
         supplier: fabricSupplier.name,
         supplierEntity: fabricSupplier,
         minStockAlert: 40,
+        location: 'A-01',
         status: this.deriveStatus(160, 40),
-        description: '\u0645\u062E\u0635\u0635 \u0644\u0625\u0646\u062A\u0627\u062C \u0627\u0644\u0642\u0645\u0635\u0627\u0646.',
+        description:
+          '\u0645\u062E\u0635\u0635 \u0644\u0625\u0646\u062A\u0627\u062C \u0627\u0644\u0642\u0645\u0635\u0627\u0646.',
       }),
     );
 
     const thread = await this.itemsRepository.save(
       this.itemsRepository.create({
         name: '\u062E\u064A\u0637 \u0623\u0633\u0648\u062F',
+        reference: 'MAT-THR-001',
         category: InventoryCategory.THREAD,
         type: '\u0628\u0648\u0644\u064A\u0633\u062A\u0631',
         color: '\u0623\u0633\u0648\u062F',
@@ -504,14 +541,17 @@ export class InventoryService implements OnModuleInit {
         supplier: threadSupplier.name,
         supplierEntity: threadSupplier,
         minStockAlert: 60,
+        location: 'B-02',
         status: this.deriveStatus(60, 60),
-        description: '\u062E\u064A\u0637 \u0644\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u062E\u064A\u0627\u0637\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629.',
+        description:
+          '\u062E\u064A\u0637 \u0644\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u062E\u064A\u0627\u0637\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629.',
       }),
     );
 
     const zipper = await this.itemsRepository.save(
       this.itemsRepository.create({
         name: '\u0633\u062D\u0627\u0628',
+        reference: 'MAT-ZIP-001',
         category: InventoryCategory.ZIPPER,
         type: '\u0645\u0639\u062F\u0646\u064A',
         color: '\u0631\u0645\u0627\u062F\u064A',
@@ -521,8 +561,10 @@ export class InventoryService implements OnModuleInit {
         supplier: zipperSupplier.name,
         supplierEntity: zipperSupplier,
         minStockAlert: 20,
+        location: 'C-01',
         status: this.deriveStatus(100, 20),
-        description: '\u0633\u062D\u0627\u0628\u0627\u062A \u0644\u0644\u0639\u0628\u0627\u064A\u0627\u062A \u0648\u0627\u0644\u0633\u0631\u0627\u0648\u064A\u0644.',
+        description:
+          '\u0633\u062D\u0627\u0628\u0627\u062A \u0644\u0644\u0639\u0628\u0627\u064A\u0627\u062A \u0648\u0627\u0644\u0633\u0631\u0627\u0648\u064A\u0644.',
       }),
     );
 
@@ -539,7 +581,8 @@ export class InventoryService implements OnModuleInit {
       reason: '\u0634\u0631\u0627\u0621 \u0642\u0645\u0627\u0634',
       date: purchaseDate,
       reference: 'PO-2026-0813',
-      notes: '\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062F\u0641\u0639\u0629 \u0642\u0645\u0627\u0634 \u062C\u062F\u064A\u062F\u0629.',
+      notes:
+        '\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062F\u0641\u0639\u0629 \u0642\u0645\u0627\u0634 \u062C\u062F\u064A\u062F\u0629.',
     });
 
     await this.createMovement({
@@ -549,7 +592,8 @@ export class InventoryService implements OnModuleInit {
       reason: '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u062E\u064A\u0637',
       date: threadOutDate,
       reference: 'ORD-2026-0816-01',
-      notes: '\u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u0641\u064A \u0637\u0644\u0628\u064A\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629.',
+      notes:
+        '\u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u0641\u064A \u0637\u0644\u0628\u064A\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629.',
     });
 
     await this.consumptionsRepository.save([
@@ -557,17 +601,19 @@ export class InventoryService implements OnModuleInit {
         inventoryItem: fabric,
         quantityUsed: 24,
         date: fabricUseDate,
-        orderId: 'ORD-2026-0818-02',
+        reference: 'LEGACY-PROD-001',
         cost: 12000,
-        notes: '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0642\u0645\u0627\u0634 \u0644\u062F\u0641\u0639\u0629 \u0625\u0646\u062A\u0627\u062C.',
+        notes:
+          '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0642\u0645\u0627\u0634 \u0644\u062F\u0641\u0639\u0629 \u0625\u0646\u062A\u0627\u062C.',
       }),
       this.consumptionsRepository.create({
         inventoryItem: zipper,
         quantityUsed: 8,
         date: zipperUseDate,
-        orderId: 'ORD-2026-0817-03',
+        reference: 'LEGACY-PROD-002',
         cost: 960,
-        notes: '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0633\u062D\u0627\u0628\u0627\u062A \u0644\u0642\u0637\u0639 \u062C\u062F\u064A\u062F\u0629.',
+        notes:
+          '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0633\u062D\u0627\u0628\u0627\u062A \u0644\u0642\u0637\u0639 \u062C\u062F\u064A\u062F\u0629.',
       }),
     ]);
   }
@@ -584,7 +630,10 @@ export class InventoryService implements OnModuleInit {
     let hasChanges = false;
 
     for (const item of items) {
-      const derivedStatus = this.deriveStatus(item.quantity, item.minStockAlert);
+      const derivedStatus = this.deriveStatus(
+        item.quantity,
+        item.minStockAlert,
+      );
       if (item.status !== derivedStatus) {
         item.status = derivedStatus;
         hasChanges = true;
@@ -619,7 +668,7 @@ export class InventoryService implements OnModuleInit {
     if (query.search?.trim()) {
       const search = `%${query.search.trim()}%`;
       qb.andWhere(
-        '(item.name LIKE :search OR item.type LIKE :search OR item.color LIKE :search OR item.supplier LIKE :search OR item.description LIKE :search)',
+        '(item.name LIKE :search OR item.reference LIKE :search OR item.type LIKE :search OR item.color LIKE :search OR item.supplier LIKE :search OR item.location LIKE :search OR item.description LIKE :search)',
         { search },
       );
     }
@@ -646,6 +695,7 @@ export class InventoryService implements OnModuleInit {
     return {
       id: item.id,
       name: item.name,
+      reference: item.reference,
       category: item.category,
       type: item.type,
       color: item.color,
@@ -656,6 +706,7 @@ export class InventoryService implements OnModuleInit {
       supplier: supplierName,
       supplierId: item.supplierEntity?.id ?? null,
       minStockAlert: item.minStockAlert,
+      location: item.location,
       status,
       description: item.description,
       notes: item.description,
@@ -680,21 +731,24 @@ export class InventoryService implements OnModuleInit {
       unit: movement.unitSnapshot ?? item.unit,
       reason: movement.reason,
       reference: movement.reference,
-      linkedOrderId: movement.reference,
       date: movement.date,
       notes: movement.notes,
+      performedBy: movement.performedBy,
       createdAt: movement.createdAt,
       updatedAt: movement.updatedAt,
     };
   }
 
-  private serializeConsumption(consumption: MaterialConsumption, inventoryItemId?: number) {
+  private serializeConsumption(
+    consumption: MaterialConsumption,
+    inventoryItemId?: number,
+  ) {
     return {
       id: consumption.id,
       inventoryItemId: inventoryItemId ?? consumption.inventoryItem?.id ?? null,
       quantityUsed: consumption.quantityUsed,
       date: consumption.date,
-      orderId: consumption.orderId,
+      reference: consumption.reference,
       cost: consumption.cost,
       notes: consumption.notes,
       createdAt: consumption.createdAt,
@@ -778,7 +832,11 @@ export class InventoryService implements OnModuleInit {
       return previousQuantity + quantity;
     }
 
-    if (type === MovementType.OUT) {
+    if (
+      type === MovementType.OUT ||
+      type === MovementType.LOSS ||
+      type === MovementType.PRODUCTION
+    ) {
       return previousQuantity - quantity;
     }
 
@@ -809,7 +867,9 @@ export class InventoryService implements OnModuleInit {
         };
       }
 
-      const supplierEntity = await this.upsertSupplierByName({ name: supplierName });
+      const supplierEntity = await this.upsertSupplierByName({
+        name: supplierName,
+      });
       return {
         supplier: supplierEntity.name,
         supplierEntity,
@@ -861,7 +921,10 @@ export class InventoryService implements OnModuleInit {
       .addSelect('supplier.address', 'address')
       .addSelect('supplier.notes', 'notes')
       .addSelect('COUNT(item.id)', 'count')
-      .addSelect('COALESCE(SUM(item.quantity * item.unitPrice), 0)', 'totalValue')
+      .addSelect(
+        'COALESCE(SUM(item.quantity * item.unitPrice), 0)',
+        'totalValue',
+      )
       .where('supplier.id = :id', { id })
       .groupBy('supplier.id')
       .addGroupBy('supplier.name')
@@ -888,7 +951,9 @@ export class InventoryService implements OnModuleInit {
     });
 
     if (!item) {
-      throw new NotFoundException(`Inventory item with id ${id} was not found.`);
+      throw new NotFoundException(
+        `Inventory item with id ${id} was not found.`,
+      );
     }
 
     return item;
@@ -922,11 +987,13 @@ export class InventoryService implements OnModuleInit {
     const allowed = new Set([
       'id',
       'name',
+      'reference',
       'category',
       'quantity',
       'unit',
       'unitPrice',
       'supplier',
+      'location',
       'status',
       'createdAt',
       'updatedAt',
@@ -939,11 +1006,13 @@ export class InventoryService implements OnModuleInit {
     const map: Record<string, string> = {
       id: 'item.id',
       name: 'item.name',
+      reference: 'item.reference',
       category: 'item.category',
       quantity: 'item.quantity',
       unit: 'item.unit',
       unitPrice: 'item.unitPrice',
       supplier: 'item.supplier',
+      location: 'item.location',
       status: 'item.status',
       createdAt: 'item.createdAt',
       updatedAt: 'item.updatedAt',
@@ -958,6 +1027,10 @@ export class InventoryService implements OnModuleInit {
       throw new BadRequestException(`${fieldName} is required.`);
     }
     return normalized;
+  }
+
+  private roundMoney(value: number) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
   }
 
   private normalizeOptionalText(value?: string | null) {

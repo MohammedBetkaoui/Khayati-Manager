@@ -6,6 +6,13 @@ import { useLanguage } from "../language-context";
 import { LanguageSwitcher } from "./language-switcher";
 import sewingMachineLogo from "../../static/sewing-machine.png";
 
+type ElectronCSSProperties = CSSProperties & {
+  WebkitAppRegion?: "drag" | "no-drag";
+};
+
+const dragStyle: ElectronCSSProperties = { WebkitAppRegion: "drag" };
+const noDragStyle: ElectronCSSProperties = { WebkitAppRegion: "no-drag" };
+
 function WindowButton({
   label,
   onClick,
@@ -17,9 +24,7 @@ function WindowButton({
   variant?: "default" | "danger";
   icon: ReactNode;
 }) {
-  const baseStyle: CSSProperties = {
-    WebkitAppRegion: "no-drag",
-  };
+  const baseStyle = noDragStyle;
 
   return (
     <button
@@ -29,8 +34,14 @@ function WindowButton({
       className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-200"
       style={{
         ...baseStyle,
-        backgroundColor: variant === "danger" ? "rgba(201, 138, 134, 0.08)" : "rgba(255, 255, 255, 0.7)",
-        borderColor: variant === "danger" ? "rgba(201, 138, 134, 0.24)" : "rgba(18, 60, 74, 0.12)",
+        backgroundColor:
+          variant === "danger"
+            ? "rgba(201, 138, 134, 0.08)"
+            : "rgba(255, 255, 255, 0.7)",
+        borderColor:
+          variant === "danger"
+            ? "rgba(201, 138, 134, 0.24)"
+            : "rgba(18, 60, 74, 0.12)",
         color: variant === "danger" ? palette.rose : palette.primary,
       }}
     >
@@ -56,7 +67,7 @@ export function AppHeader() {
       <div
         className="flex items-center justify-between gap-4 border-b px-4 py-3"
         style={{
-          WebkitAppRegion: "drag",
+          ...dragStyle,
           borderColor: "rgba(207, 202, 188, 0.8)",
           background:
             "linear-gradient(90deg, rgba(18,60,74,0.05) 0%, rgba(255,255,255,0.55) 55%, rgba(195,154,91,0.08) 100%)",
@@ -66,7 +77,7 @@ export function AppHeader() {
           type="button"
           onClick={() => navigate("/")}
           className="flex items-center gap-3.5 text-start"
-          style={{ WebkitAppRegion: "no-drag" }}
+          style={noDragStyle}
         >
           <div
             className="flex items-center justify-center overflow-hidden rounded-2xl border"
@@ -86,13 +97,19 @@ export function AppHeader() {
             />
           </div>
           <div className="leading-tight">
-            <div style={{ fontSize: 20, fontWeight: 800, color: palette.primary }}>{t.appName}</div>
-            <div style={{ fontSize: 13, color: palette.muted }}>{t.appSubtitle}</div>
+            <div
+              style={{ fontSize: 20, fontWeight: 800, color: palette.primary }}
+            >
+              {t.appName}
+            </div>
+            <div style={{ fontSize: 13, color: palette.muted }}>
+              {t.appSubtitle}
+            </div>
           </div>
         </button>
 
         <div className="flex items-center gap-3">
-          <div style={{ WebkitAppRegion: "no-drag" }}>
+          <div style={noDragStyle}>
             <LanguageSwitcher lang={lang} onChange={setLang} />
           </div>
           <button
@@ -100,7 +117,7 @@ export function AppHeader() {
             aria-label={lang === "ar" ? "التنبيهات" : "Notifications"}
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200"
             style={{
-              WebkitAppRegion: "no-drag",
+              ...noDragStyle,
               backgroundColor: "rgba(255, 255, 255, 0.78)",
               borderColor: "rgba(18, 60, 74, 0.12)",
               color: palette.primary,
@@ -122,19 +139,28 @@ export function AppHeader() {
           <div
             className="hidden items-center gap-3 rounded-full border bg-white/75 px-3 py-1.5 lg:flex"
             style={{
-              WebkitAppRegion: "no-drag",
+              ...noDragStyle,
               borderColor: "rgba(18, 60, 74, 0.10)",
             }}
           >
             <div
               className="flex h-8 w-8 items-center justify-center rounded-full"
-              style={{ backgroundColor: palette.accentSoft, color: palette.primary }}
+              style={{
+                backgroundColor: palette.accentSoft,
+                color: palette.primary,
+              }}
             >
               <UserRound size={16} strokeWidth={2} />
             </div>
             <div className="leading-tight">
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: palette.text }}>{t.userName}</div>
-              <div style={{ fontSize: 11, color: palette.muted }}>{t.userRole}</div>
+              <div
+                style={{ fontSize: 12.5, fontWeight: 800, color: palette.text }}
+              >
+                {t.userName}
+              </div>
+              <div style={{ fontSize: 11, color: palette.muted }}>
+                {t.userRole}
+              </div>
             </div>
           </div>
           {windowControls ? (

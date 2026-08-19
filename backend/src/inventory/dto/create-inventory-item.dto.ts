@@ -1,11 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import {
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { InventoryCategory } from '../../common/enums';
 import { enumValueTransform } from './normalize-enum-value';
 
@@ -18,6 +12,10 @@ const inventoryCategoryAliases = {
 export class CreateInventoryItemDto {
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
 
   @Transform(enumValueTransform(InventoryCategory, inventoryCategoryAliases))
   @IsEnum(InventoryCategory)
@@ -58,6 +56,10 @@ export class CreateInventoryItemDto {
   @IsNumber()
   @Min(0)
   minStockAlert!: number;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 
   @IsOptional()
   @IsString()

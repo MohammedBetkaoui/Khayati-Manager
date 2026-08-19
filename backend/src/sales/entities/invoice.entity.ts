@@ -8,7 +8,6 @@
   UpdateDateColumn,
 } from 'typeorm';
 import { PaymentStatus } from '../../common/enums';
-import { Order } from '../../orders/entities/order.entity';
 import { Customer } from './customer.entity';
 import { InvoiceItem } from './invoice-item.entity';
 import { Payment } from './payment.entity';
@@ -23,18 +22,15 @@ export class Invoice {
 
   @ManyToOne(() => Customer, (customer) => customer.invoices, {
     nullable: false,
-    onDelete: 'CASCADE',
+    onDelete: 'RESTRICT',
   })
   customer!: Customer;
 
-  @ManyToOne(() => Order, (order) => order.invoices, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  order?: Order;
-
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   date!: string;
+
+  @Column({ type: 'date', nullable: true })
+  dueDate?: string | null;
 
   @Column({ type: 'real', default: 0 })
   subtotal!: number;
@@ -59,7 +55,7 @@ export class Invoice {
   paymentStatus!: PaymentStatus;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @OneToMany(() => InvoiceItem, (item) => item.invoice, { cascade: true })
   items!: InvoiceItem[];

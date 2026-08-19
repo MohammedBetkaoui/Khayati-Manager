@@ -1,487 +1,549 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router";
-import { PageBackground } from "../components/page-background";
-import { useLanguage } from "../language-context";
-import { palette, analyticsText } from "./analytics-data";
-import { SummaryCards, type AnalyticsSummaryMetrics } from "../components/analytics/summary-cards";
-import { ActionBar } from "../components/analytics/action-bar";
-import { InsightsSidebar } from "../components/analytics/insights-sidebar";
-import { ReportModal } from "../components/analytics/report-modal";
 import {
-  DelayedOrdersTable,
-  ExpensesRevChart,
-  SalesProfitChart,
-  TopList,
-  type AnalyticsTopItem,
-  type DelayedOrderItem,
-} from "../components/analytics/charts-and-lists";
-import { asRecord, fetchJson, getArrayFromPayload, getNumber, getText } from "../lib/api";
+  AlertTriangle,
+  Boxes,
+  CircleDollarSign,
+  Factory,
+  PackageCheck,
+  Receipt,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import {
+  PageHeading,
+  StatePanel,
+  StatCard,
+  formatMoney,
+} from "../components/commerce-ui";
+import { PageBackground } from "../components/page-background";
+import { palette } from "../content";
+import { useLanguage } from "../language-context";
+import { fetchJson } from "../lib/api";
+import type { ApiInvoice, FinishedProduct } from "../lib/commerce";
 
-type WorkerRow = {
-  fullName: string;
-  role: string;
-  totalPieces: number;
+type SalesStats = {
+  monthSales: number;
+  totalDebt: number;
+  totalInvoices: number;
+  averageSale: number;
 };
 
-type OrderRow = {
-  id: string;
-  customer: string;
-  product: string;
-  delay: number;
-  date: string;
-};
-
-type InvoiceRow = {
-  total: number;
-  date: string;
-  product: string;
-};
-
-type ExpenseRow = {
-  amount: number;
-  date: string;
-};
-
-type WorkersStats = {
-  totalWorkers: number;
-  presentToday: number;
-  absentToday: number;
-  piecesThisMonth: number;
-};
-
-type InventoryStats = {
+type RawStats = {
+  totalMaterials: number;
   lowStockMaterials: number;
   stockValue: number;
   monthlyMovements: number;
 };
 
-const emptyWorkersStats: WorkersStats = {
-  totalWorkers: 0,
-  presentToday: 0,
-  absentToday: 0,
-  piecesThisMonth: 0,
+type ProductStats = {
+  totalProducts: number;
+  availablePieces: number;
+  soldPieces: number;
+  lowStockProducts: number;
+  productionBatches: number;
+  retailStockValue: number;
+  costStockValue: number;
 };
 
-const emptyInventoryStats: InventoryStats = {
+type WorkerStats = {
+  totalWorkers: number;
+  presentToday: number;
+  absentToday: number;
+  totalPiecesThisMonth?: number;
+  piecesThisMonth?: number;
+};
+
+const emptySales: SalesStats = {
+  monthSales: 0,
+  totalDebt: 0,
+  totalInvoices: 0,
+  averageSale: 0,
+};
+const emptyRaw: RawStats = {
+  totalMaterials: 0,
   lowStockMaterials: 0,
   stockValue: 0,
   monthlyMovements: 0,
 };
+const emptyProducts: ProductStats = {
+  totalProducts: 0,
+  availablePieces: 0,
+  soldPieces: 0,
+  lowStockProducts: 0,
+  productionBatches: 0,
+  retailStockValue: 0,
+  costStockValue: 0,
+};
+const emptyWorkers: WorkerStats = {
+  totalWorkers: 0,
+  presentToday: 0,
+  absentToday: 0,
+};
 
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthLabel(date: Date) {
-  return date.toLocaleDateString("en", { month: "short" });
-}
-
-function buildRecentMonths(count: number) {
-  const today = new Date();
+function recentMonths(count: number) {
+  const current = new Date();
   return Array.from({ length: count }, (_, index) => {
-    const date = new Date(today.getFullYear(), today.getMonth() - (count - index - 1), 1);
+    const date = new Date(
+      current.getFullYear(),
+      current.getMonth() - (count - index - 1),
+      1,
+    );
     return {
-      key: monthKey(date),
-      label: monthLabel(date),
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      label: date.toLocaleDateString("fr-DZ", { month: "short" }),
     };
   });
 }
 
-function safeString(value: unknown) {
-  return getText(value).trim();
-}
-
-function mapWorkerRow(raw: unknown): WorkerRow {
-  const record = asRecord(raw);
-  return {
-    fullName: safeString(record?.fullName) || safeString(record?.name) || "Sans nom",
-    role: safeString(record?.role),
-    totalPieces: getNumber(record?.totalPiecesCompleted ?? record?.totalPieces ?? record?.piecesCompleted),
-  };
-}
-
-function mapOrderRow(raw: unknown): OrderRow | null {
-  const record = asRecord(raw);
-  const deadline = safeString(record?.deadline ?? record?.status).toLowerCase();
-  const isLate = deadline.includes("late") || deadline.includes("retard");
-  if (!isLate) {
-    return null;
-  }
-
-  return {
-    id: safeString(record?.id) || safeString(record?.number) || "-",
-    customer: safeString(record?.customerName) || safeString(record?.customer) || "Client",
-    product: safeString(record?.product) || safeString(record?.productName) || "Produit",
-    delay: Math.max(1, getNumber(record?.delayDays ?? record?.delay)),
-    date: safeString(record?.date) || safeString(record?.deliveryDate) || safeString(record?.createdAt),
-  };
-}
-
-function mapInvoiceRow(raw: unknown): InvoiceRow {
-  const record = asRecord(raw);
-  const firstItem = getArrayFromPayload(record?.items)[0];
-  const firstItemRecord = asRecord(firstItem);
-
-  return {
-    total: getNumber(record?.total),
-    date: safeString(record?.date) || safeString(record?.createdAt),
-    product: safeString(firstItemRecord?.description) || safeString(firstItemRecord?.name) || "Produit",
-  };
-}
-
-function mapExpenseRow(raw: unknown): ExpenseRow {
-  const record = asRecord(raw);
-  return {
-    amount: getNumber(record?.amount),
-    date: safeString(record?.date) || safeString(record?.createdAt),
-  };
-}
-
 export function AnalyticsPage() {
-  const { lang, dir } = useLanguage();
-  const t = analyticsText[lang];
-  const navigate = useNavigate();
-
-  const [tab, setTab] = useState("overview");
-  const [reportOpen, setReportOpen] = useState(false);
-  const [workers, setWorkers] = useState<WorkerRow[]>([]);
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
-  const [workerStats, setWorkerStats] = useState<WorkersStats>(emptyWorkersStats);
-  const [inventoryStats, setInventoryStats] = useState<InventoryStats>(emptyInventoryStats);
+  const { lang } = useLanguage();
+  const [sales, setSales] = useState<SalesStats>(emptySales);
+  const [raw, setRaw] = useState<RawStats>(emptyRaw);
+  const [productStats, setProductStats] = useState<ProductStats>(emptyProducts);
+  const [workers, setWorkers] = useState<WorkerStats>(emptyWorkers);
+  const [invoices, setInvoices] = useState<ApiInvoice[]>([]);
+  const [products, setProducts] = useState<FinishedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function safeLoad<T>(path: string) {
-      try {
-        return await fetchJson<unknown>(path);
-      } catch {
-        return null;
-      }
-    }
-
+    const controller = new AbortController();
     async function load() {
       setLoading(true);
       setError(null);
-
       try {
-        const [workersPayload, workerStatsPayload, inventoryStatsPayload, ordersPayload, salesPayload, expensesPayload] =
-          await Promise.all([
-            safeLoad("/workers?limit=100&sortBy=fullName&sortOrder=ASC"),
-            safeLoad("/workers/stats"),
-            safeLoad("/inventory/stats"),
-            safeLoad("/orders"),
-            safeLoad("/sales"),
-            safeLoad("/expenses"),
-          ]);
-
-        if (cancelled) return;
-
-        setWorkers(getArrayFromPayload(workersPayload).map(mapWorkerRow));
-
-        const workerStatsRecord = asRecord(workerStatsPayload);
-        setWorkerStats({
-          totalWorkers: getNumber(workerStatsRecord?.totalWorkers),
-          presentToday: getNumber(workerStatsRecord?.presentToday),
-          absentToday: getNumber(workerStatsRecord?.absentToday),
-          piecesThisMonth: getNumber(workerStatsRecord?.piecesThisMonth ?? workerStatsRecord?.totalPiecesThisMonth),
-        });
-
-        const inventoryStatsRecord = asRecord(inventoryStatsPayload);
-        setInventoryStats({
-          lowStockMaterials: getNumber(inventoryStatsRecord?.lowStockMaterials ?? inventoryStatsRecord?.lowStock),
-          stockValue: getNumber(inventoryStatsRecord?.stockValue),
-          monthlyMovements: getNumber(inventoryStatsRecord?.monthlyMovements ?? inventoryStatsRecord?.movementsCount),
-        });
-
-        setOrders(getArrayFromPayload(ordersPayload).map(mapOrderRow).filter((row): row is OrderRow => row !== null));
-        setInvoices(getArrayFromPayload(salesPayload).map(mapInvoiceRow));
-        setExpenses(getArrayFromPayload(expensesPayload).map(mapExpenseRow));
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Unable to load analytics.");
+        const [
+          salesStats,
+          rawStats,
+          finishedStats,
+          workerStats,
+          invoiceList,
+          productList,
+        ] = await Promise.all([
+          fetchJson<SalesStats>("/sales/stats", { signal: controller.signal }),
+          fetchJson<RawStats>("/inventory/stats", {
+            signal: controller.signal,
+          }),
+          fetchJson<ProductStats>("/inventory/products/stats", {
+            signal: controller.signal,
+          }),
+          fetchJson<WorkerStats>("/workers/stats", {
+            signal: controller.signal,
+          }),
+          fetchJson<{ data: ApiInvoice[] }>("/sales/invoices?limit=100", {
+            signal: controller.signal,
+          }),
+          fetchJson<{ data: FinishedProduct[] }>(
+            "/inventory/products?limit=100",
+            { signal: controller.signal },
+          ),
+        ]);
+        setSales(salesStats);
+        setRaw(rawStats);
+        setProductStats(finishedStats);
+        setWorkers(workerStats);
+        setInvoices(invoiceList.data);
+        setProducts(productList.data);
+      } catch (caught) {
+        if (!controller.signal.aborted)
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "Unable to load analytics",
+          );
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
-
     void load();
+    return () => controller.abort();
+  }, [refreshKey]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const BackArrow = dir === "rtl" ? ArrowRight : ArrowLeft;
-  const CrumbChevron = dir === "rtl" ? ChevronLeft : ChevronRight;
-
-  const tabs = [
-    { id: "overview", label: t.tabs.overview },
-    { id: "salesProfits", label: t.tabs.salesProfits },
-    { id: "workersProd", label: t.tabs.workersProd },
-    { id: "stockMat", label: t.tabs.stockMat },
-    { id: "orders", label: t.tabs.orders },
-    { id: "detailed", label: t.tabs.detailed },
-  ];
-
-  const recentMonths = useMemo(() => buildRecentMonths(6), []);
-
-  const salesByMonth = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const invoice of invoices) {
-      if (!invoice.date) continue;
-      totals[invoice.date.slice(0, 7)] = (totals[invoice.date.slice(0, 7)] ?? 0) + invoice.total;
-    }
-    return recentMonths.map((month) => totals[month.key] ?? 0);
-  }, [invoices, recentMonths]);
-
-  const expensesByMonth = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const expense of expenses) {
-      if (!expense.date) continue;
-      totals[expense.date.slice(0, 7)] = (totals[expense.date.slice(0, 7)] ?? 0) + expense.amount;
-    }
-    return recentMonths.map((month) => totals[month.key] ?? 0);
-  }, [expenses, recentMonths]);
-
-  const profitByMonth = useMemo(() => {
-    return salesByMonth.map((salesValue, index) => Math.max(0, salesValue - (expensesByMonth[index] ?? 0)));
-  }, [expensesByMonth, salesByMonth]);
-
-  const currentMonthKey = monthKey(startOfMonth(new Date()));
-  const monthSales = invoices.filter((invoice) => invoice.date.startsWith(currentMonthKey)).reduce((sum, invoice) => sum + invoice.total, 0);
-  const monthExpenses = expenses.filter((expense) => expense.date.startsWith(currentMonthKey)).reduce((sum, expense) => sum + expense.amount, 0);
-  const delayedCount = orders.length;
-
-  const topWorkers = useMemo<AnalyticsTopItem[]>(() => {
-    return [...workers]
-      .sort((a, b) => b.totalPieces - a.totalPieces)
-      .slice(0, 3)
-      .map((worker) => ({
-        name: worker.fullName,
-        val1: worker.role || (lang === "ar" ? "عامل" : "Ouvrier"),
-        val2: lang === "ar" ? `${worker.totalPieces} قطعة` : `${worker.totalPieces} pcs`,
-      }));
-  }, [lang, workers]);
-
-  const topProducts = useMemo<AnalyticsTopItem[]>(() => {
-    const productMap = invoices.reduce<Record<string, { quantity: number; revenue: number }>>((acc, invoice) => {
-      const key = invoice.product;
-      if (!key) return acc;
-      acc[key] = {
-        quantity: (acc[key]?.quantity ?? 0) + 1,
-        revenue: (acc[key]?.revenue ?? 0) + invoice.total,
-      };
-      return acc;
-    }, {});
-
-    return Object.entries(productMap)
-      .sort((a, b) => b[1].revenue - a[1].revenue)
-      .slice(0, 3)
-      .map(([name, data]) => ({
-        name,
-        val1: String(data.quantity),
-        val2: `${data.revenue.toLocaleString()} ${t.currency}`,
-      }));
-  }, [invoices, t.currency]);
-
-  const delayedOrders = useMemo<DelayedOrderItem[]>(() => {
-    return orders.slice(0, 5).map((order) => ({
-      id: order.id,
-      customer: order.customer,
-      product: order.product,
-      delay: order.delay,
+  const months = useMemo(() => recentMonths(6), []);
+  const monthlySales = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const invoice of invoices)
+      totals.set(
+        invoice.date.slice(0, 7),
+        (totals.get(invoice.date.slice(0, 7)) ?? 0) + invoice.totalAmount,
+      );
+    return months.map((month) => ({
+      ...month,
+      amount: totals.get(month.key) ?? 0,
     }));
-  }, [orders]);
+  }, [invoices, months]);
+  const maxMonth = Math.max(...monthlySales.map((month) => month.amount), 1);
 
-  const metrics = useMemo<AnalyticsSummaryMetrics>(() => {
-    return {
-      sales: monthSales,
-      profits: Math.max(0, monthSales - monthExpenses),
-      expenses: monthExpenses,
-      delayed: delayedCount,
-      topWorker: topWorkers[0]?.name ?? "",
-      topProduct: topProducts[0]?.name ?? "",
-    };
-  }, [delayedCount, monthExpenses, monthSales, topProducts, topWorkers]);
+  const topProducts = useMemo(() => {
+    const values = new Map<string, { quantity: number; amount: number }>();
+    for (const invoice of invoices) {
+      for (const item of invoice.items) {
+        const current = values.get(item.productName) ?? {
+          quantity: 0,
+          amount: 0,
+        };
+        current.quantity += item.quantity;
+        current.amount += item.total;
+        values.set(item.productName, current);
+      }
+    }
+    return [...values.entries()]
+      .sort((left, right) => right[1].quantity - left[1].quantity)
+      .slice(0, 5);
+  }, [invoices]);
 
-  const insights = useMemo(() => {
-    const rows: string[] = [];
-    if (workerStats.totalWorkers > 0) {
-      rows.push(
-        lang === "ar"
-          ? `${workerStats.presentToday} من أصل ${workerStats.totalWorkers} عاملين حاضرون اليوم.`
-          : `${workerStats.presentToday} travailleurs sur ${workerStats.totalWorkers} sont presents aujourd'hui.`,
-      );
-    }
-    if (workerStats.piecesThisMonth > 0) {
-      rows.push(
-        lang === "ar"
-          ? `تم إنجاز ${workerStats.piecesThisMonth} قطعة منذ 1 أغسطس 2026.`
-          : `${workerStats.piecesThisMonth} pieces ont ete realisees depuis le 1 aout 2026.`,
-      );
-    }
-    if (inventoryStats.stockValue > 0) {
-      rows.push(
-        lang === "ar"
-          ? `قيمة المخزون الحالية ${inventoryStats.stockValue.toLocaleString()} ${t.currency}.`
-          : `La valeur actuelle du stock est de ${inventoryStats.stockValue.toLocaleString()} ${t.currency}.`,
-      );
-    }
-    return rows;
-  }, [inventoryStats.stockValue, lang, t.currency, workerStats.piecesThisMonth, workerStats.presentToday, workerStats.totalWorkers]);
+  const stockProducts = [...products]
+    .sort((left, right) => right.quantityAvailable - left.quantityAvailable)
+    .slice(0, 6);
+  const grossStockMargin = Math.max(
+    0,
+    productStats.retailStockValue - productStats.costStockValue,
+  );
+  const attendanceRate = workers.totalWorkers
+    ? Math.round((workers.presentToday / workers.totalWorkers) * 100)
+    : 0;
+  const lowAlerts = raw.lowStockMaterials + productStats.lowStockProducts;
 
-  const alerts = useMemo(() => {
-    const rows: string[] = [];
-    if (inventoryStats.lowStockMaterials > 0) {
-      rows.push(
-        lang === "ar"
-          ? `${inventoryStats.lowStockMaterials} مواد قاربت على النفاد في المخزون.`
-          : `${inventoryStats.lowStockMaterials} matieres sont proches de la rupture.`,
-      );
-    }
-    if (workerStats.absentToday > 0) {
-      rows.push(
-        lang === "ar"
-          ? `${workerStats.absentToday} غيابات مسجلة اليوم.`
-          : `${workerStats.absentToday} absences ont ete enregistrees aujourd'hui.`,
-      );
-    }
-    if (delayedCount > 0) {
-      rows.push(
-        lang === "ar"
-          ? `${delayedCount} طلبيات متأخرة تحتاج متابعة.`
-          : `${delayedCount} commandes en retard demandent un suivi.`,
-      );
-    }
-    return rows;
-  }, [delayedCount, inventoryStats.lowStockMaterials, lang, workerStats.absentToday]);
-
-  const actions = useMemo(() => {
-    const rows: string[] = [];
-    if (inventoryStats.lowStockMaterials > 0) {
-      rows.push(lang === "ar" ? "أعط أولوية لإعادة تموين المواد الناقصة." : "Prioriser le reapprovisionnement des matieres critiques.");
-    }
-    if (workerStats.presentToday < workerStats.totalWorkers) {
-      rows.push(lang === "ar" ? "راجع توزيع العمل حسب الحضور اليومي." : "Revoir la repartition des taches selon la presence du jour.");
-    }
-    if (metrics.sales > 0 && metrics.expenses > metrics.sales) {
-      rows.push(lang === "ar" ? "راقب المصاريف لأنّها تتجاوز المبيعات الحالية." : "Surveiller les depenses car elles depassent les ventes actuelles.");
-    }
-    return rows;
-  }, [inventoryStats.lowStockMaterials, lang, metrics.expenses, metrics.sales, workerStats.presentToday, workerStats.totalWorkers]);
+  const text =
+    lang === "ar"
+      ? {
+          title: "تحليل البيانات",
+          subtitle:
+            "قراءة مباشرة للمبيعات، المخزون، الإنتاج ونشاط الورشة دون بيانات ثابتة.",
+          sales: "مبيعات الشهر",
+          debt: "ديون الزبائن",
+          stock: "قيمة المنتجات",
+          pieces: "القطع المتوفرة",
+          alerts: "تنبيهات المخزون",
+          batches: "دفعات الإنتاج",
+          trend: "تطور المبيعات خلال 6 أشهر",
+          top: "المنتجات الأكثر مبيعا",
+          stockTitle: "توزيع مخزون المنتجات",
+          workshop: "مؤشرات الورشة",
+          attendance: "نسبة الحضور اليوم",
+          rawValue: "قيمة المواد الأولية",
+          margin: "هامش المخزون المتوقع",
+          movements: "حركات المواد هذا الشهر",
+          empty: "لا توجد بيانات كافية للتحليل",
+        }
+      : {
+          title: "Analyse des données",
+          subtitle:
+            "Lecture directe des ventes, stocks, productions et activités de l'atelier, sans données statiques.",
+          sales: "Ventes du mois",
+          debt: "Créances clients",
+          stock: "Valeur des produits",
+          pieces: "Pièces disponibles",
+          alerts: "Alertes de stock",
+          batches: "Lots de production",
+          trend: "Évolution des ventes sur 6 mois",
+          top: "Produits les plus vendus",
+          stockTitle: "Répartition du stock produits",
+          workshop: "Indicateurs atelier",
+          attendance: "Présence aujourd'hui",
+          rawValue: "Valeur des matières",
+          margin: "Marge potentielle du stock",
+          movements: "Mouvements matières du mois",
+          empty: "Pas encore assez de données pour l'analyse",
+        };
 
   return (
     <PageBackground>
-      <div className="flex items-center gap-4 pt-7">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="flex items-center justify-center transition-colors hover:opacity-80"
-          style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
-        >
-          <BackArrow size={20} />
-        </button>
-        <div>
-          <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-            <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
-              {t.breadcrumbHome}
-            </button>
-            <CrumbChevron size={14} />
-            <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
-          </div>
-          <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
-            {t.title}
-          </h1>
-          <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
-        </div>
-      </div>
-
+      <PageHeading title={text.title} subtitle={text.subtitle} />
       <div className="mt-6">
-        <SummaryCards metrics={metrics} />
+        <StatePanel
+          loading={loading}
+          error={error}
+          empty={false}
+          emptyTitle={text.empty}
+          onRetry={() => setRefreshKey((value) => value + 1)}
+        />
       </div>
-
-      <div className="mt-5">
-        <ActionBar onCreateReport={() => setReportOpen(true)} />
-      </div>
-
-      <div className="mt-5 flex flex-col gap-6 pb-10 xl:flex-row">
-        <div className="min-w-0 flex-1">
-          <div className="mb-4 flex flex-wrap items-center gap-1.5">
-            {tabs.map((item) => {
-              const active = item.id === tab;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className="transition-colors"
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: 12,
-                    fontSize: 14,
-                    fontWeight: active ? 700 : 500,
-                    color: active ? "#fff" : palette.muted,
-                    backgroundColor: active ? palette.primary : palette.surface,
-                    border: `1px solid ${active ? palette.primary : palette.border}`,
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {loading ? (
-            <div className="mb-4 text-sm" style={{ color: palette.muted }}>
-              {lang === "ar" ? "جاري تحميل التحليلات..." : "Chargement des analyses..."}
-            </div>
-          ) : null}
-          {!loading && error ? (
-            <div className="mb-4 text-sm" style={{ color: "#b46a66" }}>
-              {lang === "ar" ? "تعذر تحميل بعض بيانات التحليل." : "Impossible de charger une partie des donnees analytiques."}
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <SalesProfitChart
-              months={recentMonths.map((month) => month.label)}
-              sales={salesByMonth.map((value) => (monthSales > 0 ? Math.round((value / Math.max(...salesByMonth, 1)) * 100) : 0))}
-              profits={profitByMonth.map((value) => (Math.max(...profitByMonth, 0) > 0 ? Math.round((value / Math.max(...profitByMonth, 1)) * 100) : 0))}
+      {!loading && !error ? (
+        <>
+          <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <StatCard
+              icon={Receipt}
+              label={text.sales}
+              value={formatMoney(sales.monthSales, lang)}
             />
-            <ExpensesRevChart salesTotal={monthSales} expensesTotal={monthExpenses} profitTotal={monthSales - monthExpenses} />
-            <TopList title={t.charts.topProducts} items={topProducts} columns={[t.actions.product, lang === "ar" ? "الكمية" : "Qté", lang === "ar" ? "الإيراد" : "Revenu"]} />
-            <TopList title={t.charts.topWorkers} items={topWorkers} columns={[t.actions.worker, lang === "ar" ? "الوظيفة" : "Rôle", lang === "ar" ? "الإنتاج" : "Prod."]} />
-            <div className="md:col-span-2">
-              <DelayedOrdersTable orders={delayedOrders} />
-            </div>
-          </div>
-        </div>
+            <StatCard
+              icon={CircleDollarSign}
+              label={text.debt}
+              value={formatMoney(sales.totalDebt, lang)}
+              color="#b46a66"
+              tint="rgba(201,138,134,0.13)"
+            />
+            <StatCard
+              icon={Boxes}
+              label={text.stock}
+              value={formatMoney(productStats.retailStockValue, lang)}
+              color="#a87d3c"
+              tint="rgba(195,154,91,0.15)"
+            />
+            <StatCard
+              icon={PackageCheck}
+              label={text.pieces}
+              value={productStats.availablePieces}
+              color="#4d8a6a"
+              tint="rgba(77,138,106,0.12)"
+            />
+            <StatCard
+              icon={AlertTriangle}
+              label={text.alerts}
+              value={lowAlerts}
+              color="#b46a66"
+              tint="rgba(201,138,134,0.13)"
+            />
+            <StatCard
+              icon={Factory}
+              label={text.batches}
+              value={productStats.productionBatches}
+              color="#6b8aa0"
+              tint="rgba(107,138,160,0.13)"
+            />
+          </section>
 
-        <div className="w-full shrink-0 xl:w-[320px]">
-          <div className="sticky top-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: palette.text }}>
-                {t.insights.title}
+          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+            <section
+              className="rounded-[22px] border p-5"
+              style={{
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp size={18} style={{ color: palette.primary }} />
+                <h2 style={{ fontSize: 16, fontWeight: 900 }}>{text.trend}</h2>
+              </div>
+              <div className="mt-6 flex h-64 items-end gap-3">
+                {monthlySales.map((month) => (
+                  <div
+                    key={month.key}
+                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
+                  >
+                    <span
+                      className="max-w-full truncate"
+                      style={{ fontSize: 10.5, color: palette.muted }}
+                    >
+                      {formatMoney(month.amount, lang)}
+                    </span>
+                    <div
+                      className="w-full max-w-[62px] rounded-t-xl transition-all"
+                      style={{
+                        height: `${Math.max(5, (month.amount / maxMonth) * 180)}px`,
+                        background: month.amount
+                          ? "linear-gradient(180deg, #c39a5b 0%, #123c4a 100%)"
+                          : palette.border,
+                      }}
+                    />
+                    <span style={{ fontSize: 11.5, color: palette.muted }}>
+                      {month.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section
+              className="rounded-[22px] border p-5"
+              style={{
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+              }}
+            >
+              <h2 style={{ fontSize: 16, fontWeight: 900 }}>{text.top}</h2>
+              {topProducts.length ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  {topProducts.map(([name, values], index) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-3 rounded-xl p-3"
+                      style={{ backgroundColor: palette.bg }}
+                    >
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                        style={{
+                          backgroundColor:
+                            index === 0
+                              ? palette.accentSoft
+                              : "rgba(18,60,74,0.07)",
+                          color: index === 0 ? "#a87d3c" : palette.primary,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="truncate"
+                          style={{ fontSize: 13.5, fontWeight: 800 }}
+                        >
+                          {name}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: palette.muted }}>
+                          {values.quantity} {lang === "ar" ? "قطعة" : "pièces"}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 900,
+                          color: palette.primary,
+                        }}
+                      >
+                        {formatMoney(values.amount, lang)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty text={text.empty} />
+              )}
+            </section>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <section
+              className="rounded-[22px] border p-5"
+              style={{
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+              }}
+            >
+              <h2 style={{ fontSize: 16, fontWeight: 900 }}>
+                {text.stockTitle}
               </h2>
-            </div>
-            <div className="rounded-2xl border p-5" style={{ borderColor: palette.border, backgroundColor: palette.surface }}>
-              <InsightsSidebar insights={insights} alerts={alerts} actions={actions} />
-            </div>
+              {stockProducts.length ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  {stockProducts.map((product) => {
+                    const width = productStats.availablePieces
+                      ? Math.max(
+                          3,
+                          (product.quantityAvailable /
+                            productStats.availablePieces) *
+                            100,
+                        )
+                      : 0;
+                    return (
+                      <div key={product.id}>
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <span
+                            className="truncate"
+                            style={{ fontSize: 13, fontWeight: 700 }}
+                          >
+                            {product.name}
+                          </span>
+                          <span style={{ fontSize: 12, color: palette.muted }}>
+                            {product.quantityAvailable}
+                          </span>
+                        </div>
+                        <div
+                          className="h-2 overflow-hidden rounded-full"
+                          style={{ backgroundColor: palette.bg }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${width}%`,
+                              backgroundColor:
+                                product.quantityAvailable <=
+                                product.minStockAlert
+                                  ? "#c98a86"
+                                  : "#4d8a6a",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Empty text={text.empty} />
+              )}
+            </section>
+            <section
+              className="rounded-[22px] border p-5"
+              style={{
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Users size={18} style={{ color: palette.primary }} />
+                <h2 style={{ fontSize: 16, fontWeight: 900 }}>
+                  {text.workshop}
+                </h2>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Indicator
+                  label={text.attendance}
+                  value={`${attendanceRate}%`}
+                  helper={`${workers.presentToday}/${workers.totalWorkers}`}
+                  color="#4d8a6a"
+                />
+                <Indicator
+                  label={text.rawValue}
+                  value={formatMoney(raw.stockValue, lang)}
+                  helper={`${raw.totalMaterials} ${lang === "ar" ? "مادة" : "matières"}`}
+                  color="#a87d3c"
+                />
+                <Indicator
+                  label={text.margin}
+                  value={formatMoney(grossStockMargin, lang)}
+                  helper={lang === "ar" ? "قبل المصاريف" : "avant charges"}
+                  color={palette.primary}
+                />
+                <Indicator
+                  label={text.movements}
+                  value={String(raw.monthlyMovements)}
+                  helper={
+                    lang === "ar"
+                      ? "دخول وخروج وإنتاج"
+                      : "entrées, sorties, production"
+                  }
+                  color="#6b8aa0"
+                />
+              </div>
+            </section>
           </div>
-        </div>
-      </div>
-
-      <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} />
+        </>
+      ) : null}
     </PageBackground>
+  );
+}
+
+function Indicator({
+  label,
+  value,
+  helper,
+  color,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  color: string;
+}) {
+  return (
+    <div className="rounded-2xl p-4" style={{ backgroundColor: palette.bg }}>
+      <div style={{ fontSize: 11.5, color: palette.muted }}>{label}</div>
+      <div className="mt-1" style={{ fontSize: 19, fontWeight: 900, color }}>
+        {value}
+      </div>
+      <div className="mt-1" style={{ fontSize: 11, color: palette.muted }}>
+        {helper}
+      </div>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <div
+      className="mt-4 flex min-h-36 items-center justify-center rounded-xl border border-dashed text-center text-sm"
+      style={{ borderColor: palette.borderStrong, color: palette.muted }}
+    >
+      {text}
+    </div>
   );
 }
