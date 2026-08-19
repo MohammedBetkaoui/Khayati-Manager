@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, AlertCircle, Info, UserRound } from "lucide-react";
 import { useNavigate } from "react-router";
 
 
@@ -7,6 +7,7 @@ import { PageBackground } from "../components/page-background";
 import { useLanguage } from "../language-context";
 
 import { palette, salaryText, mockPayroll } from "./salary-data";
+import { Button } from "../components/kit";
 import { SummaryCards } from "../components/salary/summary-cards";
 import { PayrollTable } from "../components/salary/payroll-table";
 import { SalaryDetailsBar } from "../components/salary/salary-details-bar";
@@ -64,28 +65,34 @@ export function SalaryPage() {
 
   return (
     <PageBackground>
-      <div className="flex items-center gap-4 pt-7">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="flex items-center justify-center transition-colors hover:opacity-80"
-          style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
-        >
-          <BackArrow size={20} />
-        </button>
-        <div>
-          <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
-            <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
-              {t.breadcrumbHome}
-            </button>
-            <CrumbChevron size={14} />
-            <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
+      <div className="flex flex-wrap items-start justify-between gap-4 pt-7">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.primary }}
+          >
+            <BackArrow size={20} />
+          </button>
+          <div>
+            <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}>
+              <button type="button" onClick={() => navigate("/")} className="transition-colors hover:opacity-80">
+                {t.breadcrumbHome}
+              </button>
+              <CrumbChevron size={14} />
+              <span style={{ color: palette.text, fontWeight: 600 }}>{t.breadcrumb}</span>
+            </div>
+            <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
+              {t.title}
+            </h1>
+            <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
           </div>
-          <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>
-            {t.title}
-          </h1>
-          <p style={{ fontSize: 13.5, color: palette.muted, marginTop: 2, maxWidth: 680 }}>{t.subtitle}</p>
         </div>
+        <Button variant="primary" onClick={() => navigate("/worker-profile")}>
+          <UserRound size={15} />
+          {lang === "ar" ? "فتح ملف العامل" : "Ouvrir fiche travailleur"}
+        </Button>
       </div>
 
       <div className="mt-6">

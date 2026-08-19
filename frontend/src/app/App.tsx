@@ -10,6 +10,7 @@ import { ExpensesPage } from "./pages/expenses-page";
 import { AnalyticsPage } from "./pages/analytics-page";
 import { SpecialSettingsPage } from "./pages/special-settings-page";
 import { CustomerProfilePage } from "./pages/customer-profile-page";
+import { WorkerProfilePage } from "./pages/worker-profile-page";
 
 function RootLayout() {
   return (
@@ -31,6 +32,7 @@ const router = createHashRouter([
       { path: "sales", element: <SalesPage /> },
       { path: "customer-profile", element: <CustomerProfilePage /> },
       { path: "salary", element: <SalaryPage /> },
+      { path: "worker-profile", element: <WorkerProfilePage /> },
       { path: "expenses", element: <ExpensesPage /> },
       { path: "analytics", element: <AnalyticsPage /> },
       { path: "special-settings", element: <SpecialSettingsPage /> },
