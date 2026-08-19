@@ -1,4 +1,4 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
@@ -6,7 +6,7 @@
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { StockMovementType } from '../../common/enums';
+import { MovementType } from '../../common/enums';
 import { InventoryItem } from './inventory-item.entity';
 
 @Entity('stock_movements')
@@ -19,26 +19,32 @@ export class StockMovement {
   })
   inventoryItem!: InventoryItem;
 
-  @Column({ type: 'simple-enum', enum: StockMovementType })
-  movementType!: StockMovementType;
+  @Column({ name: 'movementType', type: 'simple-enum', enum: MovementType })
+  type!: MovementType;
 
   @Column({ type: 'real' })
   quantity!: number;
 
-  @Column()
-  unit!: string;
+  @Column({ type: 'real', default: 0 })
+  previousQuantity!: number;
 
-  @Column({ nullable: true })
-  reason?: string;
+  @Column({ type: 'real', default: 0 })
+  newQuantity!: number;
+
+  @Column({ name: 'unit', type: 'text', nullable: true })
+  unitSnapshot?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  reason?: string | null;
+
+  @Column({ name: 'linkedOrderId', type: 'text', nullable: true })
+  reference?: string | null;
 
   @Column({ type: 'date' })
   date!: string;
 
-  @Column({ nullable: true })
-  linkedOrderId?: string;
-
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

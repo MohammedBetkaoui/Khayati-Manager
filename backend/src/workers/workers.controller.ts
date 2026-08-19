@@ -4,20 +4,18 @@ import {
   Delete,
   Get,
   Param,
-  ParseEnumPipe,
   ParseIntPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { AttendanceStatus, WorkerRole } from '../common/enums';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
-import { CreateWorkerProductionDto } from './dto/create-worker-production.dto';
+import { CreateProductionDto } from './dto/create-production.dto';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
-import { UpdateWorkerProductionDto } from './dto/update-worker-production.dto';
+import { UpdateProductionDto } from './dto/update-production.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
-import { WorkerQueryDto } from './dto/worker-query.dto';
+import { WorkerFilterDto } from './dto/worker-filter.dto';
 import { WorkersService } from './workers.service';
 
 @Controller('workers')
@@ -25,115 +23,88 @@ export class WorkersController {
   constructor(private readonly workersService: WorkersService) {}
 
   @Get('stats')
-  getWorkersStats() {
-    return this.workersService.getWorkersStats();
+  getStats() {
+    return this.workersService.getStats();
   }
 
-  @Get('active')
-  findActiveWorkers() {
-    return this.workersService.findActiveWorkers();
-  }
-
-  @Get('attendance/today')
-  getTodayAttendance() {
-    return this.workersService.getTodayAttendance();
-  }
-
-  @Patch('attendance/:attendanceId')
+  @Patch('attendance/:id')
   updateAttendance(
-    @Param('attendanceId', ParseIntPipe) attendanceId: number,
-    @Body() updateAttendanceDto: UpdateAttendanceDto,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAttendanceDto,
   ) {
-    return this.workersService.updateAttendance(attendanceId, updateAttendanceDto);
+    return this.workersService.updateAttendance(id, dto);
   }
 
-  @Patch('production/:productionId')
+  @Patch('production/:id')
   updateProduction(
-    @Param('productionId', ParseIntPipe) productionId: number,
-    @Body() updateWorkerProductionDto: UpdateWorkerProductionDto,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateProductionDto,
   ) {
-    return this.workersService.updateProduction(
-      productionId,
-      updateWorkerProductionDto,
-    );
-  }
-
-  @Get('productivity/ranking')
-  getProductivityRanking(
-    @Query('periodStart') periodStart?: string,
-    @Query('periodEnd') periodEnd?: string,
-  ) {
-    return this.workersService.getProductivityRanking(periodStart, periodEnd);
-  }
-
-  @Get('role/:role')
-  findByRole(@Param('role', new ParseEnumPipe(WorkerRole)) role: WorkerRole) {
-    return this.workersService.findByRole(role);
+    return this.workersService.updateProduction(id, dto);
   }
 
   @Post()
-  create(@Body() createWorkerDto: CreateWorkerDto) {
-    return this.workersService.create(createWorkerDto);
+  create(@Body() dto: CreateWorkerDto) {
+    return this.workersService.create(dto);
   }
 
   @Get()
-  findAll(@Query() query: WorkerQueryDto) {
+  findAll(@Query() query: WorkerFilterDto) {
     return this.workersService.findAll(query);
   }
 
   @Get(':id/profile')
-  getWorkerProfile(@Param('id', ParseIntPipe) id: number) {
-    return this.workersService.getWorkerProfile(id);
+  getProfile(@Param('id', ParseIntPipe) id: number) {
+    return this.workersService.getProfile(id);
   }
 
   @Post(':id/attendance')
-  markAttendance(
+  createAttendance(
     @Param('id', ParseIntPipe) id: number,
-    @Body() createAttendanceDto: CreateAttendanceDto,
+    @Body() dto: CreateAttendanceDto,
   ) {
-    return this.workersService.markAttendance(id, createAttendanceDto);
+    return this.workersService.createAttendance(id, dto);
   }
 
   @Get(':id/attendance')
-  getWorkerAttendance(
+  getAttendance(
     @Param('id', ParseIntPipe) id: number,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('status', new ParseEnumPipe(AttendanceStatus, { optional: true }))
-    status?: AttendanceStatus,
+    @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.workersService.getWorkerAttendance(id, {
+    return this.workersService.getAttendance(id, {
       startDate,
       endDate,
       status,
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
+      page,
+      limit,
     });
   }
 
   @Post(':id/production')
-  addProduction(
+  createProduction(
     @Param('id', ParseIntPipe) id: number,
-    @Body() createWorkerProductionDto: CreateWorkerProductionDto,
+    @Body() dto: CreateProductionDto,
   ) {
-    return this.workersService.addProduction(id, createWorkerProductionDto);
+    return this.workersService.createProduction(id, dto);
   }
 
   @Get(':id/production')
-  getWorkerProduction(
+  getProduction(
     @Param('id', ParseIntPipe) id: number,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.workersService.getWorkerProduction(id, {
+    return this.workersService.getProduction(id, {
       startDate,
       endDate,
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
+      page,
+      limit,
     });
   }
 
@@ -145,9 +116,9 @@ export class WorkersController {
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateWorkerDto: UpdateWorkerDto,
+    @Body() dto: UpdateWorkerDto,
   ) {
-    return this.workersService.update(id, updateWorkerDto);
+    return this.workersService.update(id, dto);
   }
 
   @Delete(':id')

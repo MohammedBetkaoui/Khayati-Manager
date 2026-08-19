@@ -1,7 +1,9 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -11,7 +13,9 @@ import {
   StockStatus,
 } from '../../common/enums';
 import { OrderMaterial } from '../../orders/entities/order-material.entity';
+import { MaterialConsumption } from './material-consumption.entity';
 import { StockMovement } from './stock-movement.entity';
+import { Supplier } from './supplier.entity';
 
 @Entity('inventory_items')
 export class InventoryItem {
@@ -24,11 +28,11 @@ export class InventoryItem {
   @Column({ type: 'simple-enum', enum: InventoryCategory })
   category!: InventoryCategory;
 
-  @Column({ nullable: true })
-  color?: string;
+  @Column({ type: 'text', nullable: true })
+  type?: string | null;
 
-  @Column({ nullable: true })
-  type?: string;
+  @Column({ type: 'text', nullable: true })
+  color?: string | null;
 
   @Column({ type: 'real', default: 0 })
   quantity!: number;
@@ -39,8 +43,15 @@ export class InventoryItem {
   @Column({ type: 'real', default: 0 })
   unitPrice!: number;
 
-  @Column({ nullable: true })
-  supplier?: string;
+  @Column({ type: 'text', nullable: true })
+  supplier?: string | null;
+
+  @ManyToOne(() => Supplier, (supplierEntity) => supplierEntity.inventoryItems, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'supplierEntityId' })
+  supplierEntity?: Supplier | null;
 
   @Column({ type: 'real', default: 0 })
   minStockAlert!: number;
@@ -52,11 +63,14 @@ export class InventoryItem {
   })
   status!: StockStatus;
 
-  @Column({ type: 'text', nullable: true })
-  notes?: string;
+  @Column({ name: 'notes', type: 'text', nullable: true })
+  description?: string | null;
 
   @OneToMany(() => StockMovement, (movement) => movement.inventoryItem)
   stockMovements!: StockMovement[];
+
+  @OneToMany(() => MaterialConsumption, (consumption) => consumption.inventoryItem)
+  materialConsumptions!: MaterialConsumption[];
 
   @OneToMany(() => OrderMaterial, (usage) => usage.inventoryItem)
   orderMaterialUsages!: OrderMaterial[];

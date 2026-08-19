@@ -1,4 +1,4 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
@@ -19,9 +19,6 @@ export class WorkerProduction {
   })
   worker!: Worker;
 
-  @Column({ type: 'integer', nullable: true })
-  orderId?: number;
-
   @Column({ type: 'date' })
   date!: string;
 
@@ -38,7 +35,7 @@ export class WorkerProduction {
   totalAmount!: number;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

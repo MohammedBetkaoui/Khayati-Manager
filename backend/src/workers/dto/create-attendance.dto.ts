@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -8,13 +8,23 @@ import {
   Min,
 } from 'class-validator';
 import { AttendanceStatus } from '../../common/enums';
+import { enumValueTransform } from './normalize-enum-value';
 
 export class CreateAttendanceDto {
   @IsDateString()
   date!: string;
 
+  @Transform(enumValueTransform(AttendanceStatus))
   @IsEnum(AttendanceStatus)
   status!: AttendanceStatus;
+
+  @IsOptional()
+  @IsString()
+  checkIn?: string;
+
+  @IsOptional()
+  @IsString()
+  checkOut?: string;
 
   @IsOptional()
   @IsString()

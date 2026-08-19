@@ -1,7 +1,8 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -9,10 +10,16 @@
 import { AttendanceStatus } from '../../common/enums';
 import { Worker } from './worker.entity';
 
+@Index(['worker', 'date'], { unique: true })
 @Entity('attendances')
 export class Attendance {
   @PrimaryGeneratedColumn()
   id!: number;
+
+  @ManyToOne(() => Worker, (worker) => worker.attendances, {
+    onDelete: 'CASCADE',
+  })
+  worker!: Worker;
 
   @Column({ type: 'date' })
   date!: string;
@@ -21,21 +28,16 @@ export class Attendance {
   status!: AttendanceStatus;
 
   @Column({ type: 'text', nullable: true })
-  checkInTime?: string;
+  checkIn?: string | null;
 
   @Column({ type: 'text', nullable: true })
-  checkOutTime?: string;
+  checkOut?: string | null;
 
   @Column({ type: 'integer', default: 0 })
   lateMinutes!: number;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
-
-  @ManyToOne(() => Worker, (worker) => worker.attendances, {
-    onDelete: 'CASCADE',
-  })
-  worker!: Worker;
+  notes?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

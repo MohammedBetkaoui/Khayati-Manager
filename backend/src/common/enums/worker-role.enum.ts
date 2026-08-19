@@ -1,9 +1,9 @@
 export enum WorkerRole {
-  TAILOR = 'خياط',
-  ASSISTANT = 'مساعد',
-  CUTTER = 'قاطع قماش',
-  IRONING_MANAGER = 'مسؤول كي',
-  PACKAGING_MANAGER = 'مسؤول تغليف',
-  SELLER = 'بائع',
-  SUPERVISOR = 'مشرف',
+  TAILOR = '\u062e\u064a\u0627\u0637',
+  ASSISTANT = '\u0645\u0633\u0627\u0639\u062f',
+  CUTTER = '\u0642\u0627\u0637\u0639 \u0642\u0645\u0627\u0634',
+  IRONING = '\u0645\u0633\u0624\u0648\u0644 \u0643\u064a',
+  PACKAGING = '\u0645\u0633\u0624\u0648\u0644 \u062a\u063a\u0644\u064a\u0641',
+  SELLER = '\u0628\u0627\u0626\u0639',
+  SUPERVISOR = '\u0645\u0634\u0631\u0641',
 }

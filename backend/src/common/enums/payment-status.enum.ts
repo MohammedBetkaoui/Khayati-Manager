@@ -1,5 +1,5 @@
 export enum PaymentStatus {
-  PAID = 'مدفوعة',
-  PARTIALLY_PAID = 'مدفوعة جزئياً',
-  UNPAID = 'غير مدفوعة',
+  PAID = '\u0645\u062f\u0641\u0648\u0639\u0629',
+  PARTIALLY_PAID = '\u0645\u062f\u0641\u0648\u0639\u0629 \u062c\u0632\u0626\u064a\u0627\u064b',
+  UNPAID = '\u063a\u064a\u0631 \u0645\u062f\u0641\u0648\u0639\u0629',
 }

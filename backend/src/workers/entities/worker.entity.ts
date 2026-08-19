@@ -1,4 +1,4 @@
-﻿import {
+import {
   Column,
   CreateDateColumn,
   Entity,
@@ -22,8 +22,8 @@ export class Worker {
   @Column()
   fullName!: string;
 
-  @Column({ nullable: true })
-  phone?: string;
+  @Column({ type: 'text', nullable: true })
+  phone?: string | null;
 
   @Column({ type: 'simple-enum', enum: WorkerRole })
   role!: WorkerRole;
@@ -34,8 +34,8 @@ export class Worker {
   @Column({ type: 'real', default: 0 })
   salaryValue!: number;
 
-  @Column({ type: 'date', nullable: true })
-  startDate?: string;
+  @Column({ type: 'date' })
+  startDate!: string;
 
   @Column({
     type: 'simple-enum',
@@ -45,7 +45,7 @@ export class Worker {
   status!: WorkerStatus;
 
   @Column({ type: 'text', nullable: true })
-  notes?: string;
+  notes?: string | null;
 
   @OneToMany(() => Attendance, (attendance) => attendance.worker)
   attendances!: Attendance[];

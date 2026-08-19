@@ -1,7 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  IsDateString,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -10,14 +10,12 @@ import {
 import { SalaryType, WorkerRole, WorkerStatus } from '../../common/enums';
 import { enumValueTransform } from './normalize-enum-value';
 
-export class CreateWorkerDto {
-  @IsString()
-  fullName!: string;
-
+export class WorkerFilterDto {
   @IsOptional()
   @IsString()
-  phone?: string;
+  search?: string;
 
+  @IsOptional()
   @Transform(
     enumValueTransform(WorkerRole, {
       IRONING_MANAGER: WorkerRole.IRONING,
@@ -25,24 +23,16 @@ export class CreateWorkerDto {
     }),
   )
   @IsEnum(WorkerRole)
-  role!: WorkerRole;
+  role?: WorkerRole;
 
+  @IsOptional()
   @Transform(
     enumValueTransform(SalaryType, {
       PIECE_BASED: SalaryType.PIECE,
     }),
   )
   @IsEnum(SalaryType)
-  salaryType!: SalaryType;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  salaryValue?: number;
-
-  @IsDateString()
-  startDate!: string;
+  salaryType?: SalaryType;
 
   @IsOptional()
   @Transform(
@@ -54,6 +44,25 @@ export class CreateWorkerDto {
   status?: WorkerStatus;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
   @IsString()
-  notes?: string;
+  sortBy?: string;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
+  @IsIn(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC';
 }
