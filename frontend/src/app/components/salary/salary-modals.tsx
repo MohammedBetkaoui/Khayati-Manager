@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertTriangle, PencilLine, RotateCcw, Trash2 } from "lucide-react";
 import { useLanguage } from "../../language-context";
 import { fetchJson, getArrayFromPayload } from "../../lib/api";
 import {
@@ -51,12 +52,12 @@ export function CalculateSalaryModal({
   const [installmentNumber, setInstallmentNumber] = useState("1");
   const [pieces, setPieces] = useState("");
   const [piecePrice, setPiecePrice] = useState("");
+  const [manualAmountOpen, setManualAmountOpen] = useState(false);
+  const [manualGrossAmount, setManualGrossAmount] = useState("");
   const [otherDeductions, setOtherDeductions] = useState("0");
   const [notes, setNotes] = useState("");
   const [advances, setAdvances] = useState<BalanceRecord[]>([]);
-  const [loans, setLoans] = useState<BalanceRecord[]>([]);
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
-  const [loanAmounts, setLoanAmounts] = useState<Record<number, string>>({});
   const [monthAllocated, setMonthAllocated] = useState(0);
   const [monthPaid, setMonthPaid] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -66,9 +67,11 @@ export function CalculateSalaryModal({
   const calculated = salaryType === "piece"
     ? (Number(pieces) || 0) * (Number(piecePrice) || 0)
     : (worker?.monthlySalary ?? 0) / Math.max(1, Number(installments) || 4);
+  const grossAmount = salaryType === "monthly" && manualAmountOpen
+    ? Number(manualGrossAmount) || 0
+    : calculated;
   const selectedAdvance = Object.values(advanceAmounts).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const selectedLoan = Object.values(loanAmounts).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const net = Math.max(0, calculated - selectedAdvance - selectedLoan - (Number(otherDeductions) || 0));
+  const net = Math.max(0, grossAmount - selectedAdvance - (Number(otherDeductions) || 0));
 
   useEffect(() => {
     if (!open) return;
@@ -76,22 +79,29 @@ export function CalculateSalaryModal({
     setEnd(periodEnd);
     setSalaryMonth(periodStart.slice(0, 7));
     setWorkerId((current) => current || String(workers[0]?.id ?? ""));
+    setManualAmountOpen(false);
+    setManualGrossAmount("");
     setError(null);
   }, [open, periodEnd, periodStart, workers]);
+
+  useEffect(() => {
+    if (salaryType !== "monthly") {
+      setManualAmountOpen(false);
+      setManualGrossAmount("");
+    }
+  }, [salaryType]);
 
   useEffect(() => {
     if (!open || !workerId) return;
     let cancelled = false;
     async function loadBalances() {
       try {
-        const [advancePayload, loanPayload, payrollPayload] = await Promise.all([
+        const [advancePayload, payrollPayload] = await Promise.all([
           fetchJson<unknown>(`/payroll/advances?workerId=${workerId}`),
-          fetchJson<unknown>(`/payroll/loans?workerId=${workerId}`),
           fetchJson<unknown>(`/payroll?workerId=${workerId}&startDate=${salaryMonth}-01&endDate=${salaryMonth}-31&limit=100`),
         ]);
         if (cancelled) return;
         setAdvances((getArrayFromPayload(advancePayload) as BalanceRecord[]).filter((item) => item.remainingAmount > 0));
-        setLoans((getArrayFromPayload(loanPayload) as BalanceRecord[]).filter((item) => item.remainingAmount > 0));
         const payrolls = getArrayFromPayload(payrollPayload) as PayrollRecord[];
         setMonthAllocated(payrolls.filter((item) => item.status !== "CANCELLED").reduce((sum, item) => sum + Number(item.grossAmount || 0), 0));
         setMonthPaid(payrolls.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0));
@@ -122,9 +132,9 @@ export function CalculateSalaryModal({
             piecesCompleted: Number(pieces),
             piecePrice: Number(piecePrice),
           }),
+          ...(salaryType === "monthly" && manualAmountOpen ? { manualGrossAmount: Number(manualGrossAmount) } : {}),
           otherDeductions: Number(otherDeductions) || 0,
           advanceDeductions: Object.entries(advanceAmounts).filter(([, amount]) => Number(amount) > 0).map(([id, amount]) => ({ id: Number(id), amount: Number(amount) })),
-          loanDeductions: Object.entries(loanAmounts).filter(([, amount]) => Number(amount) > 0).map(([id, amount]) => ({ id: Number(id), amount: Number(amount) })),
           notes,
         }),
       });
@@ -140,7 +150,7 @@ export function CalculateSalaryModal({
   return (
     <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "حساب راتب أسبوعي" : "Nouvelle paie hebdomadaire"} maxWidth={720}>
       <form className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-        <Field label={lang === "ar" ? "العامل" : "Travailleur"}><WorkerSelect workers={workers} value={workerId} onChange={(value) => { setWorkerId(value); setAdvanceAmounts({}); setLoanAmounts({}); }} /></Field>
+        <Field label={lang === "ar" ? "العامل" : "Travailleur"}><WorkerSelect workers={workers} value={workerId} onChange={(value) => { setWorkerId(value); setAdvanceAmounts({}); setManualAmountOpen(false); setManualGrossAmount(""); }} /></Field>
         <Field label={lang === "ar" ? "نوع الأجر" : "Type de rémunération"}><TextInput readOnly value={salaryType === "monthly" ? (lang === "ar" ? "شهري مقسّم أسبوعياً" : "Mensuel par tranches") : (lang === "ar" ? "حسب القطعة" : "À la pièce")} /></Field>
         <Field label={lang === "ar" ? "بداية الفترة" : "Début de période"}><TextInput required type="date" value={start} onChange={(event) => setStart(event.target.value)} /></Field>
         <Field label={lang === "ar" ? "نهاية الفترة" : "Fin de période"}><TextInput required type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></Field>
@@ -163,9 +173,37 @@ export function CalculateSalaryModal({
         )}
 
         {advances.length ? <BalanceInputs title={lang === "ar" ? "السلف المراد خصمها" : "Avances à déduire"} rows={advances} values={advanceAmounts} onChange={setAdvanceAmounts} lang={lang} /> : null}
-        {loans.length ? <BalanceInputs title={lang === "ar" ? "اقتطاع من القروض" : "Retenues sur prêts"} rows={loans} values={loanAmounts} onChange={setLoanAmounts} lang={lang} /> : null}
         <Field label={lang === "ar" ? "اقتطاعات أخرى" : "Autres retenues"}><TextInput type="number" min="0" step="0.01" value={otherDeductions} onChange={(event) => setOtherDeductions(event.target.value)} /></Field>
-        <div className="rounded-xl p-3" style={{ backgroundColor: `${palette.accent}12` }}><div className="text-xs" style={{ color: palette.muted }}>{lang === "ar" ? "المبلغ المتوقع للدفع" : "Montant estimé à verser"}</div><strong className="mt-1 block text-lg" style={{ color: palette.primary }}>{money(net, lang)}</strong></div>
+        <div className="rounded-xl p-3" style={{ backgroundColor: `${palette.accent}12` }}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs" style={{ color: palette.muted }}>{lang === "ar" ? "المبلغ المتوقع للدفع" : "Montant estimé à verser"}</div>
+            {salaryType === "monthly" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (manualAmountOpen) {
+                    setManualAmountOpen(false);
+                    setManualGrossAmount("");
+                    return;
+                  }
+                  setManualAmountOpen(true);
+                  setManualGrossAmount(String(calculated));
+                }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold"
+                style={{ color: manualAmountOpen ? "#b46a66" : palette.primary, backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}
+              >
+                {manualAmountOpen ? <RotateCcw size={13} /> : <PencilLine size={13} />}
+                {manualAmountOpen ? (lang === "ar" ? "إرجاع" : "Réinitialiser") : (lang === "ar" ? "تعديل" : "Modifier")}
+              </button>
+            ) : null}
+          </div>
+          {salaryType === "monthly" && manualAmountOpen ? (
+            <div className="mt-2">
+              <TextInput required type="number" min="0.01" step="0.01" value={manualGrossAmount} onChange={(event) => setManualGrossAmount(event.target.value)} />
+              <div className="mt-2 text-xs" style={{ color: palette.muted }}>{lang === "ar" ? "الصافي بعد الاقتطاعات" : "Net après retenues"}: <strong style={{ color: palette.primary }}>{money(net, lang)}</strong></div>
+            </div>
+          ) : <strong className="mt-1 block text-lg" style={{ color: palette.primary }}>{money(net, lang)}</strong>}
+        </div>
         <div className="sm:col-span-2"><Field label={lang === "ar" ? "ملاحظات" : "Notes"}><Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field></div>
         <div className="sm:col-span-2"><ErrorMessage message={error} /></div>
         <div className="flex justify-end gap-3 sm:col-span-2"><Button variant="secondary" onClick={onClose}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button><Button variant="primary" type="submit" disabled={saving || !worker}>{saving ? (lang === "ar" ? "جاري الحفظ..." : "Enregistrement...") : (lang === "ar" ? "حفظ الحساب" : "Enregistrer la paie")}</Button></div>
@@ -189,7 +227,7 @@ function BalanceInputs({ title, rows, values, onChange, lang }: { title: string;
   );
 }
 
-function WorkerMoneyModal({ kind, open, onClose, onSaved, workers }: { kind: "advance" | "loan"; open: boolean; onClose: () => void; onSaved: () => void; workers: WorkerOption[] }) {
+function AdvanceMoneyModal({ open, onClose, onSaved, workers }: { open: boolean; onClose: () => void; onSaved: () => void; workers: WorkerOption[] }) {
   const { lang } = useLanguage();
   const [workerId, setWorkerId] = useState("");
   const [amount, setAmount] = useState("");
@@ -202,18 +240,108 @@ function WorkerMoneyModal({ kind, open, onClose, onSaved, workers }: { kind: "ad
   async function submit() {
     setSaving(true); setError(null);
     try {
-      await fetchJson(kind === "advance" ? "/payroll/advances" : "/payroll/loans", { method: "POST", body: JSON.stringify({ workerId: Number(workerId), amount: Number(amount), date, notes }) });
+      await fetchJson("/payroll/advances", { method: "POST", body: JSON.stringify({ workerId: Number(workerId), amount: Number(amount), date, notes }) });
       setAmount(""); setNotes(""); onSaved(); onClose();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to save."); }
     finally { setSaving(false); }
   }
 
-  const title = kind === "advance" ? (lang === "ar" ? "تسجيل سلفة" : "Enregistrer une avance") : (lang === "ar" ? "تسجيل قرض" : "Enregistrer un prêt");
+  const title = lang === "ar" ? "تسجيل سلفة" : "Enregistrer une avance";
   return <ModalShell open={open} onClose={onClose} title={title}><form className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="sm:col-span-2"><Field label={lang === "ar" ? "العامل" : "Travailleur"}><WorkerSelect workers={workers} value={workerId} onChange={setWorkerId} /></Field></div><Field label={lang === "ar" ? "المبلغ" : "Montant"}><TextInput required type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} /></Field><Field label={lang === "ar" ? "التاريخ" : "Date"}><TextInput required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></Field><div className="sm:col-span-2"><Field label={lang === "ar" ? "ملاحظات" : "Notes"}><Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field></div><div className="sm:col-span-2"><ErrorMessage message={error} /></div><div className="flex justify-end gap-3 sm:col-span-2"><Button variant="secondary" onClick={onClose}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button><Button variant="primary" type="submit" disabled={saving || !workerId}>{lang === "ar" ? "حفظ" : "Enregistrer"}</Button></div></form></ModalShell>;
 }
 
-export function AdvanceModal(props: Omit<Parameters<typeof WorkerMoneyModal>[0], "kind">) { return <WorkerMoneyModal {...props} kind="advance" />; }
-export function LoanModal(props: Omit<Parameters<typeof WorkerMoneyModal>[0], "kind">) { return <WorkerMoneyModal {...props} kind="loan" />; }
+export function AdvanceModal(props: Parameters<typeof AdvanceMoneyModal>[0]) { return <AdvanceMoneyModal {...props} />; }
+
+export function DeletePayrollModal({ open, onClose, onDeleted, record }: { open: boolean; onClose: () => void; onDeleted: () => void; record: PayrollRecord | null }) {
+  const { lang } = useLanguage();
+  const [confirmation, setConfirmation] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setConfirmation("");
+    setAcknowledged(false);
+    setError(null);
+  }, [open, record?.id]);
+
+  const expectedName = record?.workerName.trim() ?? "";
+  const canDelete = Boolean(record && acknowledged && confirmation.trim().toLocaleLowerCase() === expectedName.toLocaleLowerCase());
+
+  async function submit() {
+    if (!record || !canDelete) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await fetchJson(`/payroll/${record.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({
+          confirmation: confirmation.trim(),
+          acknowledgePermanentDeletion: acknowledged,
+        }),
+      });
+      onDeleted();
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to delete payroll.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "حذف الراتب نهائياً" : "Suppression définitive de la paie"} maxWidth={560}>
+      <form className="space-y-4 px-6 py-5" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+        <div className="rounded-2xl p-4" style={{ border: "1px solid rgba(180,106,102,.35)", backgroundColor: "rgba(180,106,102,.1)" }}>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: "rgba(180,106,102,.14)", color: "#b46a66" }}><AlertTriangle size={20} /></div>
+            <div>
+              <h3 style={{ color: "#7c3935", fontWeight: 800 }}>{lang === "ar" ? "تنبيه قبل الحذف" : "Alerte avant suppression"}</h3>
+              <p className="mt-1 text-sm leading-6" style={{ color: "#7c3935" }}>
+                {lang === "ar"
+                  ? "سيتم حذف هذا الراتب وكل الدفعات المرتبطة به نهائياً. سيتم أيضاً إرجاع السلف المخصومة من هذا الراتب إلى أرصدتها."
+                  : "Cette paie et tous ses paiements liés seront supprimés définitivement. Les avances déduites par cette paie seront aussi restaurées dans leurs soldes."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-4" style={{ backgroundColor: palette.bg, border: `1px solid ${palette.border}` }}>
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "العامل" : "Travailleur"}</span><strong style={{ color: palette.text }}>{record?.workerName ?? "-"}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "الفترة" : "Période"}</span><strong style={{ color: palette.text }}>{record ? `${record.periodStart} -> ${record.periodEnd}` : "-"}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "المبلغ المدفوع" : "Montant payé"}</span><strong style={{ color: "#4d8a6a" }}>{money(record?.paidAmount ?? 0, lang)}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "الاقتطاعات" : "Retenues"}</span><strong style={{ color: "#b46a66" }}>{money(record?.totalDeductions ?? 0, lang)}</strong>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-3 rounded-xl p-3 text-sm" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}`, color: palette.text }}>
+          <input className="mt-1" type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
+          <span>{lang === "ar" ? "أفهم أن هذا حذف نهائي من النظام." : "Je comprends que cette suppression est définitive dans le système."}</span>
+        </label>
+
+        <Field label={lang === "ar" ? `اكتب اسم العامل للتأكيد: ${expectedName}` : `Tapez le nom du travailleur pour confirmer : ${expectedName}`}>
+          <TextInput value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" />
+        </Field>
+
+        <ErrorMessage message={error} />
+
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button variant="secondary" onClick={onClose}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button>
+          <button
+            type="submit"
+            disabled={!canDelete || saving}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-opacity"
+            style={{ backgroundColor: "#b46a66", color: "#fff", opacity: !canDelete || saving ? 0.55 : 1, cursor: !canDelete || saving ? "not-allowed" : "pointer" }}
+          >
+            <Trash2 size={15} />{saving ? (lang === "ar" ? "جاري الحذف..." : "Suppression...") : (lang === "ar" ? "حذف نهائي" : "Supprimer définitivement")}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
 
 export function PaymentModal({ open, onClose, onSaved, record }: { open: boolean; onClose: () => void; onSaved: () => void; record: PayrollRecord | null }) {
   const { lang } = useLanguage();
@@ -227,15 +355,4 @@ export function PaymentModal({ open, onClose, onSaved, record }: { open: boolean
   useEffect(() => { if (open && record) { setAmount(String(record.remainingAmount)); setError(null); } }, [open, record]);
   async function submit() { if (!record) return; setSaving(true); setError(null); try { await fetchJson(`/payroll/${record.id}/payments`, { method: "POST", body: JSON.stringify({ amount: Number(amount), date, method, reference, notes }) }); onSaved(); onClose(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to save payment."); } finally { setSaving(false); } }
   return <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "تسجيل دفع الراتب" : "Enregistrer un paiement"}><form className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}><div className="rounded-xl p-3 sm:col-span-2" style={{ backgroundColor: palette.bg }}><strong>{record?.workerName}</strong><div className="mt-1 text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "المتبقي" : "Reste dû"}: {money(record?.remainingAmount ?? 0, lang)}</div></div><Field label={lang === "ar" ? "المبلغ المدفوع" : "Montant payé"}><TextInput required type="number" min="0.01" max={record?.remainingAmount} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} /></Field><Field label={lang === "ar" ? "التاريخ" : "Date"}><TextInput required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></Field><Field label={lang === "ar" ? "طريقة الدفع" : "Mode de paiement"}><Select value={method} onChange={(event) => setMethod(event.target.value)}><option value="CASH">{lang === "ar" ? "نقداً" : "Espèces"}</option><option value="TRANSFER">{lang === "ar" ? "تحويل" : "Virement"}</option><option value="OTHER">{lang === "ar" ? "أخرى" : "Autre"}</option></Select></Field><Field label={lang === "ar" ? "المرجع" : "Référence"}><TextInput value={reference} onChange={(event) => setReference(event.target.value)} /></Field><div className="sm:col-span-2"><Field label={lang === "ar" ? "ملاحظات" : "Notes"}><Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></Field></div><div className="sm:col-span-2"><ErrorMessage message={error} /></div><div className="flex justify-end gap-3 sm:col-span-2"><Button variant="secondary" onClick={onClose}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button><Button variant="primary" type="submit" disabled={saving || !record}>{lang === "ar" ? "تأكيد الدفع" : "Confirmer le paiement"}</Button></div></form></ModalShell>;
-}
-
-export function LoanRepaymentModal({ open, onClose, onSaved, loan }: { open: boolean; onClose: () => void; onSaved: () => void; loan: BalanceRecord | null }) {
-  const { lang } = useLanguage();
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(today());
-  const [method, setMethod] = useState("CASH");
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (open && loan) { setAmount(String(loan.remainingAmount)); setError(null); } }, [loan, open]);
-  async function submit() { if (!loan) return; try { await fetchJson(`/payroll/loans/${loan.id}/repayments`, { method: "POST", body: JSON.stringify({ amount: Number(amount), date, method }) }); onSaved(); onClose(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to save repayment."); } }
-  return <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "تسجيل تسديد قرض" : "Remboursement du prêt"}><form className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}><Field label={lang === "ar" ? "المبلغ" : "Montant"}><TextInput required type="number" min="0.01" max={loan?.remainingAmount} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} /></Field><Field label={lang === "ar" ? "التاريخ" : "Date"}><TextInput required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></Field><div className="sm:col-span-2"><Field label={lang === "ar" ? "طريقة الدفع" : "Mode"}><Select value={method} onChange={(event) => setMethod(event.target.value)}><option value="CASH">{lang === "ar" ? "نقداً" : "Espèces"}</option><option value="TRANSFER">{lang === "ar" ? "تحويل" : "Virement"}</option><option value="OTHER">{lang === "ar" ? "أخرى" : "Autre"}</option></Select></Field></div><div className="sm:col-span-2"><ErrorMessage message={error} /></div><div className="flex justify-end gap-3 sm:col-span-2"><Button variant="secondary" onClick={onClose}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button><Button variant="primary" type="submit">{lang === "ar" ? "تسجيل" : "Enregistrer"}</Button></div></form></ModalShell>;
 }

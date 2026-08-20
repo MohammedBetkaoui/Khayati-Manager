@@ -74,6 +74,12 @@ export class CreatePayrollDto {
   otherDeductions?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  manualGrossAmount?: number;
+
+  @IsOptional()
   @IsArray()
   @ArrayUnique((item: BalanceDeductionDto) => item.id)
   @ValidateNested({ each: true })

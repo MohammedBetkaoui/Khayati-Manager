@@ -1,4 +1,4 @@
-import { Eye, Pencil, StickyNote, Trash2 } from "lucide-react";
+import { Eye, Pencil, StickyNote, Trash2, UserRound } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
 import { Avatar, Badge, ProgressBar } from "../kit";
@@ -48,12 +48,14 @@ export function WorkersTable({
   onSelect,
   onEdit,
   onDelete,
+  onOpenProfile,
 }: {
   rows: Worker[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onOpenProfile?: (id: string) => void;
 }) {
   const { lang } = useLanguage();
   const t = workersText[lang];
@@ -161,6 +163,7 @@ export function WorkersTable({
                 <td style={cellStyle}>
                   <div className="flex items-center justify-center gap-0.5">
                     <ActionIcon icon={Eye} label={t.view} onClick={(e) => { e.stopPropagation(); onSelect(w.id); }} />
+                    <ActionIcon icon={UserRound} label={t.panel.fullDetails} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(w.id); }} />
                     <ActionIcon icon={Pencil} label={t.edit} onClick={(e) => { e.stopPropagation(); onEdit?.(w.id); }} />
                     <ActionIcon icon={StickyNote} label={t.notes} onClick={(e) => e.stopPropagation()} />
                     <ActionIcon icon={Trash2} label={t.delete} danger onClick={(e) => { e.stopPropagation(); onDelete?.(w.id); }} />

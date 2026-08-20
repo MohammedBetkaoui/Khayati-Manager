@@ -1,17 +1,17 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarRange, ChevronLeft, ChevronRight, HandCoins, Landmark, Plus, Search, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarRange, ChevronLeft, ChevronRight, HandCoins, Plus, Search, UserRound } from "lucide-react";
 import { useNavigate } from "react-router";
 import { Button, Select, TextInput } from "../components/kit";
 import { PageBackground } from "../components/page-background";
 import { PayrollTable } from "../components/salary/payroll-table";
 import { SalaryDetailsBar } from "../components/salary/salary-details-bar";
 import { SummaryCards } from "../components/salary/summary-cards";
-import { AdvanceModal, CalculateSalaryModal, LoanModal, PaymentModal } from "../components/salary/salary-modals";
+import { AdvanceModal, CalculateSalaryModal, DeletePayrollModal, PaymentModal } from "../components/salary/salary-modals";
 import { useLanguage } from "../language-context";
 import { fetchJson, getArrayFromPayload } from "../lib/api";
 import { palette, type DashboardStats, type PayrollRecord, type WorkerOption } from "./salary-data";
 
-const emptyStats: DashboardStats = { activeWorkers: 0, salariesDueThisWeek: 0, paidThisWeek: 0, remainingToPay: 0, activeAdvances: 0, activeLoans: 0 };
+const emptyStats: DashboardStats = { activeWorkers: 0, salariesDueThisWeek: 0, paidThisWeek: 0, remainingToPay: 0, activeAdvances: 0 };
 
 function dateKey(date: Date) {
   const year = date.getFullYear();
@@ -52,8 +52,8 @@ export function SalaryPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [loanOpen, setLoanOpen] = useState(false);
   const [paymentRecord, setPaymentRecord] = useState<PayrollRecord | null>(null);
+  const [deleteRecord, setDeleteRecord] = useState<PayrollRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -111,6 +111,12 @@ export function SalaryPage() {
     }
   }
 
+  function afterPayrollDeleted() {
+    if (deleteRecord?.id === selectedId) setSelectedId(null);
+    setDeleteRecord(null);
+    refresh();
+  }
+
   return (
     <PageBackground>
       <div className="flex flex-wrap items-start justify-between gap-4 pt-7">
@@ -119,7 +125,7 @@ export function SalaryPage() {
           <div>
             <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: palette.muted }}><button type="button" onClick={() => navigate("/")}>{lang === "ar" ? "الرئيسية" : "Accueil"}</button><CrumbChevron size={14} /><span style={{ color: palette.text, fontWeight: 600 }}>{lang === "ar" ? "تسيير الرواتب" : "Gestion des salaires"}</span></div>
             <h1 className="mt-1" style={{ fontSize: 24, fontWeight: 800, color: palette.text }}>{lang === "ar" ? "تسيير الرواتب الأسبوعية" : "Gestion des paies hebdomadaires"}</h1>
-            <p className="mt-1" style={{ fontSize: 13.5, color: palette.muted }}>{lang === "ar" ? "حساب الأجور، الدفعات الجزئية، السلف والقروض مع حفظ السجل المالي كاملاً." : "Calculs, paiements partiels, avances et prêts avec un historique financier durable."}</p>
+            <p className="mt-1" style={{ fontSize: 13.5, color: palette.muted }}>{lang === "ar" ? "حساب الأجور، الدفعات الجزئية والسلف مع حفظ السجل المالي كاملاً." : "Calculs, paiements partiels et avances avec un historique financier durable."}</p>
           </div>
         </div>
         <Button variant="secondary" onClick={() => navigate("/worker-profile")}><UserRound size={15} />{lang === "ar" ? "ملفات العمال" : "Dossiers travailleurs"}</Button>
@@ -137,7 +143,6 @@ export function SalaryPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setAdvanceOpen(true)}><HandCoins size={15} />{lang === "ar" ? "سلفة" : "Avance"}</Button>
-            <Button variant="secondary" onClick={() => setLoanOpen(true)}><Landmark size={15} />{lang === "ar" ? "قرض" : "Prêt"}</Button>
             <Button variant="primary" onClick={() => setPayrollOpen(true)}><Plus size={16} />{lang === "ar" ? "راتب جديد" : "Nouvelle paie"}</Button>
           </div>
         </div>
@@ -150,17 +155,17 @@ export function SalaryPage() {
       </section>
 
       {error ? <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#b46a66", backgroundColor: "rgba(180,106,102,.1)" }}>{error}</div> : null}
-      {selected ? <div className="mt-5"><SalaryDetailsBar record={selected} onClose={() => setSelectedId(null)} onPay={() => setPaymentRecord(selected)} onCancel={() => void cancelPayroll(selected)} /></div> : null}
+      {selected ? <div className="mt-5"><SalaryDetailsBar record={selected} onClose={() => setSelectedId(null)} onPay={() => setPaymentRecord(selected)} onCancel={() => void cancelPayroll(selected)} onDelete={() => setDeleteRecord(selected)} /></div> : null}
 
       <section className="mt-5 mb-10 overflow-hidden rounded-[20px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${palette.border}` }}><h2 style={{ color: palette.text, fontWeight: 800 }}>{lang === "ar" ? "قائمة الرواتب" : "Paies de la période"}</h2>{loading ? <span className="text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "جاري التحميل..." : "Chargement..."}</span> : <span className="text-sm" style={{ color: palette.muted }}>{records.length}</span>}</div>
-        <PayrollTable records={records} selectedId={selectedId} onSelect={setSelectedId} onPay={setPaymentRecord} />
+        <PayrollTable records={records} selectedId={selectedId} onSelect={setSelectedId} onPay={setPaymentRecord} onDelete={setDeleteRecord} />
       </section>
 
       <CalculateSalaryModal open={payrollOpen} onClose={() => setPayrollOpen(false)} onSaved={refresh} workers={workers} periodStart={startDate} periodEnd={endDate} />
       <AdvanceModal open={advanceOpen} onClose={() => setAdvanceOpen(false)} onSaved={refresh} workers={workers} />
-      <LoanModal open={loanOpen} onClose={() => setLoanOpen(false)} onSaved={refresh} workers={workers} />
       <PaymentModal open={Boolean(paymentRecord)} onClose={() => setPaymentRecord(null)} onSaved={refresh} record={paymentRecord} />
+      <DeletePayrollModal open={Boolean(deleteRecord)} onClose={() => setDeleteRecord(null)} onDeleted={afterPayrollDeleted} record={deleteRecord} />
     </PageBackground>
   );
 }

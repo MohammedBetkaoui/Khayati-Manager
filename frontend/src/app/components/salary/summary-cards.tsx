@@ -1,4 +1,4 @@
-import { Banknote, CircleDollarSign, HandCoins, Landmark, UsersRound, WalletCards } from "lucide-react";
+import { Banknote, CircleDollarSign, HandCoins, UsersRound, WalletCards } from "lucide-react";
 import { useLanguage } from "../../language-context";
 import { money, palette, type DashboardStats } from "../../pages/salary-data";
 
@@ -10,11 +10,10 @@ export function SummaryCards({ stats }: { stats: DashboardStats }) {
     { label: lang === "ar" ? "المدفوع هذا الأسبوع" : "Payé cette semaine", value: money(stats.paidThisWeek, lang), icon: Banknote, color: "#4d8a6a" },
     { label: lang === "ar" ? "المتبقي للدفع" : "Reste à payer", value: money(stats.remainingToPay, lang), icon: CircleDollarSign, color: "#b46a66" },
     { label: lang === "ar" ? "سلف جارية" : "Avances en cours", value: String(stats.activeAdvances), icon: HandCoins, color: "#c07d4f" },
-    { label: lang === "ar" ? "قروض جارية" : "Prêts en cours", value: String(stats.activeLoans), icon: Landmark, color: "#4f6a99" },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map(({ label, value, icon: Icon, color }) => (
         <div
           key={label}

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Banknote, CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, HandCoins, Landmark, PackageCheck, UserRound, WalletCards } from "lucide-react";
-import { useNavigate } from "react-router";
-import { LoanRepaymentModal } from "../components/salary/salary-modals";
+import { ArrowLeft, ArrowRight, Banknote, CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, HandCoins, PackageCheck, UserRound, WalletCards } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Select } from "../components/kit";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
@@ -11,13 +10,12 @@ import { money, payrollStatusCode, payrollStatusColors, payrollStatusLabels, sal
 
 type WorkerOption = { id: number; fullName: string; status: string };
 type WorkerInfo = { id: number; fullName: string; phone: string; role: string; salaryType: string; monthlySalary: number; startDate: string; status: string; notes: string };
-type FinancialSummary = { totalPaid: number; paidThisMonth: number; lastPayment: { amount: number; date: string } | null; outstandingAdvances: number; outstandingLoans: number; totalToRecover: number; paymentCount: number; totalPieces: number; piecesThisMonth: number; averageWeeklyPieces: number };
+type FinancialSummary = { totalPaid: number; paidThisMonth: number; lastPayment: { amount: number; date: string } | null; outstandingAdvances: number; paymentCount: number; totalPieces: number; piecesThisMonth: number; averageWeeklyPieces: number };
 type AttendanceRow = { id: number; date: string; status: string; checkIn: string; checkOut: string; lateMinutes: number };
-type LoanRecord = BalanceRecord & { repayments?: { id: number; amount: number; date: string; method: string }[] };
-type ProfilePayload = { worker: WorkerInfo; financialSummary: FinancialSummary; payrolls: PayrollRecord[]; salaryPayments: SalaryPayment[]; advances: BalanceRecord[]; loans: LoanRecord[] };
-type Tab = "payrolls" | "payments" | "advances" | "loans" | "attendance";
+type ProfilePayload = { worker: WorkerInfo; financialSummary: FinancialSummary; payrolls: PayrollRecord[]; salaryPayments: SalaryPayment[]; advances: BalanceRecord[] };
+type Tab = "payrolls" | "payments" | "advances" | "attendance";
 
-const emptySummary: FinancialSummary = { totalPaid: 0, paidThisMonth: 0, lastPayment: null, outstandingAdvances: 0, outstandingLoans: 0, totalToRecover: 0, paymentCount: 0, totalPieces: 0, piecesThisMonth: 0, averageWeeklyPieces: 0 };
+const emptySummary: FinancialSummary = { totalPaid: 0, paidThisMonth: 0, lastPayment: null, outstandingAdvances: 0, paymentCount: 0, totalPieces: 0, piecesThisMonth: 0, averageWeeklyPieces: 0 };
 
 function SummaryCard({ label, value, icon: Icon, color }: { label: string; value: string; icon: typeof Banknote; color: string }) {
   return <div className="rounded-[18px] p-4" style={{ background: `linear-gradient(145deg, ${palette.surface}, ${color}0b)`, border: `1px solid ${palette.border}` }}><div className="flex items-center justify-between gap-2"><span className="text-xs" style={{ color: palette.muted }}>{label}</span><span className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ color, backgroundColor: `${color}14` }}><Icon size={16} /></span></div><div className="mt-4 text-lg font-extrabold" style={{ color: palette.text }}>{value}</div></div>;
@@ -26,15 +24,15 @@ function SummaryCard({ label, value, icon: Icon, color }: { label: string; value
 export function WorkerProfilePage() {
   const { lang, dir } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedWorkerId = Number(searchParams.get("workerId")) || null;
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProfilePayload | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [tab, setTab] = useState<Tab>("payrolls");
-  const [loanToRepay, setLoanToRepay] = useState<LoanRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,12 +42,17 @@ export function WorkerProfilePage() {
         if (cancelled) return;
         const next = getArrayFromPayload(payload).map((raw) => { const row = asRecord(raw); return { id: getNumber(row?.id), fullName: getText(row?.fullName), status: getText(row?.status) }; }).filter((item) => item.id > 0);
         setWorkers(next);
-        setSelectedWorkerId((current) => current ?? next[0]?.id ?? null);
+        setSelectedWorkerId((current) => {
+          if (requestedWorkerId && next.some((item) => item.id === requestedWorkerId)) {
+            return requestedWorkerId;
+          }
+          return current ?? next[0]?.id ?? null;
+        });
       } catch (caught) { if (!cancelled) setError(caught instanceof Error ? caught.message : "Unable to load workers."); }
     }
     void loadWorkers();
     return () => { cancelled = true; };
-  }, []);
+  }, [requestedWorkerId]);
 
   useEffect(() => {
     if (!selectedWorkerId) { setProfile(null); setAttendance([]); setLoading(false); return; }
@@ -69,8 +72,8 @@ export function WorkerProfilePage() {
     }
     void loadProfile();
     return () => { cancelled = true; };
-  }, [refreshKey, selectedWorkerId]);
-
+  }, [selectedWorkerId]);
+ 
   const worker = profile?.worker;
   const summary = profile?.financialSummary ?? emptySummary;
   const salaryType = worker ? salaryTypeCode(worker.salaryType) : "monthly";
@@ -81,7 +84,6 @@ export function WorkerProfilePage() {
     { id: "payrolls", label: lang === "ar" ? "سجل الرواتب" : "Salaires", count: profile?.payrolls.length ?? 0 },
     { id: "payments", label: lang === "ar" ? "الدفعات" : "Paiements", count: profile?.salaryPayments.length ?? 0 },
     { id: "advances", label: lang === "ar" ? "السلف" : "Avances", count: profile?.advances.length ?? 0 },
-    { id: "loans", label: lang === "ar" ? "القروض" : "Prêts", count: profile?.loans.length ?? 0 },
     { id: "attendance", label: lang === "ar" ? "الحضور" : "Présence", count: attendance.length },
   ];
 
@@ -101,23 +103,20 @@ export function WorkerProfilePage() {
         {archived ? <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#6b6a62", backgroundColor: "rgba(107,106,98,.1)" }}>{lang === "ar" ? "هذا العامل مؤرشف: ملفه وتاريخه محفوظان، ولا يمكن إنشاء عمليات مالية جديدة له." : "Ce travailleur est archivé : son dossier reste consultable, mais aucune nouvelle opération financière n’est autorisée."}</div> : null}
       </section>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label={lang === "ar" ? "إجمالي المدفوع" : "Total versé"} value={money(summary.totalPaid, lang)} icon={Banknote} color="#4d8a6a" />
         <SummaryCard label={lang === "ar" ? "مدفوع هذا الشهر" : "Versé ce mois"} value={money(summary.paidThisMonth, lang)} icon={CalendarDays} color={palette.primary} />
         <SummaryCard label={lang === "ar" ? "آخر دفعة" : "Dernier paiement"} value={summary.lastPayment ? money(summary.lastPayment.amount, lang) : "-"} icon={CircleDollarSign} color="#a87d3c" />
         <SummaryCard label={lang === "ar" ? "السلف المتبقية" : "Avances en cours"} value={money(summary.outstandingAdvances, lang)} icon={HandCoins} color="#c07d4f" />
-        <SummaryCard label={lang === "ar" ? "القروض المتبقية" : "Prêts en cours"} value={money(summary.outstandingLoans, lang)} icon={Landmark} color="#4f6a99" />
         <SummaryCard label={lang === "ar" ? "عدد الدفعات" : "Paiements"} value={String(summary.paymentCount)} icon={WalletCards} color="#8b6d9c" />
         <SummaryCard label={lang === "ar" ? "قطع هذا الشهر" : "Pièces ce mois"} value={String(summary.piecesThisMonth)} icon={PackageCheck} color="#b46a66" />
       </div>
 
       <section className="mt-5 mb-10 overflow-hidden rounded-[22px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
         <div className="flex gap-1 overflow-x-auto px-4 pt-3" style={{ borderBottom: `1px solid ${palette.border}` }}>{tabs.map((item) => <button key={item.id} type="button" onClick={() => setTab(item.id)} className="whitespace-nowrap px-4 py-3 text-sm font-bold" style={{ color: tab === item.id ? palette.primary : palette.muted, borderBottom: tab === item.id ? `2px solid ${palette.primary}` : "2px solid transparent" }}>{item.label} <span className="ms-1 text-xs">{item.count}</span></button>)}</div>
-        <div className="p-5">{tab === "payrolls" ? <PayrollHistory rows={profile.payrolls} lang={lang} /> : null}{tab === "payments" ? <PaymentHistory rows={profile.salaryPayments} lang={lang} /> : null}{tab === "advances" ? <AdvanceHistory rows={profile.advances} lang={lang} /> : null}{tab === "loans" ? <LoanHistory rows={profile.loans} lang={lang} onRepay={setLoanToRepay} archived={archived} /> : null}{tab === "attendance" ? <AttendanceHistory rows={attendance} lang={lang} /> : null}</div>
+        <div className="p-5">{tab === "payrolls" ? <PayrollHistory rows={profile.payrolls} lang={lang} /> : null}{tab === "payments" ? <PaymentHistory rows={profile.salaryPayments} lang={lang} /> : null}{tab === "advances" ? <AdvanceHistory rows={profile.advances} lang={lang} /> : null}{tab === "attendance" ? <AttendanceHistory rows={attendance} lang={lang} /> : null}</div>
       </section>
     </> : null}
-
-    <LoanRepaymentModal open={Boolean(loanToRepay)} onClose={() => setLoanToRepay(null)} onSaved={() => setRefreshKey((value) => value + 1)} loan={loanToRepay} />
   </PageBackground>;
 }
 
@@ -125,8 +124,7 @@ function Empty({ lang }: { lang: "ar" | "fr" }) { return <div className="flex mi
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) { return <div className="overflow-x-auto"><table className="w-full" style={{ minWidth: 760, borderCollapse: "collapse" }}><thead><tr style={{ backgroundColor: palette.bg }}>{headers.map((item) => <th key={item} className="px-3 py-3 text-start text-xs" style={{ color: palette.muted }}>{item}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 const rowStyle = { borderTop: `1px solid ${palette.border}` };
 
-function PayrollHistory({ rows, lang }: { rows: PayrollRecord[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["الفترة", "النوع", "القطع / السعر", "المحسوب", "الاقتطاعات", "المدفوع", "الباقي", "الحالة"] : ["Période", "Type", "Pièces / prix", "Calculé", "Retenues", "Payé", "Reste", "Statut"]}>{rows.map((row) => { const status = payrollStatusCode(row.status); const type = salaryTypeCode(row.salaryType); return <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.periodStart} → {row.periodEnd}</td><td className="px-3 py-3 text-sm">{salaryTypeLabels[type][lang]}</td><td className="px-3 py-3 text-sm">{type === "piece" ? `${row.piecesCompleted} × ${money(row.piecePrice, lang)}` : `${row.installmentNumber}/${row.installmentsInMonth}`}</td><td className="px-3 py-3 text-sm font-bold">{money(row.grossAmount, lang)}</td><td className="px-3 py-3 text-sm">{money(row.totalDeductions, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: "#4d8a6a" }}>{money(row.paidAmount, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: row.remainingAmount ? "#b46a66" : palette.muted }}>{money(row.remainingAmount, lang)}</td><td className="px-3 py-3"><Badge bg={`${payrollStatusColors[status]}16`} fg={payrollStatusColors[status]}>{payrollStatusLabels[status][lang]}</Badge></td></tr>; })}</Table>; }
+function PayrollHistory({ rows, lang }: { rows: PayrollRecord[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["الفترة", "النوع", "القطع / السعر", "المحسوب", "الاقتطاعات", "المدفوع", "الباقي", "الحالة"] : ["Période", "Type", "Pièces / prix", "Calculé", "Retenues", "Payé", "Reste", "Statut"]}>{rows.map((row) => { const status = payrollStatusCode(row.status); const type = salaryTypeCode(row.salaryType); const visibleDeductions = (row.advanceDeduction ?? 0) + (row.otherDeductions ?? 0); return <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.periodStart} → {row.periodEnd}</td><td className="px-3 py-3 text-sm">{salaryTypeLabels[type][lang]}</td><td className="px-3 py-3 text-sm">{type === "piece" ? `${row.piecesCompleted} × ${money(row.piecePrice, lang)}` : `${row.installmentNumber}/${row.installmentsInMonth}`}</td><td className="px-3 py-3 text-sm font-bold">{money(row.grossAmount, lang)}</td><td className="px-3 py-3 text-sm">{money(visibleDeductions, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: "#4d8a6a" }}>{money(row.paidAmount, lang)}</td><td className="px-3 py-3 text-sm" style={{ color: row.remainingAmount ? "#b46a66" : palette.muted }}>{money(row.remainingAmount, lang)}</td><td className="px-3 py-3"><Badge bg={`${payrollStatusColors[status]}16`} fg={payrollStatusColors[status]}>{payrollStatusLabels[status][lang]}</Badge></td></tr>; })}</Table>; }
 function PaymentHistory({ rows, lang }: { rows: SalaryPayment[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ", "الطريقة", "المرجع", "ملاحظات"] : ["Date", "Montant", "Mode", "Référence", "Notes"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm font-bold" style={{ color: "#4d8a6a" }}>{money(row.amount, lang)}</td><td className="px-3 py-3 text-sm">{row.method}</td><td className="px-3 py-3 text-sm">{row.reference || "-"}</td><td className="px-3 py-3 text-sm">{row.notes || "-"}</td></tr>)}</Table>; }
 function AdvanceHistory({ rows, lang }: { rows: BalanceRecord[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ", "المخصوم", "الباقي", "الحالة"] : ["Date", "Montant", "Déduit", "Reste", "Statut"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{money(row.amount ?? 0, lang)}</td><td className="px-3 py-3 text-sm">{money(row.deductedAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm font-bold">{money(row.remainingAmount, lang)}</td><td className="px-3 py-3 text-sm">{row.status}</td></tr>)}</Table>; }
-function LoanHistory({ rows, lang, onRepay, archived }: { rows: LoanRecord[]; lang: "ar" | "fr"; onRepay: (row: LoanRecord) => void; archived: boolean }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "المبلغ الأصلي", "المسدّد", "الباقي", "الحالة", "الإجراء"] : ["Date", "Montant initial", "Remboursé", "Reste", "Statut", "Action"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{money(row.initialAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm">{money(row.repaidAmount ?? 0, lang)}</td><td className="px-3 py-3 text-sm font-bold">{money(row.remainingAmount, lang)}</td><td className="px-3 py-3 text-sm">{row.status}</td><td className="px-3 py-3">{row.remainingAmount > 0 && !archived ? <Button variant="secondary" onClick={() => onRepay(row)}>{lang === "ar" ? "تسجيل تسديد" : "Rembourser"}</Button> : "-"}</td></tr>)}</Table>; }
 function AttendanceHistory({ rows, lang }: { rows: AttendanceRow[]; lang: "ar" | "fr" }) { if (!rows.length) return <Empty lang={lang} />; return <Table headers={lang === "ar" ? ["التاريخ", "الحالة", "الدخول", "الخروج", "التأخر"] : ["Date", "Statut", "Entrée", "Sortie", "Retard"]}>{rows.map((row) => <tr key={row.id} style={rowStyle}><td className="px-3 py-3 text-sm">{row.date}</td><td className="px-3 py-3 text-sm">{row.status}</td><td className="px-3 py-3 text-sm">{row.checkIn || "-"}</td><td className="px-3 py-3 text-sm">{row.checkOut || "-"}</td><td className="px-3 py-3 text-sm">{row.lateMinutes} min</td></tr>)}</Table>; }

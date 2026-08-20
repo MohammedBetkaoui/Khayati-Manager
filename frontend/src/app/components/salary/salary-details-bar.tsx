@@ -1,4 +1,4 @@
-import { Ban, CalendarDays, Coins, HandCoins, Landmark, Wallet, X } from "lucide-react";
+import { Ban, CalendarDays, Coins, HandCoins, Trash2, Wallet, WalletCards, X } from "lucide-react";
 import { useLanguage } from "../../language-context";
 import {
   money,
@@ -21,11 +21,13 @@ export function SalaryDetailsBar({
   onClose,
   onPay,
   onCancel,
+  onDelete,
 }: {
   record: PayrollRecord;
   onClose: () => void;
   onPay: () => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
   const { lang } = useLanguage();
   const status = payrollStatusCode(record.status);
@@ -52,6 +54,7 @@ export function SalaryDetailsBar({
         <div className="flex items-center gap-2">
           {record.remainingAmount > 0 && status !== "cancelled" ? <Button variant="primary" onClick={onPay}><Wallet size={15} />{lang === "ar" ? "تسجيل دفع" : "Enregistrer un paiement"}</Button> : null}
           {record.paidAmount === 0 && status !== "cancelled" ? <Button variant="secondary" onClick={onCancel}><Ban size={15} />{lang === "ar" ? "إلغاء مسجل" : "Annuler avec trace"}</Button> : null}
+          <Button variant="secondary" onClick={onDelete}><Trash2 size={15} />{lang === "ar" ? "حذف نهائي" : "Supprimer"}</Button>
           <button type="button" aria-label="close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ color: palette.muted, border: `1px solid ${palette.border}` }}><X size={17} /></button>
         </div>
       </div>
@@ -79,14 +82,13 @@ export function SalaryDetailsBar({
           <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><HandCoins size={16} color="#c07d4f" />{lang === "ar" ? "الاقتطاعات الموثقة" : "Retenues tracées"}</div>
           <div className="space-y-2.5">
             <AmountLine label={lang === "ar" ? "خصم السلف" : "Avances déduites"} value={money(record.advanceDeduction, lang)} />
-            <AmountLine label={lang === "ar" ? "خصم القروض" : "Prêts remboursés"} value={money(record.loanDeduction, lang)} />
             <AmountLine label={lang === "ar" ? "اقتطاعات أخرى" : "Autres retenues"} value={money(record.otherDeductions, lang)} />
             <AmountLine label={lang === "ar" ? "الصافي المستحق" : "Net dû"} value={money(record.amountDue, lang)} color="#a87d3c" />
           </div>
         </div>
 
         <div className="rounded-2xl p-4" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
-          <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><Landmark size={16} color="#4f6a99" />{lang === "ar" ? "سجل الدفع" : "Règlements"}</div>
+          <div className="mb-3 flex items-center gap-2 font-bold" style={{ color: palette.text }}><WalletCards size={16} color="#4f6a99" />{lang === "ar" ? "سجل الدفع" : "Règlements"}</div>
           {record.payments?.length ? (
             <div className="space-y-2">
               {record.payments.map((payment) => (

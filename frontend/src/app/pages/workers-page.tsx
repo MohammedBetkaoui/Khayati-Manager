@@ -452,6 +452,10 @@ export function WorkersPage() {
     setError(null);
   }
 
+  function openWorkerProfile(workerId: string) {
+    navigate(`/worker-profile?workerId=${workerId}`);
+  }
+
   async function handleAddNote(form: NoteForm) {
     if (!noteWorkerId) return;
 
@@ -600,6 +604,7 @@ export function WorkersPage() {
                     onSelect={setSelectedId}
                     onEdit={openEditWorker}
                     onDelete={setWorkerToDelete}
+                    onOpenProfile={openWorkerProfile}
                   />
                 )}
                 {tab === "attendance" && (
@@ -629,6 +634,7 @@ export function WorkersPage() {
               onEdit={openEditWorker}
               onMarkAttendance={openAttendance}
               onAddNote={openNote}
+              onOpenProfile={openWorkerProfile}
             />
           </aside>
         )}

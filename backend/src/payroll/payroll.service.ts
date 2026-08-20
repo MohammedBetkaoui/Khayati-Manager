@@ -26,6 +26,7 @@ import {
   CreatePayrollDto,
 } from './dto/create-payroll.dto';
 import { CreateSalaryPaymentDto } from './dto/create-salary-payment.dto';
+import { DeletePayrollDto } from './dto/delete-payroll.dto';
 import { PayrollFilterDto } from './dto/payroll-filter.dto';
 import { UpdatePayrollDto } from './dto/update-payroll.dto';
 import { Advance } from './entities/advance.entity';
@@ -238,6 +239,7 @@ export class PayrollService implements OnModuleInit {
         otherDeductions: dto.otherDeductions ?? payroll.otherDeductions,
         advanceDeductions: dto.advanceDeductions ?? existingAdvanceDeductions,
         loanDeductions: dto.loanDeductions ?? existingLoanDeductions,
+        manualGrossAmount: dto.manualGrossAmount,
         notes: dto.notes ?? payroll.notes ?? undefined,
       };
 
@@ -308,6 +310,44 @@ export class PayrollService implements OnModuleInit {
       await manager.save(payroll);
     });
     return this.findOne(id);
+  }
+
+  async removePermanently(id: number, dto: DeletePayrollDto) {
+    return this.dataSource.transaction(async (manager) => {
+      const payroll = await manager.findOne(Payroll, {
+        where: { id },
+        relations: {
+          worker: true,
+          payments: true,
+          advanceDeductions: { advance: true },
+          loanDeductions: { loan: true },
+        },
+      });
+      if (!payroll) {
+        throw new NotFoundException(`Payroll with id ${id} was not found.`);
+      }
+
+      const expected = payroll.worker.fullName.trim().toLocaleLowerCase();
+      const received = dto.confirmation.trim().toLocaleLowerCase();
+      if (received !== expected) {
+        throw new BadRequestException(
+          'Confirmation does not match the worker name for this payroll.',
+        );
+      }
+
+      const deletedPayments = payroll.payments?.length ?? 0;
+      await this.reverseBalanceDeductions(manager, payroll);
+      await manager.delete(SalaryPayment, { payroll: { id: payroll.id } });
+      await manager.delete(Payroll, payroll.id);
+
+      return {
+        deleted: true,
+        id: payroll.id,
+        workerId: payroll.worker.id,
+        workerName: payroll.worker.fullName,
+        deletedPayments,
+      };
+    });
   }
 
   async createPayment(payrollId: number, dto: CreateSalaryPaymentDto) {
@@ -605,6 +645,11 @@ export class PayrollService implements OnModuleInit {
 
     const salaryType = snapshot?.salaryType ?? worker.salaryType;
     if (salaryType === SalaryType.PIECE) {
+      if (dto.manualGrossAmount !== undefined) {
+        throw new BadRequestException(
+          'Manual amount override is only available for monthly payrolls.',
+        );
+      }
       const piecesCompleted = Math.floor(dto.piecesCompleted ?? 0);
       const piecePrice = this.money(dto.piecePrice ?? 0);
       if (piecesCompleted <= 0 || piecePrice <= 0) {
@@ -666,10 +711,19 @@ export class PayrollService implements OnModuleInit {
       );
     }
     const theoretical = this.money(monthlySalary / installmentsInMonth);
-    const grossAmount =
+    const defaultGrossAmount =
       installmentNumber === installmentsInMonth
         ? remainingMonthly
         : Math.min(theoretical, remainingMonthly);
+    const grossAmount =
+      dto.manualGrossAmount === undefined
+        ? defaultGrossAmount
+        : this.money(dto.manualGrossAmount);
+    if (grossAmount > remainingMonthly) {
+      throw new BadRequestException(
+        `Manual payroll amount cannot exceed the remaining monthly salary of ${remainingMonthly}.`,
+      );
+    }
 
     return {
       periodStart,

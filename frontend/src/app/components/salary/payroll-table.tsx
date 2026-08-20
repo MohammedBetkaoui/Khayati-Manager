@@ -1,4 +1,4 @@
-import { Eye, Wallet } from "lucide-react";
+import { Eye, Trash2, Wallet } from "lucide-react";
 import { useLanguage } from "../../language-context";
 import {
   money,
@@ -17,11 +17,13 @@ export function PayrollTable({
   selectedId,
   onSelect,
   onPay,
+  onDelete,
 }: {
   records: PayrollRecord[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   onPay: (record: PayrollRecord) => void;
+  onDelete: (record: PayrollRecord) => void;
 }) {
   const { lang } = useLanguage();
   const labels = lang === "ar"
@@ -74,6 +76,7 @@ export function PayrollTable({
                     {record.remainingAmount > 0 && status !== "cancelled" ? (
                       <button type="button" aria-label={lang === "ar" ? "دفع" : "Payer"} onClick={(event) => { event.stopPropagation(); onPay(record); }} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "#4d8a6a", border: `1px solid ${palette.border}` }}><Wallet size={15} /></button>
                     ) : null}
+                    <button type="button" aria-label={lang === "ar" ? "حذف نهائي" : "Supprimer définitivement"} onClick={(event) => { event.stopPropagation(); onDelete(record); }} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ color: "#b46a66", border: `1px solid ${palette.border}` }}><Trash2 size={15} /></button>
                   </div>
                 </td>
               </tr>

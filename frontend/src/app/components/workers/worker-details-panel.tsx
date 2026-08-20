@@ -30,12 +30,14 @@ export function WorkerDetailsPanel({
   onEdit,
   onMarkAttendance,
   onAddNote,
+  onOpenProfile,
 }: {
   worker: Worker | null;
   onClose?: () => void;
   onEdit?: (id: string) => void;
   onMarkAttendance?: (id: string) => void;
   onAddNote?: (id: string) => void;
+  onOpenProfile?: (id: string) => void;
 }) {
   const { lang } = useLanguage();
   const t = workersText[lang];
@@ -151,7 +153,7 @@ export function WorkerDetailsPanel({
             <StickyNote size={16} />
             {t.panel.addNote}
           </Button>
-          <Button variant="secondary" full>
+          <Button variant="secondary" full onClick={() => onOpenProfile?.(worker.id)}>
             {t.panel.fullDetails}
             <Arrow size={15} />
           </Button>

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -14,6 +15,7 @@ import { CreateLoanRepaymentDto } from './dto/create-loan-repayment.dto';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { CreatePayrollDto } from './dto/create-payroll.dto';
 import { CreateSalaryPaymentDto } from './dto/create-salary-payment.dto';
+import { DeletePayrollDto } from './dto/delete-payroll.dto';
 import { PayrollFilterDto } from './dto/payroll-filter.dto';
 import { UpdatePayrollDto } from './dto/update-payroll.dto';
 import { PayrollService } from './payroll.service';
@@ -100,5 +102,13 @@ export class PayrollController {
     @Body() dto: UpdatePayrollDto,
   ) {
     return this.payrollService.update(id, dto);
+  }
+
+  @Delete(':id')
+  removePermanently(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: DeletePayrollDto,
+  ) {
+    return this.payrollService.removePermanently(id, dto);
   }
 }

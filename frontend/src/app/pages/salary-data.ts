@@ -37,7 +37,6 @@ export type PayrollRecord = {
   piecePrice: number;
   grossAmount: number;
   advanceDeduction: number;
-  loanDeduction: number;
   otherDeductions: number;
   totalDeductions: number;
   amountDue: number;
@@ -55,7 +54,6 @@ export type DashboardStats = {
   paidThisWeek: number;
   remainingToPay: number;
   activeAdvances: number;
-  activeLoans: number;
 };
 
 export type BalanceRecord = {
