@@ -149,3 +149,45 @@ export type RawMaterial = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type Supplier = {
+  id: number;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  status: string;
+  statusCode: "ACTIVE" | "INACTIVE" | "ARCHIVED" | string;
+  totalPurchases: number;
+  totalPaid: number;
+  totalDebt: number;
+  debt: number;
+  lastPurchaseDate: string | null;
+  lastPurchase: string | null;
+  notes: string | null;
+  archivedAt: string | null;
+};
+
+export type MaterialPurchase = {
+  id: number;
+  supplierId: number;
+  supplier: string;
+  inventoryItemId: number | null;
+  materialName: string;
+  name: string;
+  color: string | null;
+  quantityPurchased: number;
+  quantity: number;
+  unit: string;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  remaining: number;
+  paymentStatus: string;
+  status: string;
+  purchaseDate: string;
+  date: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};

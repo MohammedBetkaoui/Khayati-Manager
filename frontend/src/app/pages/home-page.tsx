@@ -9,6 +9,7 @@ const routeFor: Record<string, string> = {
   workers: "/workers",
   clients: "/clients",
   stock: "/stock",
+  suppliers: "/suppliers",
   sales: "/sales",
   salary: "/salary",
   expenses: "/expenses",

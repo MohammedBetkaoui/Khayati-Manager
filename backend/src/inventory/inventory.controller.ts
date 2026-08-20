@@ -12,11 +12,15 @@ import {
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { AdjustProductStockDto } from './dto/adjust-product-stock.dto';
 import { CreateFinishedProductDto } from './dto/create-finished-product.dto';
+import { CreateMaterialPurchaseDto } from './dto/create-material-purchase.dto';
 import { CreateProductionDto } from './dto/create-production.dto';
 import { FinishedProductFilterDto } from './dto/finished-product-filter.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
+import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
+import { CreateSupplierPaymentDto } from './dto/create-supplier-payment.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { InventoryFilterDto } from './dto/inventory-filter.dto';
+import { SupplierFilterDto } from './dto/supplier-filter.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 import { UpdateFinishedProductDto } from './dto/update-finished-product.dto';
 import { FinishedProductsService } from './finished-products.service';
@@ -55,13 +59,64 @@ export class InventoryController {
   }
 
   @Get('suppliers')
-  getSuppliers() {
-    return this.inventoryService.getSuppliers();
+  getSuppliers(@Query() query: SupplierFilterDto) {
+    return this.inventoryService.getSuppliers(query);
+  }
+
+  @Get('suppliers/stats')
+  getSupplierStats() {
+    return this.inventoryService.getSupplierStats();
   }
 
   @Post('suppliers')
   createSupplier(@Body() dto: CreateSupplierDto) {
     return this.inventoryService.createSupplier(dto);
+  }
+
+  @Get('suppliers/:id/profile')
+  getSupplierProfile(@Param('id', ParseIntPipe) id: number) {
+    return this.inventoryService.findSupplierProfile(id);
+  }
+
+  @Patch('suppliers/:id')
+  updateSupplier(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateSupplierDto,
+  ) {
+    return this.inventoryService.updateSupplier(id, dto);
+  }
+
+  @Delete('suppliers/:id')
+  archiveSupplier(@Param('id', ParseIntPipe) id: number) {
+    return this.inventoryService.archiveSupplier(id);
+  }
+
+  @Post('suppliers/:id/advances')
+  createSupplierAdvance(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateSupplierAdvanceDto,
+  ) {
+    return this.inventoryService.createSupplierAdvance(id, dto);
+  }
+
+  @Post('supplier-payments')
+  createSupplierPayment(@Body() dto: CreateSupplierPaymentDto) {
+    return this.inventoryService.createSupplierPayment(dto);
+  }
+
+  @Get('material-purchases')
+  getMaterialPurchases(@Query() query: InventoryFilterDto) {
+    return this.inventoryService.getMaterialPurchases(query);
+  }
+
+  @Post('material-purchases')
+  createMaterialPurchase(@Body() dto: CreateMaterialPurchaseDto) {
+    return this.inventoryService.createMaterialPurchase(dto);
+  }
+
+  @Get('raw-materials')
+  findRawMaterials(@Query() query: InventoryFilterDto) {
+    return this.inventoryService.findAll(query);
   }
 
   @Get('consumption-analysis')

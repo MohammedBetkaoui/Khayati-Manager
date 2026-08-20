@@ -13,6 +13,7 @@ import { MaterialConsumption } from './material-consumption.entity';
 import { ProductionMaterial } from './production-material.entity';
 import { StockMovement } from './stock-movement.entity';
 import { Supplier } from './supplier.entity';
+import { SupplierPurchase } from './supplier-purchase.entity';
 
 @Entity('inventory_items')
 export class InventoryItem {
@@ -84,6 +85,9 @@ export class InventoryItem {
 
   @OneToMany(() => ProductionMaterial, (usage) => usage.inventoryItem)
   productionMaterialUsages!: ProductionMaterial[];
+
+  @OneToMany(() => SupplierPurchase, (purchase) => purchase.inventoryItem)
+  supplierPurchases!: SupplierPurchase[];
 
   @CreateDateColumn()
   createdAt!: Date;

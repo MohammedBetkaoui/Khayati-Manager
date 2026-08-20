@@ -61,18 +61,19 @@ export class FinishedProductsService implements OnModuleInit {
 
   async create(dto: CreateFinishedProductDto) {
     const productId = await this.dataSource.transaction(async (manager) => {
-      const sku = this.normalizeSku(dto.sku);
+      const sku = this.normalizeSku(dto.sku ?? this.buildAutoSku(dto.name));
       await this.ensureProductSkuAvailable(manager, sku);
+      const initialQuantity = dto.initialQuantity ?? dto.quantity ?? 0;
 
       const product = await manager.getRepository(FinishedProduct).save(
         manager.getRepository(FinishedProduct).create({
           name: this.requiredText(dto.name, 'name'),
           sku,
-          category: dto.category,
+          category: dto.category ?? FinishedProductCategory.OTHER,
           description: this.optionalText(dto.description),
           imageUrl: this.optionalText(dto.imageUrl),
           creationDate: dto.creationDate ?? this.toDateKey(new Date()),
-          salePrice: this.roundMoney(dto.salePrice),
+          salePrice: this.roundMoney(dto.salePrice ?? 0),
           estimatedProductionCost: this.roundMoney(
             dto.estimatedProductionCost ?? 0,
           ),
@@ -85,7 +86,9 @@ export class FinishedProductsService implements OnModuleInit {
         }),
       );
 
-      const variants = dto.variants?.length ? dto.variants : [{}];
+      const variants = dto.variants?.length
+        ? dto.variants
+        : [{ initialQuantity }];
       this.ensureDistinctVariantDefinitions(variants);
 
       for (const [index, variantDto] of variants.entries()) {
@@ -322,10 +325,7 @@ export class FinishedProductsService implements OnModuleInit {
       const variant = this.resolveVariant(product, dto.variantId);
       const date = dto.date ?? this.toDateKey(new Date());
       const batchNumber = await this.nextBatchNumber(manager);
-      const resolvedMaterials = await this.resolveProductionMaterials(
-        manager,
-        dto,
-      );
+      const resolvedMaterials: ResolvedMaterial[] = [];
 
       const materialCost = this.roundMoney(
         resolvedMaterials.reduce((sum, item) => sum + item.totalCost, 0),
@@ -851,6 +851,13 @@ export class FinishedProductsService implements OnModuleInit {
     });
     const next = Number(last?.batchNumber.match(/(\d+)$/)?.[1] ?? 0) + 1;
     return `PROD-${this.toDateKey(new Date()).replace(/-/g, '')}-${String(next).padStart(4, '0')}`;
+  }
+
+  private buildAutoSku(name: string) {
+    const compactName = this.requiredText(name, 'name')
+      .replace(/\s+/g, '-')
+      .slice(0, 28);
+    return `MOD-${compactName}-${Date.now().toString(36)}`;
   }
 
   private async seedFinishedProductsIfEmpty() {

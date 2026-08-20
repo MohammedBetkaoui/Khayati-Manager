@@ -21,6 +21,16 @@ const StockPage = lazy(() =>
     default: module.StockPage,
   })),
 );
+const SuppliersPage = lazy(() =>
+  import("./pages/suppliers-page").then((module) => ({
+    default: module.SuppliersPage,
+  })),
+);
+const SupplierProfilePage = lazy(() =>
+  import("./pages/supplier-profile-page").then((module) => ({
+    default: module.SupplierProfilePage,
+  })),
+);
 const SalesPage = lazy(() =>
   import("./pages/sales-page").then((module) => ({
     default: module.SalesPage,
@@ -98,6 +108,8 @@ const router = createHashRouter([
       { index: true, element: <HomePage /> },
       { path: "workers", element: <WorkersPage /> },
       { path: "stock", element: <StockPage /> },
+      { path: "suppliers", element: <SuppliersPage /> },
+      { path: "suppliers/:supplierId", element: <SupplierProfilePage /> },
       { path: "clients", element: <ClientsPage /> },
       { path: "sales", element: <SalesPage /> },
       { path: "sales/new", element: <NewSalePage /> },

@@ -5,16 +5,31 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
-import { InventoryCategory, MovementType, StockStatus } from '../common/enums';
+import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  InventoryCategory,
+  MovementType,
+  PaymentMethod,
+  StockStatus,
+  SupplierAdvanceStatus,
+  SupplierPurchaseStatus,
+  SupplierStatus,
+} from '../common/enums';
+import { CreateMaterialPurchaseDto } from './dto/create-material-purchase.dto';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
+import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
+import { CreateSupplierPaymentDto } from './dto/create-supplier-payment.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { InventoryFilterDto } from './dto/inventory-filter.dto';
+import { SupplierFilterDto } from './dto/supplier-filter.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 import { InventoryItem } from './entities/inventory-item.entity';
 import { MaterialConsumption } from './entities/material-consumption.entity';
 import { StockMovement } from './entities/stock-movement.entity';
+import { SupplierAdvance } from './entities/supplier-advance.entity';
+import { SupplierPayment } from './entities/supplier-payment.entity';
+import { SupplierPurchase } from './entities/supplier-purchase.entity';
 import { Supplier } from './entities/supplier.entity';
 
 type PaginationPayload = {
@@ -42,6 +57,12 @@ export class InventoryService implements OnModuleInit {
     private readonly movementsRepository: Repository<StockMovement>,
     @InjectRepository(Supplier)
     private readonly suppliersRepository: Repository<Supplier>,
+    @InjectRepository(SupplierPurchase)
+    private readonly purchasesRepository: Repository<SupplierPurchase>,
+    @InjectRepository(SupplierPayment)
+    private readonly supplierPaymentsRepository: Repository<SupplierPayment>,
+    @InjectRepository(SupplierAdvance)
+    private readonly supplierAdvancesRepository: Repository<SupplierAdvance>,
     @InjectRepository(MaterialConsumption)
     private readonly consumptionsRepository: Repository<MaterialConsumption>,
     private readonly dataSource: DataSource,
@@ -49,7 +70,9 @@ export class InventoryService implements OnModuleInit {
 
   async onModuleInit() {
     await this.seedInventoryIfEmpty();
+    await this.seedSupplierPurchasesIfEmpty();
     await this.syncExistingInventoryState();
+    await this.recalculateAllSuppliers();
   }
 
   async create(dto: CreateInventoryItemDto) {
@@ -220,28 +243,47 @@ export class InventoryService implements OnModuleInit {
 
   async getStats() {
     const { start, end } = this.currentMonthRange();
-    const [totalMaterials, lowStockMaterials, stockValue, monthlyMovements] =
+    const [
+      totalMaterials,
+      monthlyPurchases,
+      monthlyPurchaseRow,
+      suppliersDebtRow,
+      activeSuppliers,
+    ] =
       await Promise.all([
         this.itemsRepository.count(),
-        this.itemsRepository
-          .createQueryBuilder('item')
-          .where('item.quantity <= item.minStockAlert')
+        this.purchasesRepository
+          .createQueryBuilder('purchase')
+          .where('purchase.purchaseDate BETWEEN :start AND :end', { start, end })
           .getCount(),
-        this.calculateStockValue(),
-        this.movementsRepository
-          .createQueryBuilder('movement')
-          .where('movement.date BETWEEN :start AND :end', { start, end })
-          .getCount(),
+        this.purchasesRepository
+          .createQueryBuilder('purchase')
+          .select('COALESCE(SUM(purchase.totalAmount), 0)', 'total')
+          .where('purchase.purchaseDate BETWEEN :start AND :end', { start, end })
+          .getRawOne<{ total: string | number | null }>(),
+        this.suppliersRepository
+          .createQueryBuilder('supplier')
+          .select('COALESCE(SUM(supplier.totalDebt), 0)', 'total')
+          .getRawOne<{ total: string | number | null }>(),
+        this.suppliersRepository.count({
+          where: { status: SupplierStatus.ACTIVE },
+        }),
       ]);
+    const monthlyPurchaseAmount = this.roundMoney(Number(monthlyPurchaseRow?.total ?? 0));
+    const supplierDebt = this.roundMoney(Number(suppliersDebtRow?.total ?? 0));
 
     return {
       totalMaterials,
       totalItems: totalMaterials,
-      lowStockMaterials,
-      lowStock: lowStockMaterials,
-      stockValue: stockValue.totalValue,
-      monthlyMovements,
-      movementsCount: monthlyMovements,
+      monthlyPurchases,
+      monthlyPurchaseAmount,
+      supplierDebt,
+      activeSuppliers,
+      lowStockMaterials: 0,
+      lowStock: 0,
+      stockValue: monthlyPurchaseAmount,
+      monthlyMovements: monthlyPurchases,
+      movementsCount: monthlyPurchases,
     };
   }
 
@@ -385,37 +427,60 @@ export class InventoryService implements OnModuleInit {
     );
   }
 
-  async getSuppliers() {
-    const rows = await this.suppliersRepository
-      .createQueryBuilder('supplier')
-      .leftJoin('supplier.inventoryItems', 'item')
-      .select('supplier.id', 'id')
-      .addSelect('supplier.name', 'name')
-      .addSelect('supplier.phone', 'phone')
-      .addSelect('supplier.address', 'address')
-      .addSelect('supplier.notes', 'notes')
-      .addSelect('COUNT(item.id)', 'count')
-      .addSelect(
-        'COALESCE(SUM(item.quantity * item.unitPrice), 0)',
-        'totalValue',
-      )
-      .groupBy('supplier.id')
-      .addGroupBy('supplier.name')
-      .addGroupBy('supplier.phone')
-      .addGroupBy('supplier.address')
-      .addGroupBy('supplier.notes')
-      .orderBy('supplier.name', 'ASC')
-      .getRawMany<{
-        id: string;
-        name: string;
-        phone: string | null;
-        address: string | null;
-        notes: string | null;
-        count: string;
-        totalValue: string;
-      }>();
+  async getSuppliers(query: SupplierFilterDto = {}) {
+    const page = this.normalizePage(query.page);
+    const limit = this.normalizeLimit(query.limit);
+    const sortBy = query.sortBy ?? 'name';
+    const sortOrder = query.sortOrder ?? 'ASC';
+    const qb = this.suppliersRepository.createQueryBuilder('supplier');
 
-    return rows.map((row) => this.serializeSupplierSummaryRow(row));
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(supplier.name LIKE :search OR supplier.phone LIKE :search OR supplier.address LIKE :search OR supplier.city LIKE :search OR supplier.notes LIKE :search)',
+        { search },
+      );
+    }
+    if (query.status) qb.andWhere('supplier.status = :status', { status: query.status });
+    if (!query.status) {
+      qb.andWhere('supplier.status != :archived', {
+        archived: SupplierStatus.ARCHIVED,
+      });
+    }
+
+    qb.orderBy(`supplier.${sortBy}`, sortOrder)
+      .addOrderBy('supplier.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [suppliers, total] = await qb.getManyAndCount();
+    return {
+      data: suppliers.map((supplier) => this.serializeSupplierDetail(supplier)),
+      pagination: this.buildPagination(page, limit, total),
+    };
+  }
+
+  async getSupplierStats() {
+    const raw = await this.suppliersRepository
+      .createQueryBuilder('supplier')
+      .select('COUNT(supplier.id)', 'totalSuppliers')
+      .addSelect(
+        `SUM(CASE WHEN supplier.status = :active THEN 1 ELSE 0 END)`,
+        'activeSuppliers',
+      )
+      .addSelect('COALESCE(SUM(supplier.totalPurchases), 0)', 'totalPurchases')
+      .addSelect('COALESCE(SUM(supplier.totalPaid), 0)', 'totalPaid')
+      .addSelect('COALESCE(SUM(supplier.totalDebt), 0)', 'totalDebt')
+      .setParameter('active', SupplierStatus.ACTIVE)
+      .getRawOne<Record<string, string | number | null>>();
+
+    return {
+      totalSuppliers: Number(raw?.totalSuppliers ?? 0),
+      activeSuppliers: Number(raw?.activeSuppliers ?? 0),
+      totalPurchases: this.roundMoney(Number(raw?.totalPurchases ?? 0)),
+      totalPaid: this.roundMoney(Number(raw?.totalPaid ?? 0)),
+      totalDebt: this.roundMoney(Number(raw?.totalDebt ?? 0)),
+    };
   }
 
   async createSupplier(dto: CreateSupplierDto) {
@@ -423,11 +488,236 @@ export class InventoryService implements OnModuleInit {
       name: dto.name,
       phone: dto.phone,
       address: dto.address,
+      city: dto.city,
+      status: dto.status,
       notes: dto.notes,
     });
 
-    const summary = await this.getSupplierSummaryById(supplier.id);
-    return summary ?? this.serializeSupplierDetail(supplier);
+    return this.serializeSupplierDetail(supplier);
+  }
+
+  async updateSupplier(id: number, dto: CreateSupplierDto) {
+    const supplier = await this.findSupplierOrFail(id);
+    if (dto.name !== undefined) supplier.name = this.normalizeRequiredText(dto.name, 'supplier name');
+    if (dto.phone !== undefined) supplier.phone = this.normalizeOptionalText(dto.phone);
+    if (dto.address !== undefined) supplier.address = this.normalizeOptionalText(dto.address);
+    if (dto.city !== undefined) supplier.city = this.normalizeOptionalText(dto.city);
+    if (dto.notes !== undefined) supplier.notes = this.normalizeOptionalText(dto.notes);
+    if (dto.status !== undefined) {
+      supplier.status = dto.status;
+      supplier.archivedAt = dto.status === SupplierStatus.ARCHIVED ? new Date() : null;
+    }
+    await this.suppliersRepository.save(supplier);
+    return this.serializeSupplierDetail(supplier);
+  }
+
+  async archiveSupplier(id: number) {
+    const supplier = await this.findSupplierOrFail(id);
+    supplier.status = SupplierStatus.ARCHIVED;
+    supplier.archivedAt = new Date();
+    await this.suppliersRepository.save(supplier);
+    return { archived: true, supplier: this.serializeSupplierDetail(supplier) };
+  }
+
+  async findSupplierProfile(id: number) {
+    const supplier = await this.suppliersRepository.findOne({
+      where: { id },
+      relations: {
+        purchases: { inventoryItem: true, payments: true },
+        payments: { purchase: true },
+        advances: true,
+      },
+    });
+    if (!supplier) throw new NotFoundException(`Supplier with id ${id} was not found.`);
+    supplier.purchases.sort((left, right) => right.purchaseDate.localeCompare(left.purchaseDate) || right.id - left.id);
+    supplier.payments.sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
+    supplier.advances.sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
+
+    const purchases = supplier.purchases.map((purchase) =>
+      this.serializePurchase(purchase, supplier),
+    );
+    const payments = supplier.payments.map((payment) =>
+      this.serializeSupplierPayment(payment, supplier),
+    );
+    const advances = supplier.advances.map((advance) =>
+      this.serializeSupplierAdvance(advance, supplier),
+    );
+    const averagePurchase = purchases.length
+      ? this.roundMoney(supplier.totalPurchases / purchases.length)
+      : 0;
+    return {
+      supplier: this.serializeSupplierDetail(supplier),
+      statistics: {
+        totalPurchases: supplier.totalPurchases,
+        totalPaid: supplier.totalPaid,
+        totalDebt: supplier.totalDebt,
+        totalAdvances: this.roundMoney(advances.reduce((sum, advance) => sum + advance.amount, 0)),
+        purchaseCount: purchases.length,
+        lastPurchase: supplier.lastPurchaseDate ?? null,
+        lastPayment: payments[0]?.date ?? null,
+        averagePurchase,
+      },
+      purchases,
+      payments,
+      advances,
+      history: this.buildSupplierHistory(purchases, payments, advances),
+    };
+  }
+
+  async getMaterialPurchases(query: InventoryFilterDto = {}) {
+    const page = this.normalizePage(query.page);
+    const limit = this.normalizeLimit(query.limit);
+    const qb = this.purchasesRepository
+      .createQueryBuilder('purchase')
+      .leftJoinAndSelect('purchase.supplier', 'supplier')
+      .leftJoinAndSelect('purchase.inventoryItem', 'item');
+
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(purchase.materialName LIKE :search OR purchase.materialColor LIKE :search OR supplier.name LIKE :search OR purchase.notes LIKE :search)',
+        { search },
+      );
+    }
+    if (query.supplier?.trim()) {
+      qb.andWhere('supplier.name LIKE :supplier', { supplier: `%${query.supplier.trim()}%` });
+    }
+    if (query.category) qb.andWhere('item.category = :category', { category: query.category });
+
+    qb.orderBy('purchase.purchaseDate', 'DESC')
+      .addOrderBy('purchase.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [purchases, total] = await qb.getManyAndCount();
+    return {
+      data: purchases.map((purchase) => this.serializePurchase(purchase)),
+      pagination: this.buildPagination(page, limit, total),
+    };
+  }
+
+  async createMaterialPurchase(dto: CreateMaterialPurchaseDto) {
+    const purchaseId = await this.dataSource.transaction(async (manager) => {
+      const supplier = await this.resolvePurchaseSupplier(manager, dto);
+      const item = await this.resolvePurchasedMaterial(manager, dto, supplier);
+      const totalAmount = this.roundMoney(dto.totalAmount);
+      const paidAmount = this.roundMoney(dto.paidAmount ?? 0);
+      if (paidAmount > totalAmount) {
+        throw new BadRequestException('paidAmount cannot exceed totalAmount.');
+      }
+
+      const purchase = await manager.getRepository(SupplierPurchase).save(
+        manager.getRepository(SupplierPurchase).create({
+          supplier,
+          inventoryItem: item,
+          materialName: item.name,
+          materialColor: item.color,
+          quantityPurchased: this.roundQuantity(dto.quantityPurchased),
+          unit: item.unit,
+          totalAmount,
+          paidAmount,
+          remainingAmount: this.roundMoney(totalAmount - paidAmount),
+          paymentStatus: this.purchaseStatus(totalAmount, paidAmount),
+          purchaseDate: dto.purchaseDate ?? this.toDateKey(new Date()),
+          notes: this.normalizeOptionalText(dto.notes),
+        }),
+      );
+
+      if (paidAmount > 0) {
+        await manager.getRepository(SupplierPayment).save(
+          manager.getRepository(SupplierPayment).create({
+            supplier,
+            purchase,
+            amount: paidAmount,
+            paymentMethod: dto.paymentMethod ?? PaymentMethod.CASH,
+            date: purchase.purchaseDate,
+            notes: 'Initial supplier purchase payment',
+          }),
+        );
+      }
+
+      await this.recalculateSupplier(manager, supplier.id);
+      return purchase.id;
+    });
+
+    const purchase = await this.purchasesRepository.findOne({
+      where: { id: purchaseId },
+      relations: { supplier: true, inventoryItem: true, payments: true },
+    });
+    if (!purchase) throw new NotFoundException('Purchase not found.');
+    return this.serializePurchase(purchase);
+  }
+
+  async createSupplierPayment(dto: CreateSupplierPaymentDto) {
+    const paymentId = await this.dataSource.transaction(async (manager) => {
+      const supplier = await this.findSupplierOrFail(dto.supplierId, manager);
+      let purchase: SupplierPurchase | null = null;
+      if (dto.purchaseId) {
+        purchase = await manager.getRepository(SupplierPurchase).findOne({
+          where: { id: dto.purchaseId },
+          relations: { supplier: true },
+        });
+        if (!purchase) throw new NotFoundException(`Purchase ${dto.purchaseId} was not found.`);
+        if (purchase.supplier.id !== supplier.id) {
+          throw new BadRequestException('purchaseId does not belong to this supplier.');
+        }
+        if (dto.amount > purchase.remainingAmount) {
+          throw new BadRequestException(`Payment exceeds remaining amount (${purchase.remainingAmount}).`);
+        }
+        purchase.paidAmount = this.roundMoney(purchase.paidAmount + dto.amount);
+        purchase.remainingAmount = this.roundMoney(purchase.totalAmount - purchase.paidAmount);
+        purchase.paymentStatus = this.purchaseStatus(purchase.totalAmount, purchase.paidAmount);
+        await manager.getRepository(SupplierPurchase).save(purchase);
+      }
+
+      const payment = await manager.getRepository(SupplierPayment).save(
+        manager.getRepository(SupplierPayment).create({
+          supplier,
+          purchase,
+          amount: this.roundMoney(dto.amount),
+          paymentMethod: dto.paymentMethod ?? PaymentMethod.CASH,
+          date: dto.date ?? this.toDateKey(new Date()),
+          reference: this.normalizeOptionalText(dto.reference),
+          notes: this.normalizeOptionalText(dto.notes),
+        }),
+      );
+      await this.recalculateSupplier(manager, supplier.id);
+      return payment.id;
+    });
+
+    const payment = await this.supplierPaymentsRepository.findOne({
+      where: { id: paymentId },
+      relations: { supplier: true, purchase: true },
+    });
+    if (!payment) throw new NotFoundException('Supplier payment not found.');
+    return this.serializeSupplierPayment(payment);
+  }
+
+  async createSupplierAdvance(supplierId: number, dto: CreateSupplierAdvanceDto) {
+    const advanceId = await this.dataSource.transaction(async (manager) => {
+      const supplier = await this.findSupplierOrFail(supplierId, manager);
+      const amount = this.roundMoney(dto.amount);
+      const advance = await manager.getRepository(SupplierAdvance).save(
+        manager.getRepository(SupplierAdvance).create({
+          supplier,
+          amount,
+          appliedAmount: 0,
+          remainingAmount: amount,
+          status: SupplierAdvanceStatus.OPEN,
+          date: dto.date ?? this.toDateKey(new Date()),
+          notes: this.normalizeOptionalText(dto.notes),
+        }),
+      );
+      await this.recalculateSupplier(manager, supplier.id);
+      return advance.id;
+    });
+
+    const advance = await this.supplierAdvancesRepository.findOne({
+      where: { id: advanceId },
+      relations: { supplier: true },
+    });
+    if (!advance) throw new NotFoundException('Supplier advance not found.');
+    return this.serializeSupplierAdvance(advance);
   }
 
   async getConsumptionAnalysis() {
@@ -618,6 +908,62 @@ export class InventoryService implements OnModuleInit {
     ]);
   }
 
+  private async seedSupplierPurchasesIfEmpty() {
+    if ((await this.purchasesRepository.count()) > 0) return;
+
+    const materials = await this.itemsRepository.find({
+      relations: { supplierEntity: true },
+      order: { id: 'ASC' },
+    });
+    if (!materials.length) return;
+
+    const today = new Date();
+    const samples = [
+      {
+        item: materials.find((item) => item.name.includes('قماش')) ?? materials[0],
+        date: this.toDateKey(this.shiftDate(today, -10)),
+        totalAmount: 48000,
+        paidAmount: 30000,
+        notes: 'Achat de tissu coton noir',
+      },
+      {
+        item: materials.find((item) => item.name.includes('خيط')) ?? materials[0],
+        date: this.toDateKey(this.shiftDate(today, -5)),
+        totalAmount: 15000,
+        paidAmount: 15000,
+        notes: 'Achat de fil pour production',
+      },
+      {
+        item: materials.find((item) => item.name.includes('سحاب')) ?? materials[0],
+        date: this.toDateKey(this.shiftDate(today, -2)),
+        totalAmount: 25000,
+        paidAmount: 10000,
+        notes: 'Approvisionnement accessoires',
+      },
+    ];
+
+    for (const sample of samples) {
+      const supplier =
+        sample.item.supplierEntity ??
+        (sample.item.supplier
+          ? await this.upsertSupplierByName({ name: sample.item.supplier })
+          : await this.upsertSupplierByName({ name: 'Fournisseur atelier' }));
+      await this.createMaterialPurchase({
+        inventoryItemId: sample.item.id,
+        materialName: sample.item.name,
+        color: sample.item.color ?? undefined,
+        quantityPurchased: Math.max(1, Math.round(sample.item.quantity / 3)),
+        unit: sample.item.unit,
+        totalAmount: sample.totalAmount,
+        paidAmount: sample.paidAmount,
+        paymentMethod: PaymentMethod.CASH,
+        supplierId: supplier.id,
+        purchaseDate: sample.date,
+        notes: sample.notes,
+      });
+    }
+  }
+
   private async syncExistingInventoryState() {
     const items = await this.itemsRepository.find({
       relations: { supplierEntity: true },
@@ -658,6 +1004,248 @@ export class InventoryService implements OnModuleInit {
     if (hasChanges) {
       await this.itemsRepository.save(items);
     }
+  }
+
+  private async resolvePurchaseSupplier(
+    manager: EntityManager,
+    dto: CreateMaterialPurchaseDto,
+  ) {
+    if (dto.supplierId) {
+      return this.findSupplierOrFail(dto.supplierId, manager);
+    }
+    if (dto.newSupplier?.name) {
+      return this.upsertSupplierByName(dto.newSupplier, manager);
+    }
+    throw new BadRequestException('supplierId or newSupplier is required.');
+  }
+
+  private async resolvePurchasedMaterial(
+    manager: EntityManager,
+    dto: CreateMaterialPurchaseDto,
+    supplier: Supplier,
+  ) {
+    const repository = manager.getRepository(InventoryItem);
+    if (dto.inventoryItemId) {
+      const item = await repository.findOne({
+        where: { id: dto.inventoryItemId },
+        relations: { supplierEntity: true },
+      });
+      if (!item) {
+        throw new NotFoundException(`Inventory item ${dto.inventoryItemId} was not found.`);
+      }
+      item.quantity = this.roundQuantity(item.quantity + dto.quantityPurchased);
+      item.unitPrice =
+        dto.quantityPurchased > 0
+          ? this.roundMoney(dto.totalAmount / dto.quantityPurchased)
+          : item.unitPrice;
+      item.supplier = supplier.name;
+      item.supplierEntity = supplier;
+      if (dto.color !== undefined) item.color = this.normalizeOptionalText(dto.color);
+      await repository.save(item);
+      return item;
+    }
+
+    const materialName = this.normalizeRequiredText(dto.materialName, 'materialName');
+    const color = this.normalizeOptionalText(dto.color);
+    const existingQb = repository
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.supplierEntity', 'supplierEntity')
+      .where('LOWER(item.name) = LOWER(:name)', { name: materialName });
+    if (color) {
+      existingQb.andWhere('item.color = :color', { color });
+    } else {
+      existingQb.andWhere("(item.color IS NULL OR item.color = '')");
+    }
+    const existing = await existingQb.getOne();
+
+    if (existing) {
+      existing.quantity = this.roundQuantity(existing.quantity + dto.quantityPurchased);
+      existing.unit = this.normalizeRequiredText(dto.unit, 'unit');
+      existing.unitPrice =
+        dto.quantityPurchased > 0
+          ? this.roundMoney(dto.totalAmount / dto.quantityPurchased)
+          : existing.unitPrice;
+      existing.supplier = supplier.name;
+      existing.supplierEntity = supplier;
+      await repository.save(existing);
+      return existing;
+    }
+
+    return repository.save(
+      repository.create({
+        name: materialName,
+        category: dto.category ?? InventoryCategory.FABRIC,
+        color,
+        quantity: this.roundQuantity(dto.quantityPurchased),
+        unit: this.normalizeRequiredText(dto.unit, 'unit'),
+        unitPrice:
+          dto.quantityPurchased > 0
+            ? this.roundMoney(dto.totalAmount / dto.quantityPurchased)
+            : 0,
+        supplier: supplier.name,
+        supplierEntity: supplier,
+        minStockAlert: 0,
+        status: StockStatus.AVAILABLE,
+        description: this.normalizeOptionalText(dto.notes),
+      }),
+    );
+  }
+
+  private async recalculateAllSuppliers() {
+    const suppliers = await this.suppliersRepository.find({ select: { id: true } });
+    for (const supplier of suppliers) {
+      await this.dataSource.transaction((manager) =>
+        this.recalculateSupplier(manager, supplier.id),
+      );
+    }
+  }
+
+  private async recalculateSupplier(manager: EntityManager, supplierId: number) {
+    const supplier = await manager.getRepository(Supplier).findOne({
+      where: { id: supplierId },
+    });
+    if (!supplier) return;
+
+    const [purchaseTotals, paymentTotals, advanceTotals] = await Promise.all([
+      manager
+        .getRepository(SupplierPurchase)
+        .createQueryBuilder('purchase')
+        .select('COALESCE(SUM(purchase.totalAmount), 0)', 'totalPurchases')
+        .addSelect('MAX(purchase.purchaseDate)', 'lastPurchaseDate')
+        .where('purchase.supplierId = :supplierId', { supplierId })
+        .getRawOne<Record<string, string | number | null>>(),
+      manager
+        .getRepository(SupplierPayment)
+        .createQueryBuilder('payment')
+        .select('COALESCE(SUM(payment.amount), 0)', 'totalPayments')
+        .where('payment.supplierId = :supplierId', { supplierId })
+        .getRawOne<Record<string, string | number | null>>(),
+      manager
+        .getRepository(SupplierAdvance)
+        .createQueryBuilder('advance')
+        .select('COALESCE(SUM(advance.amount), 0)', 'totalAdvances')
+        .where('advance.supplierId = :supplierId', { supplierId })
+        .getRawOne<Record<string, string | number | null>>(),
+    ]);
+
+    const totalPurchases = this.roundMoney(Number(purchaseTotals?.totalPurchases ?? 0));
+    const totalPaid = this.roundMoney(
+      Number(paymentTotals?.totalPayments ?? 0) +
+        Number(advanceTotals?.totalAdvances ?? 0),
+    );
+    supplier.totalPurchases = totalPurchases;
+    supplier.totalPaid = totalPaid;
+    supplier.totalDebt = this.roundMoney(Math.max(totalPurchases - totalPaid, 0));
+    supplier.lastPurchaseDate = purchaseTotals?.lastPurchaseDate
+      ? String(purchaseTotals.lastPurchaseDate)
+      : null;
+    await manager.getRepository(Supplier).save(supplier);
+  }
+
+  private purchaseStatus(totalAmount: number, paidAmount: number) {
+    if (paidAmount >= totalAmount) return SupplierPurchaseStatus.PAID;
+    if (paidAmount > 0) return SupplierPurchaseStatus.PARTIAL;
+    return SupplierPurchaseStatus.UNPAID;
+  }
+
+  private serializePurchase(
+    purchase: SupplierPurchase,
+    fallbackSupplier?: Supplier,
+  ) {
+    const supplier = purchase.supplier ?? fallbackSupplier;
+    return {
+      id: purchase.id,
+      supplierId: supplier?.id ?? null,
+      supplier: supplier?.name ?? null,
+      inventoryItemId: purchase.inventoryItem?.id ?? null,
+      materialName: purchase.materialName,
+      name: purchase.materialName,
+      color: purchase.materialColor ?? null,
+      quantityPurchased: purchase.quantityPurchased,
+      quantity: purchase.quantityPurchased,
+      unit: purchase.unit,
+      totalAmount: purchase.totalAmount,
+      paidAmount: purchase.paidAmount,
+      remainingAmount: purchase.remainingAmount,
+      remaining: purchase.remainingAmount,
+      paymentStatus: purchase.paymentStatus,
+      status: purchase.paymentStatus,
+      purchaseDate: purchase.purchaseDate,
+      date: purchase.purchaseDate,
+      notes: purchase.notes ?? null,
+      createdAt: purchase.createdAt,
+      updatedAt: purchase.updatedAt,
+    };
+  }
+
+  private serializeSupplierPayment(
+    payment: SupplierPayment,
+    fallbackSupplier?: Supplier,
+  ) {
+    const supplier = payment.supplier ?? fallbackSupplier;
+    return {
+      id: payment.id,
+      supplierId: supplier?.id ?? null,
+      supplier: supplier?.name ?? null,
+      purchaseId: payment.purchase?.id ?? null,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+      date: payment.date,
+      reference: payment.reference ?? null,
+      notes: payment.notes ?? null,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+    };
+  }
+
+  private serializeSupplierAdvance(
+    advance: SupplierAdvance,
+    fallbackSupplier?: Supplier,
+  ) {
+    const supplier = advance.supplier ?? fallbackSupplier;
+    return {
+      id: advance.id,
+      supplierId: supplier?.id ?? null,
+      supplier: supplier?.name ?? null,
+      amount: advance.amount,
+      appliedAmount: advance.appliedAmount,
+      remainingAmount: advance.remainingAmount,
+      status: advance.status,
+      date: advance.date,
+      notes: advance.notes ?? null,
+      createdAt: advance.createdAt,
+      updatedAt: advance.updatedAt,
+    };
+  }
+
+  private buildSupplierHistory(
+    purchases: ReturnType<InventoryService['serializePurchase']>[],
+    payments: ReturnType<InventoryService['serializeSupplierPayment']>[],
+    advances: ReturnType<InventoryService['serializeSupplierAdvance']>[],
+  ) {
+    return [
+      ...purchases.map((purchase) => ({
+        type: 'PURCHASE',
+        date: purchase.purchaseDate,
+        title: purchase.materialName,
+        amount: purchase.totalAmount,
+        reference: `PUR-${purchase.id}`,
+      })),
+      ...payments.map((payment) => ({
+        type: 'PAYMENT',
+        date: payment.date,
+        title: 'Supplier payment',
+        amount: payment.amount,
+        reference: payment.reference,
+      })),
+      ...advances.map((advance) => ({
+        type: 'ADVANCE',
+        date: advance.date,
+        title: 'Supplier advance',
+        amount: advance.amount,
+        reference: null,
+      })),
+    ].sort((left, right) => right.date.localeCompare(left.date));
   }
 
   private applyItemFilters(
@@ -763,9 +1351,19 @@ export class InventoryService implements OnModuleInit {
       supplier: supplier.name,
       phone: supplier.phone,
       address: supplier.address,
+      city: supplier.city ?? null,
+      status: supplier.status,
+      statusCode: this.enumKey(SupplierStatus, supplier.status),
+      totalPurchases: supplier.totalPurchases ?? 0,
+      totalPaid: supplier.totalPaid ?? 0,
+      totalDebt: supplier.totalDebt ?? 0,
+      debt: supplier.totalDebt ?? 0,
+      lastPurchaseDate: supplier.lastPurchaseDate ?? null,
+      lastPurchase: supplier.lastPurchaseDate ?? null,
       notes: supplier.notes,
+      archivedAt: supplier.archivedAt ?? null,
       count: '0',
-      totalValue: '0',
+      totalValue: String(Math.round(supplier.totalPurchases ?? 0)),
     };
   }
 
@@ -882,9 +1480,15 @@ export class InventoryService implements OnModuleInit {
     };
   }
 
-  private async upsertSupplierByName(payload: CreateSupplierDto) {
+  private async upsertSupplierByName(
+    payload: CreateSupplierDto,
+    manager?: EntityManager,
+  ) {
+    const repository = manager
+      ? manager.getRepository(Supplier)
+      : this.suppliersRepository;
     const name = this.normalizeRequiredText(payload.name, 'supplier name');
-    const existing = await this.suppliersRepository.findOne({
+    const existing = await repository.findOne({
       where: { name },
     });
 
@@ -895,18 +1499,33 @@ export class InventoryService implements OnModuleInit {
       if (payload.address !== undefined) {
         existing.address = this.normalizeOptionalText(payload.address);
       }
+      if (payload.city !== undefined) {
+        existing.city = this.normalizeOptionalText(payload.city);
+      }
+      if (payload.status !== undefined) {
+        existing.status = payload.status;
+        existing.archivedAt =
+          payload.status === SupplierStatus.ARCHIVED ? new Date() : null;
+      }
       if (payload.notes !== undefined) {
         existing.notes = this.normalizeOptionalText(payload.notes);
       }
-      return this.suppliersRepository.save(existing);
+      return repository.save(existing);
     }
 
-    return this.suppliersRepository.save(
-      this.suppliersRepository.create({
+    return repository.save(
+      repository.create({
         name,
         phone: this.normalizeOptionalText(payload.phone),
         address: this.normalizeOptionalText(payload.address),
+        city: this.normalizeOptionalText(payload.city),
+        status: payload.status ?? SupplierStatus.ACTIVE,
         notes: this.normalizeOptionalText(payload.notes),
+        totalPurchases: 0,
+        totalPaid: 0,
+        totalDebt: 0,
+        lastPurchaseDate: null,
+        archivedAt: null,
       }),
     );
   }
@@ -959,8 +1578,11 @@ export class InventoryService implements OnModuleInit {
     return item;
   }
 
-  private async findSupplierOrFail(id: number) {
-    const supplier = await this.suppliersRepository.findOne({ where: { id } });
+  private async findSupplierOrFail(id: number, manager?: EntityManager) {
+    const repository = manager
+      ? manager.getRepository(Supplier)
+      : this.suppliersRepository;
+    const supplier = await repository.findOne({ where: { id } });
 
     if (!supplier) {
       throw new NotFoundException(`Supplier with id ${id} was not found.`);
@@ -1031,6 +1653,14 @@ export class InventoryService implements OnModuleInit {
 
   private roundMoney(value: number) {
     return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
+  private roundQuantity(value: number) {
+    return Math.round((value + Number.EPSILON) * 1000) / 1000;
+  }
+
+  private enumKey<T extends Record<string, string>>(enumType: T, value: string) {
+    return Object.entries(enumType).find(([, item]) => item === value)?.[0] ?? '';
   }
 
   private normalizeOptionalText(value?: string | null) {

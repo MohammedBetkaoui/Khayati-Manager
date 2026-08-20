@@ -6,6 +6,7 @@ import {
   ContactRound,
   Receipt,
   SlidersHorizontal,
+  Truck,
   Users,
   Wallet,
 } from "lucide-react";
@@ -106,6 +107,22 @@ export const sections: Section[] = [
     },
     tint: "rgba(195, 154, 91, 0.14)",
     iconColor: "#a87d3c",
+  },
+  {
+    id: "suppliers",
+    icon: Truck,
+    ar: {
+      title: "تسيير الموردين",
+      sub: "Gestion des fournisseurs",
+      desc: "متابعة الموردين، المشتريات، المدفوعات والديون",
+    },
+    fr: {
+      title: "Gestion des fournisseurs",
+      sub: "تسيير الموردين",
+      desc: "Fournisseurs, achats, paiements et dettes",
+    },
+    tint: "rgba(107, 138, 160, 0.14)",
+    iconColor: "#6b8aa0",
   },
   {
     id: "sales",

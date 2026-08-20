@@ -54,14 +54,15 @@ export class CreateFinishedProductDto {
   @MaxLength(180)
   name!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(80)
-  sku!: string;
+  sku?: string;
 
+  @IsOptional()
   @Transform(enumValueTransform(FinishedProductCategory))
   @IsEnum(FinishedProductCategory)
-  category!: FinishedProductCategory;
+  category?: FinishedProductCategory;
 
   @IsOptional()
   @IsString()
@@ -75,10 +76,23 @@ export class CreateFinishedProductDto {
   @IsDateString()
   creationDate?: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  salePrice!: number;
+  salePrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  initialQuantity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantity?: number;
 
   @IsOptional()
   @Type(() => Number)

@@ -10,5 +10,6 @@ export * from './payment-status.enum';
 export * from './payroll.enum';
 export * from './production-task-type.enum';
 export * from './salary-type.enum';
+export * from './supplier-finance.enum';
 export * from './worker-role.enum';
 export * from './worker-status.enum';

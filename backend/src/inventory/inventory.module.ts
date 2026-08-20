@@ -12,6 +12,9 @@ import { ProductStockMovement } from './entities/product-stock-movement.entity';
 import { ProductVariant } from './entities/product-variant.entity';
 import { ProductionBatch } from './entities/production-batch.entity';
 import { ProductionMaterial } from './entities/production-material.entity';
+import { SupplierAdvance } from './entities/supplier-advance.entity';
+import { SupplierPayment } from './entities/supplier-payment.entity';
+import { SupplierPurchase } from './entities/supplier-purchase.entity';
 
 @Module({
   imports: [
@@ -25,6 +28,9 @@ import { ProductionMaterial } from './entities/production-material.entity';
       ProductionBatch,
       ProductionMaterial,
       ProductStockMovement,
+      SupplierPurchase,
+      SupplierPayment,
+      SupplierAdvance,
     ]),
   ],
   controllers: [InventoryController],
