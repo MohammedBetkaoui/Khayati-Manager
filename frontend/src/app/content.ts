@@ -34,9 +34,9 @@ export const ui = {
     pageTitle: "لوحة التسيير",
     welcome: "اختر القسم الذي تريد تسييره",
     openSection: "فتح القسم",
-    userName: "أمينة العلوي",
-    userRole: "مسؤولة الورشة",
-    footer: "خياطي Manager - كل الحقوق محفوظة",
+    userName:"عيسى ميسور",
+    userRole: "مسؤول الورشة",
+    footer: "خياطي Manager ",
   },
   fr: {
     appName: "Khayati Manager",
@@ -44,9 +44,9 @@ export const ui = {
     pageTitle: "Tableau de gestion",
     welcome: "Choisissez la section que vous souhaitez gérer",
     openSection: "Ouvrir la section",
-    userName: "Amina El Alaoui",
+    userName: "Aissa Misour",
     userRole: "Responsable d'atelier",
-    footer: "Khayati Manager - Tous droits réservés",
+    footer: "Khayati Manager ",
   },
 } as const;
 
