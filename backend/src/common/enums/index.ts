@@ -2,6 +2,7 @@ export * from './attendance-status.enum';
 export * from './customer-status.enum';
 export * from './customer-type.enum';
 export * from './expense-category.enum';
+export * from './expense-status.enum';
 export * from './expense-type.enum';
 export * from './finished-product.enum';
 export * from './inventory.enum';

@@ -697,12 +697,26 @@ export class InventoryService implements OnModuleInit {
     const advanceId = await this.dataSource.transaction(async (manager) => {
       const supplier = await this.findSupplierOrFail(supplierId, manager);
       const amount = this.roundMoney(dto.amount);
+      const debtBefore = this.roundMoney(supplier.totalDebt ?? 0);
+      if (debtBefore <= 0) {
+        throw new BadRequestException(
+          'Supplier does not have an outstanding debt.',
+        );
+      }
+      if (amount > debtBefore) {
+        throw new BadRequestException(
+          `Advance cannot exceed current supplier debt (${debtBefore}).`,
+        );
+      }
+      const debtAfter = this.roundMoney(Math.max(debtBefore - amount, 0));
       const advance = await manager.getRepository(SupplierAdvance).save(
         manager.getRepository(SupplierAdvance).create({
           supplier,
           amount,
           appliedAmount: 0,
-          remainingAmount: amount,
+          remainingAmount: debtAfter,
+          debtBefore,
+          debtAfter,
           status: SupplierAdvanceStatus.OPEN,
           date: dto.date ?? this.toDateKey(new Date()),
           notes: this.normalizeOptionalText(dto.notes),
@@ -1210,6 +1224,8 @@ export class InventoryService implements OnModuleInit {
       amount: advance.amount,
       appliedAmount: advance.appliedAmount,
       remainingAmount: advance.remainingAmount,
+      debtBefore: advance.debtBefore ?? null,
+      debtAfter: advance.debtAfter ?? null,
       status: advance.status,
       date: advance.date,
       notes: advance.notes ?? null,

@@ -28,6 +28,12 @@ export class SupplierAdvance {
   @Column({ type: 'real', default: 0 })
   remainingAmount!: number;
 
+  @Column({ type: 'real', nullable: true })
+  debtBefore?: number | null;
+
+  @Column({ type: 'real', nullable: true })
+  debtAfter?: number | null;
+
   @Column({
     type: 'simple-enum',
     enum: SupplierAdvanceStatus,

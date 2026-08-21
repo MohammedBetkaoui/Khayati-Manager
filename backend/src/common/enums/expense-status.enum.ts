@@ -1,0 +1,22 @@
+export enum ExpenseStatus {
+  PAID = 'PAID',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  UNPAID = 'UNPAID',
+  UPCOMING = 'UPCOMING',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum ExpenseSourceType {
+  MANUAL = 'MANUAL',
+  RECURRING = 'RECURRING',
+  SUPPLIER_PURCHASE = 'SUPPLIER_PURCHASE',
+  PAYROLL = 'PAYROLL',
+}
+
+export enum RecurringFrequency {
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+  YEARLY = 'YEARLY',
+}
