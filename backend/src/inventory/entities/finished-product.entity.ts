@@ -65,6 +65,9 @@ export class FinishedProduct {
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 
+  @Column({ type: 'datetime', nullable: true })
+  archivedAt?: Date | null;
+
   @OneToMany(() => ProductVariant, (variant) => variant.product, {
     cascade: ['insert', 'update'],
   })

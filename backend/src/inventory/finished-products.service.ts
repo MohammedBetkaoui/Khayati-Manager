@@ -71,7 +71,6 @@ export class FinishedProductsService implements OnModuleInit {
           sku,
           category: dto.category ?? FinishedProductCategory.OTHER,
           description: this.optionalText(dto.description),
-          imageUrl: this.optionalText(dto.imageUrl),
           creationDate: dto.creationDate ?? this.toDateKey(new Date()),
           salePrice: this.roundMoney(dto.salePrice ?? 0),
           estimatedProductionCost: this.roundMoney(
@@ -79,6 +78,8 @@ export class FinishedProductsService implements OnModuleInit {
           ),
           minStockAlert: dto.minStockAlert ?? 0,
           status: dto.status ?? FinishedProductStatus.ACTIVE,
+          archivedAt:
+            dto.status === FinishedProductStatus.ARCHIVED ? new Date() : null,
           notes: this.optionalText(dto.notes),
           quantityProduced: 0,
           quantityAvailable: 0,
@@ -161,9 +162,9 @@ export class FinishedProductsService implements OnModuleInit {
         category: query.category,
       });
     }
-    if (query.status) {
-      qb.andWhere('product.status = :status', { status: query.status });
-    }
+    qb.andWhere('product.status = :status', {
+      status: query.status ?? FinishedProductStatus.ACTIVE,
+    });
     if (query.available === true) {
       qb.andWhere('product.quantityAvailable > 0').andWhere(
         'product.status = :activeStatus',
@@ -237,8 +238,6 @@ export class FinishedProductsService implements OnModuleInit {
       if (dto.category !== undefined) product.category = dto.category;
       if (dto.description !== undefined)
         product.description = this.optionalText(dto.description);
-      if (dto.imageUrl !== undefined)
-        product.imageUrl = this.optionalText(dto.imageUrl);
       if (dto.creationDate !== undefined)
         product.creationDate = dto.creationDate;
       if (dto.salePrice !== undefined)
@@ -250,7 +249,13 @@ export class FinishedProductsService implements OnModuleInit {
       }
       if (dto.minStockAlert !== undefined)
         product.minStockAlert = dto.minStockAlert;
-      if (dto.status !== undefined) product.status = dto.status;
+      if (dto.status !== undefined) {
+        product.status = dto.status;
+        product.archivedAt =
+          dto.status === FinishedProductStatus.ARCHIVED
+            ? (product.archivedAt ?? new Date())
+            : null;
+      }
       if (dto.notes !== undefined) product.notes = this.optionalText(dto.notes);
       await manager.getRepository(FinishedProduct).save(product);
 
@@ -258,6 +263,16 @@ export class FinishedProductsService implements OnModuleInit {
         this.ensureDistinctVariantDefinitions(dto.variants);
         await this.upsertVariants(manager, product, dto.variants);
         await this.syncProductQuantities(manager, product.id);
+      } else {
+        const requestedQuantity = dto.quantity ?? dto.initialQuantity;
+        if (requestedQuantity !== undefined) {
+          await this.updateDefaultVariantQuantity(
+            manager,
+            product,
+            requestedQuantity,
+          );
+          await this.syncProductQuantities(manager, product.id);
+        }
       }
     });
 
@@ -267,8 +282,22 @@ export class FinishedProductsService implements OnModuleInit {
   async archive(id: number) {
     const product = await this.productsRepository.findOne({ where: { id } });
     if (!product) throw new NotFoundException(`Product ${id} not found`);
-    product.status = FinishedProductStatus.ARCHIVED;
-    await this.productsRepository.save(product);
+    if (product.status !== FinishedProductStatus.ARCHIVED) {
+      product.status = FinishedProductStatus.ARCHIVED;
+      product.archivedAt = new Date();
+      await this.productsRepository.save(product);
+    }
+    return this.findOne(id);
+  }
+
+  async restore(id: number) {
+    const product = await this.productsRepository.findOne({ where: { id } });
+    if (!product) throw new NotFoundException(`Product ${id} not found`);
+    if (product.status !== FinishedProductStatus.ACTIVE) {
+      product.status = FinishedProductStatus.ACTIVE;
+      product.archivedAt = null;
+      await this.productsRepository.save(product);
+    }
     return this.findOne(id);
   }
 
@@ -289,6 +318,9 @@ export class FinishedProductsService implements OnModuleInit {
         'COALESCE(SUM(product.quantityAvailable * product.estimatedProductionCost), 0)',
         'costStockValue',
       )
+      .where('product.status = :active', {
+        active: FinishedProductStatus.ACTIVE,
+      })
       .getRawOne<Record<string, number | string>>();
 
     const [activeProducts, lowStockProducts, productionBatches] =
@@ -303,7 +335,13 @@ export class FinishedProductsService implements OnModuleInit {
           })
           .andWhere('product.quantityAvailable <= product.minStockAlert')
           .getCount(),
-        this.productionsRepository.count(),
+        this.productionsRepository
+          .createQueryBuilder('production')
+          .innerJoin('production.product', 'product')
+          .where('product.status = :active', {
+            active: FinishedProductStatus.ACTIVE,
+          })
+          .getCount(),
       ]);
 
     return {
@@ -516,6 +554,49 @@ export class FinishedProductsService implements OnModuleInit {
     }
   }
 
+  private async updateDefaultVariantQuantity(
+    manager: EntityManager,
+    product: FinishedProduct,
+    quantity: number,
+  ) {
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new BadRequestException('quantity must be a non-negative integer');
+    }
+
+    const activeVariants = product.variants
+      .filter((variant) => variant.active)
+      .sort((left, right) => left.id - right.id);
+    if (activeVariants.length !== 1) {
+      throw new BadRequestException(
+        'Quantity can only be edited directly for products with one active variant',
+      );
+    }
+
+    const variant = activeVariants[0];
+    const previousQuantity = variant.quantityAvailable;
+    if (previousQuantity === quantity) return;
+
+    variant.quantityAvailable = quantity;
+    variant.quantityProduced = Math.max(
+      variant.quantityProduced,
+      variant.quantitySold + quantity,
+    );
+    await manager.getRepository(ProductVariant).save(variant);
+
+    await manager.getRepository(ProductStockMovement).save(
+      manager.getRepository(ProductStockMovement).create({
+        product,
+        variant,
+        type: ProductStockMovementType.ADJUSTMENT,
+        quantity,
+        previousQuantity,
+        newQuantity: quantity,
+        date: this.toDateKey(new Date()),
+        reason: 'Manual quantity update',
+      }),
+    );
+  }
+
   private async resolveProductionMaterials(
     manager: EntityManager,
     dto: CreateProductionDto,
@@ -691,6 +772,7 @@ export class FinishedProductsService implements OnModuleInit {
             ? 'LOW_STOCK'
             : 'AVAILABLE',
       notes: product.notes ?? null,
+      archivedAt: product.archivedAt ?? null,
       variants: (product.variants ?? [])
         .sort((left, right) => left.id - right.id)
         .map((variant) => this.serializeVariant(variant, product.salePrice)),

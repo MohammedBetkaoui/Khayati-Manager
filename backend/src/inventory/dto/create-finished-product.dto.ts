@@ -69,10 +69,6 @@ export class CreateFinishedProductDto {
   description?: string;
 
   @IsOptional()
-  @IsString()
-  imageUrl?: string;
-
-  @IsOptional()
   @IsDateString()
   creationDate?: string;
 

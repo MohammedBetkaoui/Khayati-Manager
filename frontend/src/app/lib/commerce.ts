@@ -123,6 +123,7 @@ export type FinishedProduct = {
   statusCode: "ACTIVE" | "INACTIVE" | "ARCHIVED";
   availability: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
   notes: string | null;
+  archivedAt: string | null;
   variants: ProductVariant[];
   createdAt: string;
   updatedAt: string;

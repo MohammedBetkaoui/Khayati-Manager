@@ -151,6 +151,11 @@ export class InventoryController {
     return this.finishedProductsService.findOne(id);
   }
 
+  @Patch('products/:id/restore')
+  restoreFinishedProduct(@Param('id', ParseIntPipe) id: number) {
+    return this.finishedProductsService.restore(id);
+  }
+
   @Patch('products/:id')
   updateFinishedProduct(
     @Param('id', ParseIntPipe) id: number,

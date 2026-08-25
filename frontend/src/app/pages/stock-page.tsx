@@ -1,6 +1,8 @@
 import { useDeferredValue, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   Archive,
+  AlertTriangle,
   Boxes,
   CircleDollarSign,
   Factory,
@@ -25,6 +27,7 @@ import {
   formatMoney,
 } from "../components/commerce-ui";
 import { Badge, Button } from "../components/kit";
+import { ModalShell } from "../components/modal-shell";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
@@ -81,6 +84,7 @@ const emptyProductStats: ProductStats = {
 
 export function StockPage() {
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<StockTab>("finished");
   const [products, setProducts] = useState<FinishedProduct[]>([]);
   const [purchases, setPurchases] = useState<MaterialPurchase[]>([]);
@@ -102,6 +106,10 @@ export function StockPage() {
   const [productionProduct, setProductionProduct] =
     useState<FinishedProduct | null>(null);
   const [purchaseModal, setPurchaseModal] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<FinishedProduct | null>(
+    null,
+  );
+  const [archiving, setArchiving] = useState(false);
 
   const text =
     lang === "ar"
@@ -163,7 +171,7 @@ export function StockPage() {
           productionList,
         ] = await Promise.all([
           fetchJson<{ data: FinishedProduct[] }>(
-            "/inventory/products?limit=200&sortBy=name&sortOrder=ASC",
+            "/inventory/products?status=ACTIVE&limit=200&sortBy=name&sortOrder=ASC",
             { signal: controller.signal },
           ),
           fetchJson<ProductStats>("/inventory/products/stats", {
@@ -227,21 +235,20 @@ export function StockPage() {
   );
 
   async function archiveProduct(product: FinishedProduct) {
-    const ok = window.confirm(
-      lang === "ar"
-        ? `أرشفة ${product.name}؟ سيبقى التاريخ محفوظاً.`
-        : `Archiver ${product.name} ? Son historique sera conservé.`,
-    );
-    if (!ok) return;
+    setArchiving(true);
+    setError(null);
     try {
       await fetchJson(`/inventory/products/${product.id}`, {
         method: "DELETE",
       });
+      setArchiveTarget(null);
       reload(lang === "ar" ? "تمت أرشفة المنتج." : "Produit archivé.");
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Unable to archive product",
       );
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -252,9 +259,15 @@ export function StockPage() {
         subtitle={text.subtitle}
         actions={
           tab === "finished" ? (
-            <Button variant="primary" onClick={() => setProductModal(true)}>
-              <Plus size={16} /> {text.addProduct}
-            </Button>
+            <>
+              <Button onClick={() => navigate("/stock/archives")}>
+                <Archive size={16} />
+                {lang === "ar" ? "أرشيف المنتجات" : "Archives"}
+              </Button>
+              <Button variant="primary" onClick={() => setProductModal(true)}>
+                <Plus size={16} /> {text.addProduct}
+              </Button>
+            </>
           ) : (
             <Button variant="primary" onClick={() => setPurchaseModal(true)}>
               <Plus size={16} /> {text.addPurchase}
@@ -403,7 +416,7 @@ export function StockPage() {
               setEditingProduct(product);
               setProductModal(true);
             }}
-            onArchive={archiveProduct}
+            onArchive={setArchiveTarget}
           />
         ) : null}
 
@@ -443,7 +456,171 @@ export function StockPage() {
           reload(lang === "ar" ? "تم تسجيل الشراء." : "Achat enregistré.")
         }
       />
+      <ArchiveProductModal
+        product={archiveTarget}
+        lang={lang}
+        saving={archiving}
+        onClose={() => {
+          if (!archiving) setArchiveTarget(null);
+        }}
+        onConfirm={() => {
+          if (archiveTarget) void archiveProduct(archiveTarget);
+        }}
+      />
     </PageBackground>
+  );
+}
+
+function ArchiveProductModal({
+  product,
+  lang,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  product: FinishedProduct | null;
+  lang: "ar" | "fr";
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const hasRemainingStock = (product?.quantityAvailable ?? 0) > 0;
+
+  return (
+    <ModalShell
+      open={Boolean(product)}
+      onClose={onClose}
+      title={
+        hasRemainingStock
+          ? lang === "ar"
+            ? "تنبيه قبل أرشفة المنتج"
+            : "Alerte avant archivage"
+          : lang === "ar"
+            ? "تأكيد أرشفة المنتج"
+            : "Confirmer l'archivage"
+      }
+      maxWidth={560}
+    >
+      {product ? (
+        <div className="p-6">
+          <div
+            className="flex items-start gap-3 rounded-2xl p-4"
+            style={{
+              backgroundColor: hasRemainingStock
+                ? "rgba(201,138,134,0.14)"
+                : "rgba(195,154,91,0.13)",
+              border: `1px solid ${
+                hasRemainingStock
+                  ? "rgba(201,138,134,0.32)"
+                  : "rgba(195,154,91,0.3)"
+              }`,
+              color: hasRemainingStock ? "#9f4f4b" : "#9a7335",
+            }}
+          >
+            <div
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                backgroundColor: hasRemainingStock
+                  ? "rgba(201,138,134,0.18)"
+                  : "rgba(195,154,91,0.18)",
+              }}
+            >
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, color: palette.text }}>
+                {lang === "ar"
+                  ? hasRemainingStock
+                    ? `المنتج "${product.name}" يحتوي على ${product.quantityAvailable} قطعة متبقية.`
+                    : `المنتج "${product.name}" لا يحتوي على قطع متوفرة.`
+                  : hasRemainingStock
+                    ? `Le produit "${product.name}" contient encore ${product.quantityAvailable} pièce${product.quantityAvailable > 1 ? "s" : ""}.`
+                    : `Le produit "${product.name}" ne contient plus de pièces disponibles.`}
+              </div>
+              <p className="mt-1 text-sm" style={{ lineHeight: 1.7 }}>
+                {lang === "ar"
+                  ? hasRemainingStock
+                    ? "إذا أكدت الأرشفة، سيختفي المنتج من القائمة الرئيسية ولن يمكن تسجيل مبيعات جديدة له. ستبقى المبيعات السابقة وسجل المنتج محفوظين."
+                    : "بعد التأكيد، سيختفي المنتج من القائمة الرئيسية وسيبقى محفوظاً في صفحة أرشيف المنتجات."
+                  : hasRemainingStock
+                    ? "Après archivage, il disparaîtra de la liste principale et aucune nouvelle vente ne pourra être enregistrée pour ce produit. Ses ventes passées et son historique resteront conservés."
+                    : "Après confirmation, il disparaîtra de la liste principale et restera consultable dans la page des produits archivés."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ArchiveInfo
+              label={lang === "ar" ? "المتوفر حالياً" : "Disponible"}
+              value={String(product.quantityAvailable)}
+            />
+            <ArchiveInfo
+              label={lang === "ar" ? "المباع" : "Vendu"}
+              value={String(product.quantitySold)}
+            />
+            <ArchiveInfo
+              label={lang === "ar" ? "سعر البيع" : "Prix"}
+              value={formatMoney(product.salePrice, lang)}
+            />
+          </div>
+
+          <div
+            className="mt-4 rounded-2xl p-4 text-sm"
+            style={{
+              backgroundColor: palette.bg,
+              color: palette.muted,
+              lineHeight: 1.75,
+            }}
+          >
+            {lang === "ar"
+              ? hasRemainingStock
+                ? `تنبيه: ستبقى ${product.quantityAvailable} قطعة مسجلة في السجل، لكنها لن تكون متاحة للبيع ما دام المنتج مؤرشفاً.`
+                : "معلومة: الأرشفة لا تحذف المنتج أو تاريخه من قاعدة البيانات."
+              : hasRemainingStock
+                ? `Attention : les ${product.quantityAvailable} pièce${product.quantityAvailable > 1 ? "s" : ""} resteront dans l'historique, mais ne seront plus disponibles à la vente tant que le produit est archivé.`
+                : "Information : l'archivage ne supprime ni le produit ni son historique de la base de données."}
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={onClose} disabled={saving}>
+              {lang === "ar" ? "إلغاء" : "Annuler"}
+            </Button>
+            <Button variant="primary" onClick={onConfirm} disabled={saving}>
+              <Archive size={15} />
+              {saving
+                ? lang === "ar"
+                  ? "جاري الأرشفة..."
+                  : "Archivage..."
+                : lang === "ar"
+                  ? "تأكيد الأرشفة"
+                  : "Confirmer l'archivage"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </ModalShell>
+  );
+}
+
+function ArchiveInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      className="rounded-2xl p-3"
+      style={{
+        backgroundColor: "#fbfaf7",
+        border: `1px solid ${palette.border}`,
+      }}
+    >
+      <div style={{ fontSize: 11.5, color: palette.muted, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div
+        className="mt-1"
+        style={{ fontSize: 15, fontWeight: 900, color: palette.text }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -462,8 +639,8 @@ function FinishedProductsTable({
 }) {
   const headers =
     lang === "ar"
-      ? ["الموديل", "الصورة", "المتوفر", "المباع", "سعر البيع", "الحالة", "الإجراءات"]
-      : ["Modèle", "Photo", "Disponible", "Vendu", "Prix", "État", "Actions"];
+      ? ["الموديل", "المتوفر", "المباع", "سعر البيع", "الحالة", "الإجراءات"]
+      : ["Modèle", "Disponible", "Vendu", "Prix", "État", "Actions"];
 
   return (
     <div className="overflow-x-auto">
@@ -487,22 +664,6 @@ function FinishedProductsTable({
                     {product.notes}
                   </div>
                 ) : null}
-              </td>
-              <td style={cellStyle}>
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt=""
-                    className="h-12 w-12 rounded-xl object-cover"
-                  />
-                ) : (
-                  <div
-                    className="flex h-12 w-12 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: palette.bg, color: palette.muted }}
-                  >
-                    <Shirt size={18} />
-                  </div>
-                )}
               </td>
               <td style={{ ...cellStyle, fontSize: 16, fontWeight: 900, color: "#4d8a6a" }}>
                 {product.quantityAvailable}

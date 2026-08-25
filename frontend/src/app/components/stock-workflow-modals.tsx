@@ -62,7 +62,6 @@ export function FinishedProductModal({
     name: "",
     initialQuantity: "",
     salePrice: "",
-    imageUrl: "",
     notes: "",
   });
   const [saving, setSaving] = useState(false);
@@ -75,16 +74,14 @@ export function FinishedProductModal({
       product
         ? {
             name: product.name,
-            initialQuantity: "",
+            initialQuantity: String(product.quantityAvailable),
             salePrice: String(product.salePrice || ""),
-            imageUrl: product.imageUrl ?? "",
             notes: product.notes ?? "",
           }
         : {
             name: "",
             initialQuantity: "",
             salePrice: "",
-            imageUrl: "",
             notes: "",
           },
     );
@@ -101,10 +98,10 @@ export function FinishedProductModal({
       const body: Record<string, unknown> = {
         name: form.name,
         salePrice: form.salePrice ? Number(form.salePrice) : 0,
-        imageUrl: form.imageUrl || undefined,
         notes: form.notes || undefined,
       };
-      if (!product) body.initialQuantity = Number(form.initialQuantity || 0);
+      if (product) body.quantity = Number(form.initialQuantity || 0);
+      else body.initialQuantity = Number(form.initialQuantity || 0);
       await fetchJson(
         product ? `/inventory/products/${product.id}` : "/inventory/products",
         {
@@ -153,21 +150,27 @@ export function FinishedProductModal({
               onChange={(event) => update("name", event.target.value)}
             />
           </Field>
-          {!product ? (
-            <Field
-              label={lang === "ar" ? "الكمية الأولية *" : "Quantité initiale *"}
-            >
-              <TextInput
-                required
-                min="0"
-                type="number"
-                value={form.initialQuantity}
-                onChange={(event) =>
-                  update("initialQuantity", event.target.value)
-                }
-              />
-            </Field>
-          ) : null}
+          <Field
+            label={
+              product
+                ? lang === "ar"
+                  ? "الكمية المتوفرة *"
+                  : "Quantité disponible *"
+                : lang === "ar"
+                  ? "الكمية الأولية *"
+                  : "Quantité initiale *"
+            }
+          >
+            <TextInput
+              required
+              min="0"
+              type="number"
+              value={form.initialQuantity}
+              onChange={(event) =>
+                update("initialQuantity", event.target.value)
+              }
+            />
+          </Field>
           <Field
             label={lang === "ar" ? "سعر البيع الافتراضي" : "Prix de vente"}
           >
@@ -177,13 +180,6 @@ export function FinishedProductModal({
               type="number"
               value={form.salePrice}
               onChange={(event) => update("salePrice", event.target.value)}
-            />
-          </Field>
-          <Field label={lang === "ar" ? "رابط صورة الموديل" : "Photo du modèle"}>
-            <TextInput
-              value={form.imageUrl}
-              onChange={(event) => update("imageUrl", event.target.value)}
-              placeholder="https://..."
             />
           </Field>
         </div>

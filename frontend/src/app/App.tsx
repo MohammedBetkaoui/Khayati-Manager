@@ -21,6 +21,11 @@ const StockPage = lazy(() =>
     default: module.StockPage,
   })),
 );
+const ProductArchivesPage = lazy(() =>
+  import("./pages/product-archives-page").then((module) => ({
+    default: module.ProductArchivesPage,
+  })),
+);
 const SuppliersPage = lazy(() =>
   import("./pages/suppliers-page").then((module) => ({
     default: module.SuppliersPage,
@@ -108,6 +113,7 @@ const router = createHashRouter([
       { index: true, element: <HomePage /> },
       { path: "workers", element: <WorkersPage /> },
       { path: "stock", element: <StockPage /> },
+      { path: "stock/archives", element: <ProductArchivesPage /> },
       { path: "suppliers", element: <SuppliersPage /> },
       { path: "suppliers/:supplierId", element: <SupplierProfilePage /> },
       { path: "clients", element: <ClientsPage /> },

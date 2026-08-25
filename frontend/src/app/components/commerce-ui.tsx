@@ -102,18 +102,37 @@ export function StatCard({
       >
         <Icon size={21} strokeWidth={1.9} />
       </div>
-      <div className="min-w-0">
-        <div style={{ fontSize: 12.5, color: palette.muted }}>{label}</div>
+      <div className="min-w-0 flex-1">
         <div
-          className="mt-0.5 truncate"
-          style={{ fontSize: 22, fontWeight: 800, color: palette.text }}
+          style={{
+            fontSize: 12.5,
+            color: palette.muted,
+            lineHeight: 1.45,
+          }}
+        >
+          {label}
+        </div>
+        <div
+          className="mt-0.5 break-words"
+          style={{
+            fontSize: 21,
+            fontWeight: 800,
+            color: palette.text,
+            lineHeight: 1.2,
+            overflowWrap: "anywhere",
+          }}
         >
           {value}
         </div>
         {helper ? (
           <div
-            className="mt-0.5 truncate"
-            style={{ fontSize: 11.5, color: palette.muted }}
+            className="mt-0.5 break-words"
+            style={{
+              fontSize: 11.5,
+              color: palette.muted,
+              lineHeight: 1.35,
+              overflowWrap: "anywhere",
+            }}
           >
             {helper}
           </div>
