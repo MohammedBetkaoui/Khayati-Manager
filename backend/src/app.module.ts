@@ -6,13 +6,16 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ExpensesModule } from './expenses/expenses.module';
+import { InvoicesModule } from './invoices/invoices.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { OrdersModule } from './orders/orders.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { ReportsModule } from './reports/reports.module';
 import { SalesModule } from './sales/sales.module';
 import { SettingsModule } from './settings/settings.module';
 import { WorkersModule } from './workers/workers.module';
 import { preparePayrollDatabase } from './database/prepare-payroll-database';
+import { prepareInvoiceDatabase } from './database/prepare-invoice-database';
 
 const defaultDatabasePath = join(__dirname, '..', 'database', 'khayati.sqlite');
 const configuredDatabasePath = process.env.KHAYATI_DATABASE_PATH;
@@ -28,6 +31,7 @@ if (!existsSync(databaseDir)) {
 }
 
 preparePayrollDatabase(databasePath);
+prepareInvoiceDatabase(databasePath);
 
 @Module({
   imports: [
@@ -42,7 +46,9 @@ preparePayrollDatabase(databasePath);
     }),
     WorkersModule,
     InventoryModule,
+    OrdersModule,
     SalesModule,
+    InvoicesModule,
     PayrollModule,
     ExpensesModule,
     ReportsModule,

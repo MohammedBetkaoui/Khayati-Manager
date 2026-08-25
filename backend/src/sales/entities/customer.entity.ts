@@ -7,6 +7,7 @@
   UpdateDateColumn,
 } from 'typeorm';
 import { CustomerStatus, CustomerType } from '../../common/enums';
+import { Order } from '../../orders/entities/order.entity';
 import { CustomerMeasurement } from './customer-measurement.entity';
 import { CustomerNote } from './customer-note.entity';
 import { Invoice } from './invoice.entity';
@@ -75,6 +76,9 @@ export class Customer {
 
   @OneToMany(() => Invoice, (invoice) => invoice.customer)
   invoices!: Invoice[];
+
+  @OneToMany(() => Order, (order) => order.customer)
+  orders!: Order[];
 
   @OneToMany(() => Payment, (payment) => payment.customer)
   payments!: Payment[];

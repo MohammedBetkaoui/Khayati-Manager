@@ -1,4 +1,4 @@
-﻿import {
+import {
   BeforeInsert,
   BeforeUpdate,
   Column,
@@ -10,41 +10,39 @@
 import { toMinorUnits } from '../../common/money';
 import { FinishedProduct } from '../../inventory/entities/finished-product.entity';
 import { ProductVariant } from '../../inventory/entities/product-variant.entity';
-import { Invoice } from './invoice.entity';
+import { Order } from './order.entity';
 
-@Entity('invoice_items')
-export class InvoiceItem {
+@Entity('sales_order_items')
+export class OrderItem {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @ManyToOne(() => Invoice, (invoice) => invoice.items, {
+  @ManyToOne(() => Order, (order) => order.items, {
+    nullable: false,
     onDelete: 'CASCADE',
   })
-  invoice!: Invoice;
+  order!: Order;
 
-  @ManyToOne(() => FinishedProduct, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => FinishedProduct, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   product?: FinishedProduct | null;
 
-  @ManyToOne(() => ProductVariant, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => ProductVariant, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   variant?: ProductVariant | null;
 
-  @Column()
-  description!: string;
+  @Column({ length: 180 })
+  productName!: string;
 
   @Column({ type: 'text', nullable: true })
-  productName?: string | null;
-
-  @Column({ nullable: true })
-  productType?: string;
-
-  @Column({ type: 'text', nullable: true })
-  productSku?: string | null;
+  description?: string | null;
 
   @Column({ type: 'text', nullable: true })
   reference?: string | null;
-
-  @Column({ type: 'text', nullable: true })
-  variantLabel?: string | null;
 
   @Column({ type: 'text', nullable: true })
   variantSnapshot?: string | null;
@@ -55,7 +53,7 @@ export class InvoiceItem {
   @Column({ type: 'text', nullable: true })
   color?: string | null;
 
-  @Column({ type: 'integer', default: 1 })
+  @Column({ type: 'integer' })
   quantity!: number;
 
   @Column({ type: 'real', default: 0 })
@@ -75,12 +73,7 @@ export class InvoiceItem {
 
   @BeforeInsert()
   @BeforeUpdate()
-  syncSnapshotAndMinorAmounts() {
-    this.productName ??= this.product?.name ?? this.description;
-    this.reference ??= this.productSku ?? this.product?.sku ?? null;
-    this.variantSnapshot ??= this.variantLabel ?? null;
-    this.size ??= this.variant?.size ?? null;
-    this.color ??= this.variant?.color ?? null;
+  syncMinorAmounts() {
     this.unitPriceMinor = toMinorUnits(this.unitPrice);
     this.totalMinor = toMinorUnits(this.total);
   }

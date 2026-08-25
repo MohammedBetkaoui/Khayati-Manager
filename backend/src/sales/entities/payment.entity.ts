@@ -1,4 +1,6 @@
 ﻿import {
+  BeforeInsert,
+  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
@@ -7,6 +9,7 @@
   UpdateDateColumn,
 } from 'typeorm';
 import { PaymentMethod } from '../../common/enums';
+import { toMinorUnits } from '../../common/money';
 import { Customer } from './customer.entity';
 import { Invoice } from './invoice.entity';
 
@@ -21,12 +24,16 @@ export class Payment {
   customer!: Customer;
 
   @ManyToOne(() => Invoice, (invoice) => invoice.payments, {
-    onDelete: 'CASCADE',
+    nullable: true,
+    onDelete: 'RESTRICT',
   })
-  invoice!: Invoice;
+  invoice?: Invoice | null;
 
   @Column({ type: 'real' })
   amount!: number;
+
+  @Column({ type: 'integer', default: 0 })
+  amountMinor!: number;
 
   @Column({ type: 'simple-enum', enum: PaymentMethod })
   paymentMethod!: PaymentMethod;
@@ -45,4 +52,10 @@ export class Payment {
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  syncMinorAmount() {
+    this.amountMinor = toMinorUnits(this.amount);
+  }
 }

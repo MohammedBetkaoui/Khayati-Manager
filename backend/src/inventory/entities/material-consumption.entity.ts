@@ -31,7 +31,7 @@ export class MaterialConsumption {
   @Column({ name: 'orderId', type: 'text', nullable: true })
   reference?: string | null;
 
-  @Column({ type: 'real', default: 0 })
+  @Column({ type: 'real', default: 0 }) 
   cost!: number;
 
   @Column({ type: 'text', nullable: true })
