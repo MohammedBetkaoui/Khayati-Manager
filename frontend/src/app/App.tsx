@@ -66,11 +66,6 @@ const AnalyticsPage = lazy(() =>
     default: module.AnalyticsPage,
   })),
 );
-const SpecialSettingsPage = lazy(() =>
-  import("./pages/special-settings-page").then((module) => ({
-    default: module.SpecialSettingsPage,
-  })),
-);
 const CustomerProfilePage = lazy(() =>
   import("./pages/customer-profile-page").then((module) => ({
     default: module.CustomerProfilePage,
@@ -128,7 +123,6 @@ const router = createHashRouter([
       { path: "worker-profile", element: <WorkerProfilePage /> },
       { path: "expenses", element: <ExpensesPage /> },
       { path: "analytics", element: <AnalyticsPage /> },
-      { path: "special-settings", element: <SpecialSettingsPage /> },
       { path: "*", element: <HomePage /> },
     ],
   },

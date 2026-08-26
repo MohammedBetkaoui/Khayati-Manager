@@ -1,511 +1,967 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
+  BanknoteArrowDown,
   Boxes,
   CircleDollarSign,
   Factory,
+  HandCoins,
   PackageCheck,
   Receipt,
   TrendingUp,
   Users,
 } from "lucide-react";
+import { useNavigate } from "react-router";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   PageHeading,
   StatePanel,
   StatCard,
+  formatDate,
   formatMoney,
 } from "../components/commerce-ui";
 import { PageBackground } from "../components/page-background";
+import { Badge } from "../components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
 import { fetchJson } from "../lib/api";
-import type { ApiInvoice, FinishedProduct } from "../lib/commerce";
 
-type SalesStats = {
-  monthSales: number;
-  totalDebt: number;
-  totalInvoices: number;
-  averageSale: number;
-};
+type MonthPoint = { month: string };
 
-type RawStats = {
-  totalMaterials: number;
-  lowStockMaterials: number;
-  stockValue: number;
-  monthlyMovements: number;
-};
-
-type ProductStats = {
-  totalProducts: number;
-  availablePieces: number;
-  soldPieces: number;
-  lowStockProducts: number;
-  productionBatches: number;
-  retailStockValue: number;
-  costStockValue: number;
-};
-
-type WorkerStats = {
-  totalWorkers: number;
-  presentToday: number;
-  absentToday: number;
-  totalPiecesThisMonth?: number;
-  piecesThisMonth?: number;
-};
-
-const emptySales: SalesStats = {
-  monthSales: 0,
-  totalDebt: 0,
-  totalInvoices: 0,
-  averageSale: 0,
-};
-const emptyRaw: RawStats = {
-  totalMaterials: 0,
-  lowStockMaterials: 0,
-  stockValue: 0,
-  monthlyMovements: 0,
-};
-const emptyProducts: ProductStats = {
-  totalProducts: 0,
-  availablePieces: 0,
-  soldPieces: 0,
-  lowStockProducts: 0,
-  productionBatches: 0,
-  retailStockValue: 0,
-  costStockValue: 0,
-};
-const emptyWorkers: WorkerStats = {
-  totalWorkers: 0,
-  presentToday: 0,
-  absentToday: 0,
-};
-
-function recentMonths(count: number) {
-  const current = new Date();
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(
-      current.getFullYear(),
-      current.getMonth() - (count - index - 1),
-      1,
-    );
-    return {
-      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-      label: date.toLocaleDateString("fr-DZ", { month: "short" }),
+type AnalyticsDashboard = {
+  period: { months: number; startDate: string; endDate: string };
+  summary: {
+    sales: number;
+    receipts: number;
+    outflows: number;
+    estimatedCashFlow: number;
+    customerDebt: number;
+    supplierDebt: number;
+    payrollPaid: number;
+    payrollRemaining: number;
+  };
+  financialTrend: Array<
+    MonthPoint & { sales: number; receipts: number; outflows: number }
+  >;
+  expenseBreakdown: Array<
+    MonthPoint & {
+      salaries: number;
+      materials: number;
+      rent: number;
+      maintenance: number;
+      transport: number;
+      other: number;
+    }
+  >;
+  productionSales: Array<MonthPoint & { produced: number; sold: number }>;
+  topProducts: Array<{
+    productId: number | null;
+    productName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+  finishedStock: Array<{
+    productId: number;
+    name: string;
+    quantityAvailable: number;
+    quantityProduced: number;
+    quantitySold: number;
+  }>;
+  debtTrend: Array<MonthPoint & { customerDebt: number; supplierDebt: number }>;
+  insights: {
+    topCustomers: Array<{
+      id: number;
+      fullName: string;
+      revenue: number;
+      salesCount: number;
+    }>;
+    customerDebts: Array<{
+      id: number;
+      fullName: string;
+      phone: string;
+      debt: number;
+    }>;
+    supplierDebts: Array<{
+      id: number;
+      name: string;
+      phone: string | null;
+      debt: number;
+    }>;
+    overdueInvoices: Array<{
+      id: number;
+      invoiceNumber: string;
+      customerId: number;
+      customerName: string;
+      dueDate: string;
+      remainingAmount: number;
+      daysOverdue: number;
+    }>;
+    supplierPaymentsDue: Array<{
+      purchaseId: number;
+      supplierId: number;
+      supplierName: string;
+      materialName: string;
+      purchaseDate: string;
+      remainingAmount: number;
+      daysOpen: number;
+      status: "OLD" | "OPEN";
+    }>;
+    inactiveProducts: Array<{
+      productId: number;
+      name: string;
+      quantityAvailable: number;
+      lastSaleDate: string | null;
+      inactiveDays: number;
+      level: "30_DAYS" | "60_DAYS";
+    }>;
+    payroll: {
+      totalDue: number;
+      totalPaid: number;
+      totalRemaining: number;
+      payrollCount: number;
     };
-  });
-}
+    pieceWorkers: Array<{
+      workerId: number;
+      workerName: string;
+      pieces: number;
+      amount: number;
+    }>;
+  };
+  sourceCounts: {
+    invoices: number;
+    purchases: number;
+    payrolls: number;
+    manualExpenses: number;
+  };
+};
+
+const emptyDashboard: AnalyticsDashboard = {
+  period: { months: 12, startDate: "", endDate: "" },
+  summary: {
+    sales: 0,
+    receipts: 0,
+    outflows: 0,
+    estimatedCashFlow: 0,
+    customerDebt: 0,
+    supplierDebt: 0,
+    payrollPaid: 0,
+    payrollRemaining: 0,
+  },
+  financialTrend: [],
+  expenseBreakdown: [],
+  productionSales: [],
+  topProducts: [],
+  finishedStock: [],
+  debtTrend: [],
+  insights: {
+    topCustomers: [],
+    customerDebts: [],
+    supplierDebts: [],
+    overdueInvoices: [],
+    supplierPaymentsDue: [],
+    inactiveProducts: [],
+    payroll: { totalDue: 0, totalPaid: 0, totalRemaining: 0, payrollCount: 0 },
+    pieceWorkers: [],
+  },
+  sourceCounts: { invoices: 0, purchases: 0, payrolls: 0, manualExpenses: 0 },
+};
+
+const colors = {
+  teal: "#123c4a",
+  gold: "#c39a5b",
+  green: "#4d8a6a",
+  red: "#c46f67",
+  blue: "#6b8fa4",
+  sand: "#dfc89f",
+  gray: "#9a9287",
+};
 
 export function AnalyticsPage() {
   const { lang } = useLanguage();
-  const [sales, setSales] = useState<SalesStats>(emptySales);
-  const [raw, setRaw] = useState<RawStats>(emptyRaw);
-  const [productStats, setProductStats] = useState<ProductStats>(emptyProducts);
-  const [workers, setWorkers] = useState<WorkerStats>(emptyWorkers);
-  const [invoices, setInvoices] = useState<ApiInvoice[]>([]);
-  const [products, setProducts] = useState<FinishedProduct[]>([]);
+  const navigate = useNavigate();
+  const [months, setMonths] = useState(12);
+  const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
+
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const [
-          salesStats,
-          rawStats,
-          finishedStats,
-          workerStats,
-          invoiceList,
-          productList,
-        ] = await Promise.all([
-          fetchJson<SalesStats>("/sales/stats", { signal: controller.signal }),
-          fetchJson<RawStats>("/inventory/stats", {
-            signal: controller.signal,
-          }),
-          fetchJson<ProductStats>("/inventory/products/stats", {
-            signal: controller.signal,
-          }),
-          fetchJson<WorkerStats>("/workers/stats", {
-            signal: controller.signal,
-          }),
-          fetchJson<{ data: ApiInvoice[] }>("/sales/invoices?limit=100", {
-            signal: controller.signal,
-          }),
-          fetchJson<{ data: FinishedProduct[] }>(
-            "/inventory/products?limit=100",
-            { signal: controller.signal },
-          ),
-        ]);
-        setSales(salesStats);
-        setRaw(rawStats);
-        setProductStats(finishedStats);
-        setWorkers(workerStats);
-        setInvoices(invoiceList.data);
-        setProducts(productList.data);
+        const result = await fetchJson<AnalyticsDashboard>(
+          `/analytics/dashboard?months=${months}`,
+          { signal: controller.signal },
+        );
+        setDashboard(result);
       } catch (caught) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setError(
             caught instanceof Error
               ? caught.message
-              : "Unable to load analytics",
+              : "Impossible de charger les statistiques",
           );
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     }
+
     void load();
     return () => controller.abort();
-  }, [refreshKey]);
+  }, [months, refreshKey]);
 
-  const months = useMemo(() => recentMonths(6), []);
-  const monthlySales = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const invoice of invoices)
-      totals.set(
-        invoice.date.slice(0, 7),
-        (totals.get(invoice.date.slice(0, 7)) ?? 0) + invoice.totalAmount,
-      );
-    return months.map((month) => ({
-      ...month,
-      amount: totals.get(month.key) ?? 0,
-    }));
-  }, [invoices, months]);
-  const maxMonth = Math.max(...monthlySales.map((month) => month.amount), 1);
-
-  const topProducts = useMemo(() => {
-    const values = new Map<string, { quantity: number; amount: number }>();
-    for (const invoice of invoices) {
-      for (const item of invoice.items) {
-        const current = values.get(item.productName) ?? {
-          quantity: 0,
-          amount: 0,
-        };
-        current.quantity += item.quantity;
-        current.amount += item.total;
-        values.set(item.productName, current);
+  const ar = lang === "ar";
+  const text = ar
+    ? {
+        title: "الإحصائيات والتحليل المالي",
+        subtitle:
+          "رؤية موحدة للمبيعات، المصاريف، الإنتاج، المخزون والديون من البيانات الفعلية للورشة.",
+        period: "الفترة",
+        sales: "المبيعات المسجلة",
+        receipts: "المبالغ المحصلة",
+        outflows: "المبالغ المدفوعة",
+        cashFlow: "صافي التدفق النقدي",
+        customerDebt: "ديون الزبائن",
+        supplierDebt: "ديون الموردين",
+        financial: "التطور المالي",
+        financialHelp: "المبيعات، التحصيلات والمدفوعات خلال الفترة",
+        expenses: "توزيع المصاريف",
+        expensesHelp: "الرواتب، المشتريات والمصاريف العامة دون تكرار",
+        production: "الإنتاج والمبيعات",
+        productionHelp: "مقارنة القطع المنتجة بالقطع المباعة كل شهر",
+        products: "المنتجات الأكثر مبيعاً",
+        productsHelp: "الكمية المباعة ورقم الأعمال لكل موديل",
+        stock: "مخزون المنتجات الجاهزة",
+        stockHelp: "الكميات المتوفرة حالياً للموديلات النشطة",
+        debts: "تطور الديون",
+        debtsHelp: "ديون الزبائن وديون الموردين المتراكمة",
+        topCustomers: "أفضل الزبائن حسب رقم الأعمال",
+        customerDebts: "أكبر ديون الزبائن",
+        supplierDebts: "أكبر ديون الموردين",
+        overdueInvoices: "فواتير الزبائن المتأخرة",
+        supplierDue: "مبالغ الموردين المفتوحة",
+        inactiveProducts: "موديلات بدون مبيعات",
+        payroll: "ملخص الرواتب",
+        pieceWorkers: "إنتاج العمال بالدفع حسب القطعة",
+        noData: "لا توجد بيانات في هذه الفترة",
+        sourceNote:
+          "المؤشرات محسوبة مباشرة من الفواتير، المدفوعات، المشتريات، الرواتب والمخزون.",
       }
-    }
-    return [...values.entries()]
-      .sort((left, right) => right[1].quantity - left[1].quantity)
-      .slice(0, 5);
-  }, [invoices]);
+    : {
+        title: "Statistiques et analyse financière",
+        subtitle:
+          "Vue unifiée des ventes, charges, productions, stocks et dettes à partir des données réelles de l'atelier.",
+        period: "Période",
+        sales: "Ventes enregistrées",
+        receipts: "Encaissements reçus",
+        outflows: "Décaissements réels",
+        cashFlow: "Flux de trésorerie net",
+        customerDebt: "Créances clients",
+        supplierDebt: "Dettes fournisseurs",
+        financial: "Évolution financière",
+        financialHelp: "Ventes, encaissements et décaissements sur la période",
+        expenses: "Répartition des charges",
+        expensesHelp: "Salaires, achats et charges générales sans duplication",
+        production: "Production et ventes",
+        productionHelp:
+          "Pièces produites comparées aux pièces vendues par mois",
+        products: "Produits les plus vendus",
+        productsHelp: "Quantités vendues et chiffre d'affaires par modèle",
+        stock: "Stock des produits finis",
+        stockHelp: "Quantités disponibles des modèles actifs",
+        debts: "Évolution des créances et dettes",
+        debtsHelp: "Créances clients et dettes fournisseurs cumulées",
+        topCustomers: "Top clients par chiffre d'affaires",
+        customerDebts: "Plus grandes créances clients",
+        supplierDebts: "Plus grandes dettes fournisseurs",
+        overdueInvoices: "Factures clients en retard",
+        supplierDue: "Paiements fournisseurs ouverts",
+        inactiveProducts: "Modèles sans vente",
+        payroll: "Synthèse des salaires",
+        pieceWorkers: "Production des travailleurs à la pièce",
+        noData: "Aucune donnée pour cette période",
+        sourceNote:
+          "Les indicateurs sont calculés directement depuis les factures, paiements, achats, salaires et stocks.",
+      };
 
-  const stockProducts = [...products]
-    .sort((left, right) => right.quantityAvailable - left.quantityAvailable)
-    .slice(0, 6);
-  const grossStockMargin = Math.max(
-    0,
-    productStats.retailStockValue - productStats.costStockValue,
-  );
-  const attendanceRate = workers.totalWorkers
-    ? Math.round((workers.presentToday / workers.totalWorkers) * 100)
-    : 0;
-  const lowAlerts = raw.lowStockMaterials + productStats.lowStockProducts;
-
-  const text =
-    lang === "ar"
-      ? {
-          title: "تحليل البيانات",
-          subtitle:
-            "قراءة مباشرة للمبيعات، المخزون، الإنتاج ونشاط الورشة دون بيانات ثابتة.",
-          sales: "مبيعات الشهر",
-          debt: "ديون الزبائن",
-          stock: "قيمة المنتجات",
-          pieces: "القطع المتوفرة",
-          alerts: "تنبيهات المخزون",
-          batches: "دفعات الإنتاج",
-          trend: "تطور المبيعات خلال 6 أشهر",
-          top: "المنتجات الأكثر مبيعا",
-          stockTitle: "توزيع مخزون المنتجات",
-          workshop: "مؤشرات الورشة",
-          attendance: "نسبة الحضور اليوم",
-          rawValue: "قيمة المواد الأولية",
-          margin: "هامش المخزون المتوقع",
-          movements: "حركات المواد هذا الشهر",
-          empty: "لا توجد بيانات كافية للتحليل",
-        }
-      : {
-          title: "Analyse des données",
-          subtitle:
-            "Lecture directe des ventes, stocks, productions et activités de l'atelier, sans données statiques.",
-          sales: "Ventes du mois",
-          debt: "Créances clients",
-          stock: "Valeur des produits",
-          pieces: "Pièces disponibles",
-          alerts: "Alertes de stock",
-          batches: "Lots de production",
-          trend: "Évolution des ventes sur 6 mois",
-          top: "Produits les plus vendus",
-          stockTitle: "Répartition du stock produits",
-          workshop: "Indicateurs atelier",
-          attendance: "Présence aujourd'hui",
-          rawValue: "Valeur des matières",
-          margin: "Marge potentielle du stock",
-          movements: "Mouvements matières du mois",
-          empty: "Pas encore assez de données pour l'analyse",
-        };
+  const moneyTooltip = (value: number | string) =>
+    formatMoney(Number(value), lang);
 
   return (
     <PageBackground>
-      <PageHeading title={text.title} subtitle={text.subtitle} />
+      <PageHeading
+        title={text.title}
+        subtitle={text.subtitle}
+        actions={
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 12, color: palette.muted }}>
+              {text.period}
+            </span>
+            <Select
+              value={String(months)}
+              onValueChange={(value) => setMonths(Number(value))}
+            >
+              <SelectTrigger
+                className="w-[155px] rounded-xl bg-white"
+                style={{ borderColor: palette.border }}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="6">
+                  {ar ? "آخر 6 أشهر" : "6 derniers mois"}
+                </SelectItem>
+                <SelectItem value="12">
+                  {ar ? "آخر 12 شهراً" : "12 derniers mois"}
+                </SelectItem>
+                <SelectItem value="24">
+                  {ar ? "آخر 24 شهراً" : "24 derniers mois"}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
+
       <div className="mt-6">
         <StatePanel
           loading={loading}
           error={error}
           empty={false}
-          emptyTitle={text.empty}
+          emptyTitle={text.noData}
           onRetry={() => setRefreshKey((value) => value + 1)}
         />
       </div>
+
       {!loading && !error ? (
         <>
           <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
             <StatCard
               icon={Receipt}
               label={text.sales}
-              value={formatMoney(sales.monthSales, lang)}
+              value={formatMoney(dashboard.summary.sales, lang)}
             />
             <StatCard
-              icon={CircleDollarSign}
-              label={text.debt}
-              value={formatMoney(sales.totalDebt, lang)}
-              color="#b46a66"
-              tint="rgba(201,138,134,0.13)"
-            />
-            <StatCard
-              icon={Boxes}
-              label={text.stock}
-              value={formatMoney(productStats.retailStockValue, lang)}
-              color="#a87d3c"
-              tint="rgba(195,154,91,0.15)"
-            />
-            <StatCard
-              icon={PackageCheck}
-              label={text.pieces}
-              value={productStats.availablePieces}
-              color="#4d8a6a"
+              icon={HandCoins}
+              label={text.receipts}
+              value={formatMoney(dashboard.summary.receipts, lang)}
+              color={colors.green}
               tint="rgba(77,138,106,0.12)"
             />
             <StatCard
-              icon={AlertTriangle}
-              label={text.alerts}
-              value={lowAlerts}
-              color="#b46a66"
-              tint="rgba(201,138,134,0.13)"
+              icon={BanknoteArrowDown}
+              label={text.outflows}
+              value={formatMoney(dashboard.summary.outflows, lang)}
+              color={colors.red}
+              tint="rgba(196,111,103,0.12)"
             />
             <StatCard
-              icon={Factory}
-              label={text.batches}
-              value={productStats.productionBatches}
-              color="#6b8aa0"
-              tint="rgba(107,138,160,0.13)"
+              icon={TrendingUp}
+              label={text.cashFlow}
+              value={formatMoney(dashboard.summary.estimatedCashFlow, lang)}
+              color={
+                dashboard.summary.estimatedCashFlow >= 0
+                  ? colors.green
+                  : colors.red
+              }
+              tint={
+                dashboard.summary.estimatedCashFlow >= 0
+                  ? "rgba(77,138,106,0.12)"
+                  : "rgba(196,111,103,0.12)"
+              }
+            />
+            <StatCard
+              icon={CircleDollarSign}
+              label={text.customerDebt}
+              value={formatMoney(dashboard.summary.customerDebt, lang)}
+              color={colors.gold}
+              tint="rgba(195,154,91,0.15)"
+            />
+            <StatCard
+              icon={AlertTriangle}
+              label={text.supplierDebt}
+              value={formatMoney(dashboard.summary.supplierDebt, lang)}
+              color={colors.red}
+              tint="rgba(196,111,103,0.12)"
             />
           </section>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-            <section
-              className="rounded-[22px] border p-5"
-              style={{
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-              }}
+          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <ChartCard
+              title={text.financial}
+              subtitle={text.financialHelp}
+              icon={<TrendingUp size={19} />}
             >
-              <div className="flex items-center gap-2">
-                <TrendingUp size={18} style={{ color: palette.primary }} />
-                <h2 style={{ fontSize: 16, fontWeight: 900 }}>{text.trend}</h2>
-              </div>
-              <div className="mt-6 flex h-64 items-end gap-3">
-                {monthlySales.map((month) => (
-                  <div
-                    key={month.key}
-                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
+              <div className="h-full w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={dashboard.financialTrend}
+                    margin={{ top: 8, right: 10, left: 6, bottom: 0 }}
                   >
-                    <span
-                      className="max-w-full truncate"
-                      style={{ fontSize: 10.5, color: palette.muted }}
-                    >
-                      {formatMoney(month.amount, lang)}
-                    </span>
-                    <div
-                      className="w-full max-w-[62px] rounded-t-xl transition-all"
-                      style={{
-                        height: `${Math.max(5, (month.amount / maxMonth) * 180)}px`,
-                        background: month.amount
-                          ? "linear-gradient(180deg, #c39a5b 0%, #123c4a 100%)"
-                          : palette.border,
-                      }}
+                    <CartesianGrid
+                      stroke={palette.border}
+                      strokeDasharray="3 5"
+                      vertical={false}
                     />
-                    <span style={{ fontSize: 11.5, color: palette.muted }}>
-                      {month.label}
-                    </span>
-                  </div>
-                ))}
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => formatMonth(value, lang)}
+                      padding={{ left: 10, right: 10 }}
+                      tick={{ fontSize: 11, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={compactMoney}
+                      tick={{ fontSize: 10, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                    />
+                    <Tooltip
+                      formatter={moneyTooltip}
+                      labelFormatter={(value) =>
+                        formatMonth(String(value), lang, true)
+                      }
+                      contentStyle={tooltipStyle}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    isAnimationActive={false}
+                      name={ar ? "المبيعات" : "Ventes"}
+                      stroke={colors.teal}
+                      strokeWidth={2.7}
+                      dot={{ r: 2.5, strokeWidth: 0 }}
+                      activeDot={{ r: 4 }}
+                    />
+                  <Line
+                    type="monotone"
+                    dataKey="receipts"
+                    isAnimationActive={false}
+                      name={ar ? "التحصيلات" : "Encaissements"}
+                      stroke={colors.green}
+                      strokeWidth={2.4}
+                      dot={{ r: 2.5, strokeWidth: 0 }}
+                    />
+                  <Line
+                    type="monotone"
+                    dataKey="outflows"
+                    isAnimationActive={false}
+                      name={ar ? "المدفوعات" : "Décaissements"}
+                      stroke={colors.red}
+                      strokeWidth={2.4}
+                      dot={{ r: 2.5, strokeWidth: 0 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-            </section>
-            <section
-              className="rounded-[22px] border p-5"
-              style={{
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-              }}
+            </ChartCard>
+
+            <ChartCard
+              title={text.expenses}
+              subtitle={text.expensesHelp}
+              icon={<Receipt size={19} />}
             >
-              <h2 style={{ fontSize: 16, fontWeight: 900 }}>{text.top}</h2>
-              {topProducts.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  {topProducts.map(([name, values], index) => (
-                    <div
-                      key={name}
-                      className="flex items-center gap-3 rounded-xl p-3"
-                      style={{ backgroundColor: palette.bg }}
-                    >
-                      <div
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                        style={{
-                          backgroundColor:
-                            index === 0
-                              ? palette.accentSoft
-                              : "rgba(18,60,74,0.07)",
-                          color: index === 0 ? "#a87d3c" : palette.primary,
-                          fontWeight: 900,
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="truncate"
-                          style={{ fontSize: 13.5, fontWeight: 800 }}
-                        >
-                          {name}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: palette.muted }}>
-                          {values.quantity} {lang === "ar" ? "قطعة" : "pièces"}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          fontWeight: 900,
-                          color: palette.primary,
-                        }}
-                      >
-                        {formatMoney(values.amount, lang)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty text={text.empty} />
-              )}
-            </section>
+              <div className="h-full w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dashboard.expenseBreakdown}
+                    margin={{ top: 8, right: 10, left: 6, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke={palette.border}
+                      strokeDasharray="3 5"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => formatMonth(value, lang)}
+                      padding={{ left: 10, right: 10 }}
+                      tick={{ fontSize: 11, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={compactMoney}
+                      tick={{ fontSize: 10, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                    />
+                    <Tooltip
+                      formatter={moneyTooltip}
+                      labelFormatter={(value) =>
+                        formatMonth(String(value), lang, true)
+                      }
+                      contentStyle={tooltipStyle}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 10.5, paddingTop: 12 }} />
+                  <Bar
+                    dataKey="salaries"
+                    isAnimationActive={false}
+                      name={ar ? "الرواتب" : "Salaires"}
+                      stackId="charges"
+                      fill={colors.teal}
+                    />
+                  <Bar
+                    dataKey="materials"
+                    isAnimationActive={false}
+                      name={ar ? "المواد" : "Matières"}
+                      stackId="charges"
+                      fill={colors.gold}
+                    />
+                  <Bar
+                    dataKey="rent"
+                    isAnimationActive={false}
+                      name={ar ? "الكراء" : "Loyer"}
+                      stackId="charges"
+                      fill={colors.blue}
+                    />
+                  <Bar
+                    dataKey="maintenance"
+                    isAnimationActive={false}
+                      name={ar ? "الصيانة" : "Maintenance"}
+                      stackId="charges"
+                      fill={colors.green}
+                    />
+                  <Bar
+                    dataKey="transport"
+                    isAnimationActive={false}
+                      name={ar ? "النقل" : "Transport"}
+                      stackId="charges"
+                      fill={colors.sand}
+                    />
+                  <Bar
+                    dataKey="other"
+                    isAnimationActive={false}
+                      name={ar ? "أخرى" : "Autres"}
+                      stackId="charges"
+                      fill={colors.gray}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+
+            <ChartCard
+              title={text.production}
+              subtitle={text.productionHelp}
+              icon={<Factory size={19} />}
+            >
+              <div className="h-full w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dashboard.productionSales}
+                    margin={{ top: 8, right: 10, left: 6, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke={palette.border}
+                      strokeDasharray="3 5"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => formatMonth(value, lang)}
+                      padding={{ left: 10, right: 10 }}
+                      tick={{ fontSize: 11, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 10, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={42}
+                    />
+                    <Tooltip
+                      labelFormatter={(value) =>
+                        formatMonth(String(value), lang, true)
+                      }
+                      contentStyle={tooltipStyle}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                  <Bar
+                    dataKey="produced"
+                    isAnimationActive={false}
+                      name={ar ? "منتجة" : "Produites"}
+                      fill={colors.teal}
+                      radius={[5, 5, 0, 0]}
+                    />
+                  <Bar
+                    dataKey="sold"
+                    isAnimationActive={false}
+                      name={ar ? "مباعة" : "Vendues"}
+                      fill={colors.gold}
+                      radius={[5, 5, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+
+            <ChartCard
+              title={text.debts}
+              subtitle={text.debtsHelp}
+              icon={<CircleDollarSign size={19} />}
+            >
+              <div className="h-full w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={dashboard.debtTrend}
+                    margin={{ top: 8, right: 10, left: 6, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke={palette.border}
+                      strokeDasharray="3 5"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => formatMonth(value, lang)}
+                      padding={{ left: 10, right: 10 }}
+                      tick={{ fontSize: 11, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={compactMoney}
+                      tick={{ fontSize: 10, fill: palette.muted }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={54}
+                    />
+                    <Tooltip
+                      formatter={moneyTooltip}
+                      labelFormatter={(value) =>
+                        formatMonth(String(value), lang, true)
+                      }
+                      contentStyle={tooltipStyle}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="customerDebt"
+                    isAnimationActive={false}
+                      name={ar ? "ديون الزبائن" : "Créances clients"}
+                      stroke={colors.gold}
+                      strokeWidth={2.6}
+                      dot={{ r: 2.5, strokeWidth: 0 }}
+                    />
+                  <Line
+                    type="monotone"
+                    dataKey="supplierDebt"
+                    isAnimationActive={false}
+                      name={ar ? "ديون الموردين" : "Dettes fournisseurs"}
+                      stroke={colors.red}
+                      strokeWidth={2.6}
+                      dot={{ r: 2.5, strokeWidth: 0 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+
+            <ChartCard
+              title={text.products}
+              subtitle={text.productsHelp}
+              icon={<PackageCheck size={19} />}
+            >
+              <HorizontalProductBars
+                data={dashboard.topProducts}
+                lang={lang}
+                emptyText={text.noData}
+              />
+            </ChartCard>
+
+            <ChartCard
+              title={text.stock}
+              subtitle={text.stockHelp}
+              icon={<Boxes size={19} />}
+            >
+              <StockBars
+                data={dashboard.finishedStock}
+                lang={lang}
+                emptyText={text.noData}
+              />
+            </ChartCard>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <section
-              className="rounded-[22px] border p-5"
-              style={{
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-              }}
-            >
-              <h2 style={{ fontSize: 16, fontWeight: 900 }}>
-                {text.stockTitle}
-              </h2>
-              {stockProducts.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  {stockProducts.map((product) => {
-                    const width = productStats.availablePieces
-                      ? Math.max(
-                          3,
-                          (product.quantityAvailable /
-                            productStats.availablePieces) *
-                            100,
-                        )
-                      : 0;
-                    return (
-                      <div key={product.id}>
-                        <div className="mb-1.5 flex items-center justify-between gap-3">
-                          <span
-                            className="truncate"
-                            style={{ fontSize: 13, fontWeight: 700 }}
-                          >
-                            {product.name}
-                          </span>
-                          <span style={{ fontSize: 12, color: palette.muted }}>
-                            {product.quantityAvailable}
-                          </span>
-                        </div>
-                        <div
-                          className="h-2 overflow-hidden rounded-full"
-                          style={{ backgroundColor: palette.bg }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${width}%`,
-                              backgroundColor:
-                                product.quantityAvailable <=
-                                product.minStockAlert
-                                  ? "#c98a86"
-                                  : "#4d8a6a",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <InsightCard title={text.topCustomers} icon={<Users size={18} />}>
+              {dashboard.insights.topCustomers.length ? (
+                dashboard.insights.topCustomers.map((item, index) => (
+                  <ClickableRow
+                    key={item.id}
+                    onClick={() => navigate(`/customer-profile/${item.id}`)}
+                  >
+                    <RowIdentity
+                      rank={index + 1}
+                      title={item.fullName}
+                      subtitle={`${item.salesCount} ${ar ? "عملية بيع" : "ventes"}`}
+                    />
+                    <Money value={item.revenue} lang={lang} />
+                  </ClickableRow>
+                ))
               ) : (
-                <Empty text={text.empty} />
+                <EmptyState text={text.noData} />
               )}
-            </section>
-            <section
-              className="rounded-[22px] border p-5"
-              style={{
-                borderColor: palette.border,
-                backgroundColor: palette.surface,
-              }}
+            </InsightCard>
+
+            <InsightCard
+              title={text.customerDebts}
+              icon={<CircleDollarSign size={18} />}
+              tone="warning"
             >
-              <div className="flex items-center gap-2">
-                <Users size={18} style={{ color: palette.primary }} />
-                <h2 style={{ fontSize: 16, fontWeight: 900 }}>
-                  {text.workshop}
-                </h2>
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Indicator
-                  label={text.attendance}
-                  value={`${attendanceRate}%`}
-                  helper={`${workers.presentToday}/${workers.totalWorkers}`}
-                  color="#4d8a6a"
+              {dashboard.insights.customerDebts.length ? (
+                dashboard.insights.customerDebts.map((item, index) => (
+                  <ClickableRow
+                    key={item.id}
+                    onClick={() => navigate(`/customer-profile/${item.id}`)}
+                  >
+                    <RowIdentity
+                      rank={index + 1}
+                      title={item.fullName}
+                      subtitle={item.phone || "—"}
+                    />
+                    <Money value={item.debt} lang={lang} danger />
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+
+            <InsightCard
+              title={text.supplierDebts}
+              icon={<AlertTriangle size={18} />}
+              tone="warning"
+            >
+              {dashboard.insights.supplierDebts.length ? (
+                dashboard.insights.supplierDebts.map((item, index) => (
+                  <ClickableRow
+                    key={item.id}
+                    onClick={() => navigate(`/suppliers/${item.id}`)}
+                  >
+                    <RowIdentity
+                      rank={index + 1}
+                      title={item.name}
+                      subtitle={item.phone || "—"}
+                    />
+                    <Money value={item.debt} lang={lang} danger />
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+
+            <InsightCard
+              title={text.overdueInvoices}
+              icon={<Receipt size={18} />}
+              tone="warning"
+            >
+              {dashboard.insights.overdueInvoices.length ? (
+                dashboard.insights.overdueInvoices.map((item) => (
+                  <ClickableRow
+                    key={item.id}
+                    onClick={() => navigate("/sales")}
+                  >
+                    <RowIdentity
+                      title={item.invoiceNumber}
+                      subtitle={`${item.customerName} · ${formatDate(item.dueDate, lang)}`}
+                    />
+                    <div className="text-end">
+                      <Money value={item.remainingAmount} lang={lang} danger />
+                      <Badge
+                        variant="outline"
+                        className="mt-1 border-red-200 bg-red-50 text-red-700"
+                      >
+                        {item.daysOverdue} {ar ? "يوم" : "j"}
+                      </Badge>
+                    </div>
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+
+            <InsightCard
+              title={text.supplierDue}
+              icon={<BanknoteArrowDown size={18} />}
+            >
+              {dashboard.insights.supplierPaymentsDue.length ? (
+                dashboard.insights.supplierPaymentsDue.map((item) => (
+                  <ClickableRow
+                    key={item.purchaseId}
+                    onClick={() => navigate(`/suppliers/${item.supplierId}`)}
+                  >
+                    <RowIdentity
+                      title={item.supplierName}
+                      subtitle={`${item.materialName} · ${formatDate(item.purchaseDate, lang)}`}
+                    />
+                    <div className="text-end">
+                      <Money value={item.remainingAmount} lang={lang} />
+                      <span
+                        className="mt-1 block"
+                        style={{
+                          fontSize: 10.5,
+                          color:
+                            item.status === "OLD" ? colors.red : palette.muted,
+                        }}
+                      >
+                        {item.daysOpen} {ar ? "يوم مفتوح" : "jours ouverts"}
+                      </span>
+                    </div>
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+
+            <InsightCard
+              title={text.inactiveProducts}
+              icon={<Boxes size={18} />}
+            >
+              {dashboard.insights.inactiveProducts.length ? (
+                dashboard.insights.inactiveProducts.map((item) => (
+                  <ClickableRow
+                    key={item.productId}
+                    onClick={() => navigate("/stock")}
+                  >
+                    <RowIdentity
+                      title={item.name}
+                      subtitle={
+                        item.lastSaleDate
+                          ? `${ar ? "آخر بيع" : "Dernière vente"}: ${formatDate(item.lastSaleDate, lang)}`
+                          : ar
+                            ? "لم يبع بعد"
+                            : "Jamais vendu"
+                      }
+                    />
+                    <div className="text-end">
+                      <Metric
+                        value={`${item.quantityAvailable}`}
+                        label={ar ? "متوفر" : "en stock"}
+                      />
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          color:
+                            item.level === "60_DAYS" ? colors.red : colors.gold,
+                        }}
+                      >
+                        {item.inactiveDays} {ar ? "يوم" : "jours"}
+                      </span>
+                    </div>
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+
+            <InsightCard title={text.payroll} icon={<HandCoins size={18} />}>
+              <button
+                type="button"
+                onClick={() => navigate("/salary")}
+                className="grid w-full grid-cols-2 gap-3 text-start"
+              >
+                <SummaryBox
+                  label={ar ? "المستحق" : "Total dû"}
+                  value={formatMoney(dashboard.insights.payroll.totalDue, lang)}
                 />
-                <Indicator
-                  label={text.rawValue}
-                  value={formatMoney(raw.stockValue, lang)}
-                  helper={`${raw.totalMaterials} ${lang === "ar" ? "مادة" : "matières"}`}
-                  color="#a87d3c"
+                <SummaryBox
+                  label={ar ? "المدفوع" : "Payé"}
+                  value={formatMoney(
+                    dashboard.insights.payroll.totalPaid,
+                    lang,
+                  )}
+                  color={colors.green}
                 />
-                <Indicator
-                  label={text.margin}
-                  value={formatMoney(grossStockMargin, lang)}
-                  helper={lang === "ar" ? "قبل المصاريف" : "avant charges"}
-                  color={palette.primary}
+                <SummaryBox
+                  label={ar ? "المتبقي" : "Reste"}
+                  value={formatMoney(
+                    dashboard.insights.payroll.totalRemaining,
+                    lang,
+                  )}
+                  color={colors.red}
                 />
-                <Indicator
-                  label={text.movements}
-                  value={String(raw.monthlyMovements)}
-                  helper={
-                    lang === "ar"
-                      ? "دخول وخروج وإنتاج"
-                      : "entrées, sorties, production"
-                  }
-                  color="#6b8aa0"
+                <SummaryBox
+                  label={ar ? "عدد الرواتب" : "Paies"}
+                  value={String(dashboard.insights.payroll.payrollCount)}
                 />
-              </div>
-            </section>
+              </button>
+            </InsightCard>
+
+            <InsightCard title={text.pieceWorkers} icon={<Factory size={18} />}>
+              {dashboard.insights.pieceWorkers.length ? (
+                dashboard.insights.pieceWorkers.map((item, index) => (
+                  <ClickableRow
+                    key={item.workerId}
+                    onClick={() =>
+                      navigate(`/worker-profile?workerId=${item.workerId}`)
+                    }
+                  >
+                    <RowIdentity
+                      rank={index + 1}
+                      title={item.workerName}
+                      subtitle={formatMoney(item.amount, lang)}
+                    />
+                    <Metric
+                      value={String(item.pieces)}
+                      label={ar ? "قطعة" : "pièces"}
+                    />
+                  </ClickableRow>
+                ))
+              ) : (
+                <EmptyState text={text.noData} />
+              )}
+            </InsightCard>
+          </section>
+
+          <div
+            className="mt-5 rounded-2xl border px-4 py-3"
+            style={{
+              borderColor: palette.border,
+              backgroundColor: "rgba(255,255,255,0.72)",
+              color: palette.muted,
+              fontSize: 11.5,
+            }}
+          >
+            {text.sourceNote} {ar ? "المصادر" : "Sources"}:{" "}
+            {dashboard.sourceCounts.invoices} {ar ? "فاتورة" : "factures"},{" "}
+            {dashboard.sourceCounts.purchases} {ar ? "شراء" : "achats"},{" "}
+            {dashboard.sourceCounts.payrolls} {ar ? "راتب" : "paies"},{" "}
+            {dashboard.sourceCounts.manualExpenses}{" "}
+            {ar ? "مصروف عام" : "charges générales"}.
           </div>
         </>
       ) : null}
@@ -513,37 +969,344 @@ export function AnalyticsPage() {
   );
 }
 
-function Indicator({
-  label,
-  value,
-  helper,
-  color,
+function ChartCard({
+  title,
+  subtitle,
+  icon,
+  children,
 }: {
-  label: string;
-  value: string;
-  helper: string;
-  color: string;
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl p-4" style={{ backgroundColor: palette.bg }}>
-      <div style={{ fontSize: 11.5, color: palette.muted }}>{label}</div>
-      <div className="mt-1" style={{ fontSize: 19, fontWeight: 900, color }}>
-        {value}
+    <section
+      className="min-w-0 rounded-[22px] border p-5"
+      style={{
+        borderColor: palette.border,
+        backgroundColor: palette.surface,
+        boxShadow: "0 14px 34px -30px rgba(18,60,74,0.55)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            color: palette.primary,
+            backgroundColor: "rgba(18,60,74,0.08)",
+          }}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <h2 style={{ fontSize: 15.5, fontWeight: 900, color: palette.text }}>
+            {title}
+          </h2>
+          <p
+            className="mt-0.5"
+            style={{ fontSize: 11.5, color: palette.muted }}
+          >
+            {subtitle}
+          </p>
+        </div>
       </div>
-      <div className="mt-1" style={{ fontSize: 11, color: palette.muted }}>
-        {helper}
+      <div className="mt-5 h-[310px] min-w-0">{children}</div>
+    </section>
+  );
+}
+
+function InsightCard({
+  title,
+  icon,
+  tone = "normal",
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  tone?: "normal" | "warning";
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className="min-w-0 rounded-[22px] border p-4"
+      style={{
+        borderColor:
+          tone === "warning" ? "rgba(196,111,103,0.24)" : palette.border,
+        backgroundColor: palette.surface,
+      }}
+    >
+      <div
+        className="flex items-center gap-2 border-b pb-3"
+        style={{ borderColor: palette.border }}
+      >
+        <span
+          style={{
+            color: tone === "warning" ? colors.red : palette.primary,
+          }}
+        >
+          {icon}
+        </span>
+        <h3 style={{ fontSize: 14, fontWeight: 900, color: palette.text }}>
+          {title}
+        </h3>
+      </div>
+      <div className="mt-2 flex max-h-[330px] flex-col overflow-y-auto">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function HorizontalProductBars({
+  data,
+  lang,
+  emptyText,
+}: {
+  data: AnalyticsDashboard["topProducts"];
+  lang: string;
+  emptyText: string;
+}) {
+  if (!data.length) return <EmptyState text={emptyText} fill />;
+  const max = Math.max(...data.map((item) => item.quantity), 1);
+
+  return (
+    <div className="flex h-full flex-col gap-3 overflow-y-auto pe-1">
+      {data.map((item, index) => (
+        <div key={`${item.productId ?? "snapshot"}-${item.productName}`}>
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <span
+              className="truncate"
+              style={{ fontSize: 12.5, fontWeight: 800 }}
+            >
+              <span style={{ color: colors.gold }}>#{index + 1}</span>{" "}
+              {item.productName}
+            </span>
+            <span
+              className="shrink-0"
+              style={{
+                fontSize: 11.5,
+                fontWeight: 800,
+                color: palette.primary,
+              }}
+            >
+              {item.quantity} · {formatMoney(item.revenue, lang)}
+            </span>
+          </div>
+          <div
+            className="h-2.5 overflow-hidden rounded-full"
+            style={{ backgroundColor: palette.bg }}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(3, (item.quantity / max) * 100)}%`,
+                background: `linear-gradient(90deg, ${colors.teal}, ${colors.gold})`,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StockBars({
+  data,
+  lang,
+  emptyText,
+}: {
+  data: AnalyticsDashboard["finishedStock"];
+  lang: string;
+  emptyText: string;
+}) {
+  if (!data.length) return <EmptyState text={emptyText} fill />;
+  const max = Math.max(...data.map((item) => item.quantityAvailable), 1);
+
+  return (
+    <div className="flex h-full flex-col gap-3 overflow-y-auto pe-1">
+      {data.map((item) => (
+        <div key={item.productId}>
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <span
+              className="truncate"
+              style={{ fontSize: 12.5, fontWeight: 800 }}
+            >
+              {item.name}
+            </span>
+            <span
+              className="shrink-0"
+              style={{ fontSize: 11.5, color: palette.muted }}
+            >
+              {item.quantityAvailable} {lang === "ar" ? "قطعة" : "pièces"}
+            </span>
+          </div>
+          <div
+            className="h-2.5 overflow-hidden rounded-full"
+            style={{ backgroundColor: palette.bg }}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(3, (item.quantityAvailable / max) * 100)}%`,
+                backgroundColor:
+                  item.quantityAvailable > 0 ? colors.green : colors.red,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ClickableRow({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-3 text-start transition-colors hover:bg-black/[0.025]"
+      style={{ borderBottom: `1px solid ${palette.border}` }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RowIdentity({
+  rank,
+  title,
+  subtitle,
+}: {
+  rank?: number;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {rank ? (
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+          style={{
+            backgroundColor: rank === 1 ? palette.accentSoft : palette.bg,
+            color: rank === 1 ? colors.gold : palette.primary,
+            fontSize: 11.5,
+            fontWeight: 900,
+          }}
+        >
+          {rank}
+        </span>
+      ) : null}
+      <div className="min-w-0">
+        <div
+          className="truncate"
+          style={{ fontSize: 12.5, fontWeight: 800, color: palette.text }}
+        >
+          {title}
+        </div>
+        <div
+          className="mt-0.5 truncate"
+          style={{ fontSize: 10.5, color: palette.muted }}
+        >
+          {subtitle}
+        </div>
       </div>
     </div>
   );
 }
 
-function Empty({ text }: { text: string }) {
+function Money({
+  value,
+  lang,
+  danger = false,
+}: {
+  value: number;
+  lang: string;
+  danger?: boolean;
+}) {
+  return (
+    <span
+      className="shrink-0"
+      style={{
+        fontSize: 12,
+        fontWeight: 900,
+        color: danger ? colors.red : palette.primary,
+      }}
+    >
+      {formatMoney(value, lang)}
+    </span>
+  );
+}
+
+function Metric({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="shrink-0 text-end">
+      <div style={{ fontSize: 13, fontWeight: 900, color: palette.primary }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 9.5, color: palette.muted }}>{label}</div>
+    </div>
+  );
+}
+
+function SummaryBox({
+  label,
+  value,
+  color = palette.primary,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-xl p-3" style={{ backgroundColor: palette.bg }}>
+      <div style={{ fontSize: 10.5, color: palette.muted }}>{label}</div>
+      <div className="mt-1" style={{ fontSize: 13, fontWeight: 900, color }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text, fill = false }: { text: string; fill?: boolean }) {
   return (
     <div
-      className="mt-4 flex min-h-36 items-center justify-center rounded-xl border border-dashed text-center text-sm"
-      style={{ borderColor: palette.borderStrong, color: palette.muted }}
+      className={`flex items-center justify-center text-center ${fill ? "h-full" : "min-h-24"}`}
+      style={{ color: palette.muted, fontSize: 12 }}
     >
       {text}
     </div>
   );
 }
+
+function formatMonth(value: string, lang: string, long = false) {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  return new Date(year, month - 1, 1).toLocaleDateString(
+    lang === "ar" ? "ar-DZ" : "fr-DZ",
+    {
+      month: long ? "long" : "short",
+      year: long ? "numeric" : undefined,
+    },
+  );
+}
+
+function compactMoney(value: number) {
+  return new Intl.NumberFormat("fr-DZ", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+const tooltipStyle = {
+  border: `1px solid ${palette.border}`,
+  borderRadius: 12,
+  boxShadow: "0 12px 30px rgba(18,60,74,0.12)",
+  fontSize: 11.5,
+};

@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { Bell, Minus, Square, UserRound, X } from "lucide-react";
+import { Minus, Square, UserRound, X } from "lucide-react";
 import { useNavigate } from "react-router";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
@@ -112,30 +112,6 @@ export function AppHeader() {
           <div style={noDragStyle}>
             <LanguageSwitcher lang={lang} onChange={setLang} />
           </div>
-          <button
-            type="button"
-            aria-label={lang === "ar" ? "التنبيهات" : "Notifications"}
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200"
-            style={{
-              ...noDragStyle,
-              backgroundColor: "rgba(255, 255, 255, 0.78)",
-              borderColor: "rgba(18, 60, 74, 0.12)",
-              color: palette.primary,
-            }}
-          >
-            <Bell size={17} strokeWidth={2} />
-            <span
-              className="absolute rounded-full"
-              style={{
-                top: 9,
-                insetInlineEnd: 10,
-                width: 7,
-                height: 7,
-                backgroundColor: palette.accent,
-                boxShadow: "0 0 0 2px #fff",
-              }}
-            />
-          </button>
           <div
             className="hidden items-center gap-3 rounded-full border bg-white/75 px-3 py-1.5 lg:flex"
             style={{

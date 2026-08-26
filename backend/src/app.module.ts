@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -55,6 +56,7 @@ prepareInvoicePaymentsDatabase(databasePath);
     ExpensesModule,
     ReportsModule,
     SettingsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

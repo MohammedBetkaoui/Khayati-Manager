@@ -14,7 +14,6 @@ const routeFor: Record<string, string> = {
   salary: "/salary",
   expenses: "/expenses",
   analytics: "/analytics",
-  settings: "/special-settings",
 };
 
 export function HomePage() {

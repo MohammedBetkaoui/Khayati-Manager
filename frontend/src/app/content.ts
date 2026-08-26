@@ -5,7 +5,6 @@ import {
   Calculator,
   ContactRound,
   Receipt,
-  SlidersHorizontal,
   Truck,
   Users,
   Wallet,
@@ -187,21 +186,5 @@ export const sections: Section[] = [
     },
     tint: "rgba(195, 154, 91, 0.14)",
     iconColor: "#a87d3c",
-  },
-  {
-    id: "settings",
-    icon: SlidersHorizontal,
-    ar: {
-      title: "إعدادات خاصة",
-      sub: "Paramètres spéciaux",
-      desc: "قواعد الأجور والأسعار والتنبيهات الخاصة بالورشة",
-    },
-    fr: {
-      title: "Paramètres spéciaux",
-      sub: "إعدادات خاصة",
-      desc: "Règles salariales, prix et alertes propres à l'atelier",
-    },
-    tint: "rgba(201, 138, 134, 0.14)",
-    iconColor: "#b46a66",
   },
 ];
