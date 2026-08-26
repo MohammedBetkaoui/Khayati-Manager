@@ -1,7 +1,16 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const { ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 let configured = false;
+
+function isUpdaterConfigured() {
+  return (
+    !process.resourcesPath ||
+    fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'))
+  );
+}
 
 function configureUpdater(mainWindow) {
   if (configured) {
@@ -43,6 +52,10 @@ function configureUpdater(mainWindow) {
   });
 
   ipcMain.handle('updater:check', async () => {
+    if (!isUpdaterConfigured()) {
+      return { disabled: true };
+    }
+
     try {
       return await autoUpdater.checkForUpdates();
     } catch (error) {
@@ -51,6 +64,10 @@ function configureUpdater(mainWindow) {
   });
 
   ipcMain.handle('updater:download', async () => {
+    if (!isUpdaterConfigured()) {
+      return { ok: false, disabled: true };
+    }
+
     try {
       const result = await autoUpdater.downloadUpdate();
       return { ok: true, result };
@@ -74,4 +91,5 @@ function configureUpdater(mainWindow) {
 
 module.exports = {
   configureUpdater,
+  isUpdaterConfigured,
 };

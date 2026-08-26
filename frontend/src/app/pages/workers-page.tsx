@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, ChevronLeft, ChevronRight, StickyNote, ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
+  StickyNote,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
 import { useNavigate } from "react-router";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
+import { API_BASE_URL } from "../lib/api";
 import { PageBackground } from "../components/page-background";
 import { Avatar, Badge, ProgressBar } from "../components/kit";
 import { SummaryCards } from "../components/workers/summary-cards";
 import { ActionBar, type Filters } from "../components/workers/action-bar";
 import { WorkersTable } from "../components/workers/workers-table";
 import { WorkerDetailsPanel } from "../components/workers/worker-details-panel";
-import { AddWorkerModal, type AddWorkerForm } from "../components/workers/add-worker-modal";
+import {
+  AddWorkerModal,
+  type AddWorkerForm,
+} from "../components/workers/add-worker-modal";
 import { DeleteWorkerModal } from "../components/workers/delete-worker-modal";
 import {
   AddNoteModal,
@@ -83,10 +94,6 @@ const emptyStats: ApiWorkersStats = {
   absentToday: 0,
   totalPiecesThisMonth: 0,
 };
-
-const API_BASE_URL =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://localhost:3000";
 
 const roleToApi: Record<RoleId, string> = {
   tailor: "خياط",
@@ -175,9 +182,15 @@ function mapApiWorker(worker: ApiWorker): Worker {
     salaryType,
     monthlySalary,
     salaryRate: formatSalaryRate(salaryType, monthlySalary),
-    attendance: attendanceStatus === "حاضر" || attendanceStatus === "متأخر" ? "present" : "absent",
+    attendance:
+      attendanceStatus === "حاضر" || attendanceStatus === "متأخر"
+        ? "present"
+        : "absent",
     pieces: totalPieces,
-    productivity: Math.max(0, Math.min(100, Math.round(numeric(worker.productivityPercent)))),
+    productivity: Math.max(
+      0,
+      Math.min(100, Math.round(numeric(worker.productivityPercent))),
+    ),
     status,
     note: {
       ar: worker.notes || "لا توجد ملاحظات",
@@ -193,7 +206,9 @@ function workerToForm(worker: Worker): AddWorkerForm {
     role: worker.role,
     startDate: worker.startDate === "-" ? "" : worker.startDate,
     salaryType: worker.salaryType,
-    monthlySalary: String(worker.monthlySalary ?? parseSalaryValue(worker.salaryRate.ar)),
+    monthlySalary: String(
+      worker.monthlySalary ?? parseSalaryValue(worker.salaryRate.ar),
+    ),
     notes: worker.note.ar === "لا توجد ملاحظات" ? "" : worker.note.ar,
     status: worker.status,
   };
@@ -246,7 +261,9 @@ export function WorkersPage() {
   const [workerToDelete, setWorkerToDelete] = useState<string | null>(null);
   const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null);
   const [editingForm, setEditingForm] = useState<AddWorkerForm | null>(null);
-  const [attendanceWorkerId, setAttendanceWorkerId] = useState<string | null>(null);
+  const [attendanceWorkerId, setAttendanceWorkerId] = useState<string | null>(
+    null,
+  );
   const [noteWorkerId, setNoteWorkerId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("all");
   const [modalOpen, setModalOpen] = useState(false);
@@ -269,8 +286,10 @@ export function WorkersPage() {
 
     if (filters.query.trim()) params.set("search", filters.query.trim());
     if (filters.role !== "all") params.set("role", roleToApi[filters.role]);
-    if (filters.salary !== "all") params.set("salaryType", salaryToApi[filters.salary]);
-    if (filters.status !== "all") params.set("status", statusToApi[filters.status]);
+    if (filters.salary !== "all")
+      params.set("salaryType", salaryToApi[filters.salary]);
+    if (filters.status !== "all")
+      params.set("status", statusToApi[filters.status]);
 
     return params.toString();
   }, [filters.query, filters.role, filters.salary, filters.status]);
@@ -318,13 +337,18 @@ export function WorkersPage() {
     if (selectedId && !rows.some((worker) => worker.id === selectedId)) {
       setSelectedId(null);
     }
-    if (editingWorkerId && !rows.some((worker) => worker.id === editingWorkerId) && !editingForm) {
+    if (
+      editingWorkerId &&
+      !rows.some((worker) => worker.id === editingWorkerId) &&
+      !editingForm
+    ) {
       setEditingWorkerId(null);
     }
   }, [rows, selectedId, editingWorkerId, editingForm]);
 
   const selected = rows.find((w) => w.id === selectedId) ?? null;
-  const attendanceWorker = rows.find((w) => w.id === attendanceWorkerId) ?? null;
+  const attendanceWorker =
+    rows.find((w) => w.id === attendanceWorkerId) ?? null;
   const noteWorker = rows.find((w) => w.id === noteWorkerId) ?? null;
   const Chevron = dir === "rtl" ? ChevronLeft : ChevronRight;
 
@@ -367,7 +391,9 @@ export function WorkersPage() {
         setEditingWorkerId(null);
         setEditingForm(null);
       }
-      setError(err instanceof Error ? err.message : "Unable to load worker data");
+      setError(
+        err instanceof Error ? err.message : "Unable to load worker data",
+      );
     }
   }
 
@@ -439,7 +465,9 @@ export function WorkersPage() {
       setAttendanceWorkerId(null);
       setRefreshKey((key) => key + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to mark attendance");
+      setError(
+        err instanceof Error ? err.message : "Unable to mark attendance",
+      );
       throw err;
     } finally {
       setSavingAction(false);
@@ -548,11 +576,17 @@ export function WorkersPage() {
 
       {/* Action bar */}
       <div className="mt-5">
-        <ActionBar filters={filters} onChange={setFilters} onAdd={() => setModalOpen(true)} />
+        <ActionBar
+          filters={filters}
+          onChange={setFilters}
+          onAdd={() => setModalOpen(true)}
+        />
       </div>
 
       {/* Main two-column layout */}
-      <div className={`mt-5 grid grid-cols-1 gap-5 pb-10 ${selectedId ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+      <div
+        className={`mt-5 grid grid-cols-1 gap-5 pb-10 ${selectedId ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}
+      >
         {/* LEFT — list */}
         <section
           style={{
@@ -564,7 +598,10 @@ export function WorkersPage() {
           }}
         >
           {/* Tabs */}
-          <div className="flex items-center gap-1 px-4 pt-4" style={{ borderBottom: `1px solid ${palette.border}` }}>
+          <div
+            className="flex items-center gap-1 px-4 pt-4"
+            style={{ borderBottom: `1px solid ${palette.border}` }}
+          >
             {tabs.map((tb) => {
               const active = tb.id === tab;
               return (
@@ -584,7 +621,12 @@ export function WorkersPage() {
                   {active ? (
                     <span
                       className="absolute inset-x-2"
-                      style={{ bottom: -1, height: 2.5, borderRadius: 999, backgroundColor: palette.primary }}
+                      style={{
+                        bottom: -1,
+                        height: 2.5,
+                        borderRadius: 999,
+                        backgroundColor: palette.primary,
+                      }}
                     />
                   ) : null}
                 </button>
@@ -594,7 +636,11 @@ export function WorkersPage() {
 
           <div className="p-4">
             {loading || error || rows.length === 0 ? (
-              <WorkersStateBlock loading={loading} error={error} hasWorkers={stats.totalWorkers > 0} />
+              <WorkersStateBlock
+                loading={loading}
+                error={error}
+                hasWorkers={stats.totalWorkers > 0}
+              />
             ) : (
               <>
                 {tab === "all" && (
@@ -608,10 +654,18 @@ export function WorkersPage() {
                   />
                 )}
                 {tab === "attendance" && (
-                  <AttendanceList rows={rows} onSelect={setSelectedId} onChangeAttendance={openAttendance} />
+                  <AttendanceList
+                    rows={rows}
+                    onSelect={setSelectedId}
+                    onChangeAttendance={openAttendance}
+                  />
                 )}
-                {tab === "productivity" && <ProductivityList rows={rows} onSelect={setSelectedId} />}
-                {tab === "notes" && <NotesList rows={rows} onSelect={setSelectedId} />}
+                {tab === "productivity" && (
+                  <ProductivityList rows={rows} onSelect={setSelectedId} />
+                )}
+                {tab === "notes" && (
+                  <NotesList rows={rows} onSelect={setSelectedId} />
+                )}
               </>
             )}
           </div>
@@ -619,7 +673,11 @@ export function WorkersPage() {
           {/* Footer count */}
           <div
             className="flex items-center px-5 py-3"
-            style={{ borderTop: `1px solid ${palette.border}`, fontSize: 12.5, color: palette.muted }}
+            style={{
+              borderTop: `1px solid ${palette.border}`,
+              fontSize: 12.5,
+              color: palette.muted,
+            }}
           >
             {t.showing} {rows.length} {t.of} {totalRows} {t.workers}
           </div>
@@ -735,12 +793,30 @@ function WorkersStateBlock({
         padding: 28,
       }}
     >
-      <div style={{ fontSize: 16, fontWeight: 800, color: palette.text }}>{title}</div>
-      <p style={{ marginTop: 8, maxWidth: 440, fontSize: 13.5, color: palette.muted, lineHeight: 1.7 }}>
+      <div style={{ fontSize: 16, fontWeight: 800, color: palette.text }}>
+        {title}
+      </div>
+      <p
+        style={{
+          marginTop: 8,
+          maxWidth: 440,
+          fontSize: 13.5,
+          color: palette.muted,
+          lineHeight: 1.7,
+        }}
+      >
         {description}
       </p>
       {error ? (
-        <p style={{ marginTop: 10, maxWidth: 520, fontSize: 12, color: palette.rose, lineHeight: 1.6 }}>
+        <p
+          style={{
+            marginTop: 10,
+            maxWidth: 520,
+            fontSize: 12,
+            color: palette.rose,
+            lineHeight: 1.6,
+          }}
+        >
           {error}
         </p>
       ) : null}
@@ -777,7 +853,9 @@ function RowShell({
       <Avatar name={worker.name[lang]} />
       <div className="min-w-0 flex-1">
         <div style={{ fontWeight: 600, fontSize: 14 }}>{worker.name[lang]}</div>
-        <div style={{ fontSize: 12, color: palette.muted }}>{roleLabels[worker.role][lang]}</div>
+        <div style={{ fontSize: 12, color: palette.muted }}>
+          {roleLabels[worker.role][lang]}
+        </div>
       </div>
       {children}
     </div>
@@ -804,7 +882,9 @@ function AttendanceList({
           <RowShell key={w.id} worker={w} onSelect={onSelect}>
             <div className="flex items-center gap-2.5">
               <Badge
-                bg={present ? "rgba(77,138,106,0.14)" : "rgba(201,138,134,0.14)"}
+                bg={
+                  present ? "rgba(77,138,106,0.14)" : "rgba(201,138,134,0.14)"
+                }
                 fg={present ? "#4d8a6a" : "#b46a66"}
                 dot={present ? "#4d8a6a" : "#b46a66"}
               >
@@ -839,7 +919,13 @@ function AttendanceList({
   );
 }
 
-function ProductivityList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: string) => void }) {
+function ProductivityList({
+  rows,
+  onSelect,
+}: {
+  rows: Worker[];
+  onSelect: (id: string) => void;
+}) {
   const { lang } = useLanguage();
   const t = workersText[lang];
   const sorted = [...rows].sort((a, b) => b.productivity - a.productivity);
@@ -848,7 +934,13 @@ function ProductivityList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: s
       {sorted.map((w) => (
         <RowShell key={w.id} worker={w} onSelect={onSelect}>
           <div className="flex items-center gap-4" style={{ width: 240 }}>
-            <span style={{ fontSize: 12.5, color: palette.muted, whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                fontSize: 12.5,
+                color: palette.muted,
+                whiteSpace: "nowrap",
+              }}
+            >
               {w.pieces} {t.pieceUnit}
             </span>
             <div style={{ flex: 1 }}>
@@ -861,7 +953,13 @@ function ProductivityList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: s
   );
 }
 
-function NotesList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: string) => void }) {
+function NotesList({
+  rows,
+  onSelect,
+}: {
+  rows: Worker[];
+  onSelect: (id: string) => void;
+}) {
   const { lang } = useLanguage();
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -871,12 +969,19 @@ function NotesList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: string) 
           type="button"
           onClick={() => onSelect(w.id)}
           className="flex flex-col gap-2 text-start transition-colors"
-          style={{ padding: 14, borderRadius: 16, border: `1px solid ${palette.border}`, backgroundColor: palette.surface }}
+          style={{
+            padding: 14,
+            borderRadius: 16,
+            border: `1px solid ${palette.border}`,
+            backgroundColor: palette.surface,
+          }}
         >
           <div className="flex items-center gap-2.5">
             <Avatar name={w.name[lang]} size={30} />
             <div className="min-w-0 flex-1">
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{w.name[lang]}</div>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                {w.name[lang]}
+              </div>
             </div>
             <Badge bg={roleColors[w.role].bg} fg={roleColors[w.role].fg}>
               {roleLabels[w.role][lang]}
@@ -886,7 +991,10 @@ function NotesList({ rows, onSelect }: { rows: Worker[]; onSelect: (id: string) 
             className="flex items-start gap-2"
             style={{ fontSize: 13, color: palette.text, lineHeight: 1.6 }}
           >
-            <StickyNote size={15} style={{ color: palette.accent, marginTop: 2, flexShrink: 0 }} />
+            <StickyNote
+              size={15}
+              style={{ color: palette.accent, marginTop: 2, flexShrink: 0 }}
+            />
             <span>{w.note[lang]}</span>
           </div>
         </button>

@@ -11,7 +11,7 @@ const allowedOrigins = new Set([
 const viteDevelopmentOrigin =
   /^http:\/\/(?:localhost|127\.0\.0\.1):51(?:7|8|9)\d$/;
 
-async function bootstrap() {
+export async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
@@ -42,6 +42,12 @@ async function bootstrap() {
   );
 
   await app.listen(Number(process.env.PORT ?? 3000), '127.0.0.1');
+  return app;
 }
 
-void bootstrap();
+if (require.main === module) {
+  void bootstrap().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

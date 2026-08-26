@@ -1,6 +1,7 @@
 export const API_BASE_URL =
+  window.electron?.backend?.baseUrl?.replace(/\/$/, "") ||
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://localhost:3000";
+  "http://127.0.0.1:3000";
 
 export async function fetchJson<T>(
   path: string,

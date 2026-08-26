@@ -5,6 +5,9 @@ interface Window {
     appVersion: string;
     platform: string;
     isPackaged: boolean;
+    backend?: {
+      baseUrl: string;
+    };
     windowControls?: {
       minimize(): Promise<boolean>;
       toggleMaximize(): Promise<boolean>;

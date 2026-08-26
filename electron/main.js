@@ -1,14 +1,20 @@
-const path = require('node:path');
-const { app, BrowserWindow, dialog } = require('electron');
+const path = require("node:path");
+const { app, BrowserWindow, dialog } = require("electron");
 const {
   startBackendProcess,
   stopBackendProcess,
   waitForBackend,
+  getBackendBaseUrl,
   resolveFrontendEntry,
   resolveSplashEntry,
   resolveAppIcon,
-} = require('./launcher');
-const { configureUpdater } = require('./updater');
+} = require("./launcher");
+const { configureUpdater, isUpdaterConfigured } = require("./updater");
+
+const userDataPathOverride = process.env.KHAYATI_USER_DATA_PATH?.trim();
+if (userDataPathOverride) {
+  app.setPath("userData", path.resolve(userDataPathOverride));
+}
 
 let mainWindow = null;
 let splashWindow = null;
@@ -25,7 +31,7 @@ function createSplashWindow() {
     show: true,
     transparent: false,
     autoHideMenuBar: true,
-    backgroundColor: '#f5f4f0',
+    backgroundColor: "#f5f4f0",
     icon: resolveAppIcon(),
     webPreferences: {
       contextIsolation: true,
@@ -45,11 +51,11 @@ function createMainWindow() {
     frame: false,
     autoHideMenuBar: true,
     show: false,
-    backgroundColor: '#f5f4f0',
+    backgroundColor: "#f5f4f0",
     icon,
-    titleBarStyle: 'hidden',
+    titleBarStyle: "hidden",
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -65,11 +71,11 @@ async function bootstrap() {
   ownsBackendProcess = backendState.owned;
 
   if (backendProcess) {
-    backendProcess.once('exit', (code) => {
+    backendProcess.once("exit", (code) => {
       if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
         dialog.showErrorBox(
-          'Khayati Manager',
-          `Le backend s'est arrêté de façon inattendue (code ${code ?? 'unknown'}).`,
+          "Khayati Manager",
+          `Le backend s'est arrêté de façon inattendue (code ${code ?? "unknown"}).`,
         );
         app.quit();
       }
@@ -81,39 +87,44 @@ async function bootstrap() {
   mainWindow = createMainWindow();
   const autoUpdater = configureUpdater(mainWindow);
 
-  mainWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
-    showFatalStartupError(
-      new Error(`Impossible de charger l'interface: ${errorDescription} (${errorCode})`),
-    );
-    app.quit();
-  });
+  mainWindow.webContents.once(
+    "did-fail-load",
+    (_event, errorCode, errorDescription) => {
+      showFatalStartupError(
+        new Error(
+          `Impossible de charger l'interface: ${errorDescription} (${errorCode})`,
+        ),
+      );
+      app.quit();
+    },
+  );
 
-  mainWindow.webContents.once('did-finish-load', () => {
-    if (app.isPackaged) {
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (app.isPackaged && isUpdaterConfigured()) {
       autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-        mainWindow?.webContents.send('updater:status', {
-          state: 'error',
+        mainWindow?.webContents.send("updater:status", {
+          state: "error",
           message: error instanceof Error ? error.message : String(error),
         });
       });
     }
   });
 
-  mainWindow.once('ready-to-show', () => {
+  mainWindow.once("ready-to-show", () => {
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close();
     }
     mainWindow.show();
   });
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 
   if (app.isPackaged) {
     await mainWindow.loadFile(resolveFrontendEntry());
   } else {
-    await mainWindow.loadURL('http://localhost:5173');
+    await mainWindow.loadURL("http://localhost:5173");
   }
 }
 
@@ -124,7 +135,7 @@ function showFatalStartupError(error) {
     splashWindow.close();
   }
 
-  dialog.showErrorBox('Khayati Manager', message);
+  dialog.showErrorBox("Khayati Manager", message);
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -167,13 +178,17 @@ if (!app.requestSingleInstanceLock()) {
     return true;
   };
 
-  const { ipcMain } = require('electron');
+  const { ipcMain } = require("electron");
 
-  ipcMain.handle('window:minimize', () => minimizeMainWindow());
-  ipcMain.handle('window:toggle-maximize', () => toggleMainWindowMaximize());
-  ipcMain.handle('window:close', () => closeMainWindow());
+  ipcMain.on("backend:get-base-url", (event) => {
+    event.returnValue = getBackendBaseUrl();
+  });
 
-  app.on('second-instance', () => {
+  ipcMain.handle("window:minimize", () => minimizeMainWindow());
+  ipcMain.handle("window:toggle-maximize", () => toggleMainWindowMaximize());
+  ipcMain.handle("window:close", () => closeMainWindow());
+
+  app.on("second-instance", () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
@@ -190,17 +205,17 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.on('before-quit', () => {
+app.on("before-quit", () => {
   stopBackendProcess(backendProcess, ownsBackendProcess);
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-app.on('activate', () => {
+app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     bootstrap().catch((error) => {
       showFatalStartupError(error);
