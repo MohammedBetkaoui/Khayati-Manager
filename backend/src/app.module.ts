@@ -16,6 +16,7 @@ import { SettingsModule } from './settings/settings.module';
 import { WorkersModule } from './workers/workers.module';
 import { preparePayrollDatabase } from './database/prepare-payroll-database';
 import { prepareInvoiceDatabase } from './database/prepare-invoice-database';
+import { prepareInvoicePaymentsDatabase } from './database/prepare-invoice-payments-database';
 
 const defaultDatabasePath = join(__dirname, '..', 'database', 'khayati.sqlite');
 const configuredDatabasePath = process.env.KHAYATI_DATABASE_PATH;
@@ -32,6 +33,7 @@ if (!existsSync(databaseDir)) {
 
 preparePayrollDatabase(databasePath);
 prepareInvoiceDatabase(databasePath);
+prepareInvoicePaymentsDatabase(databasePath);
 
 @Module({
   imports: [

@@ -1,7 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { UpdateWorkshopSettingsDto } from './dto/update-workshop-settings.dto';
 
 @Controller('settings')
 export class SettingsController {
@@ -10,6 +19,16 @@ export class SettingsController {
   @Post()
   create(@Body() createSettingDto: CreateSettingDto) {
     return this.settingsService.create(createSettingDto);
+  }
+
+  @Get('workshop')
+  getWorkshopSettings() {
+    return this.settingsService.getWorkshopSettings();
+  }
+
+  @Patch('workshop')
+  updateWorkshopSettings(@Body() dto: UpdateWorkshopSettingsDto) {
+    return this.settingsService.updateWorkshopSettings(dto);
   }
 
   @Get()

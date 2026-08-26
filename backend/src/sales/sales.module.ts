@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FinishedProduct } from '../inventory/entities/finished-product.entity';
 import { ProductStockMovement } from '../inventory/entities/product-stock-movement.entity';
 import { ProductVariant } from '../inventory/entities/product-variant.entity';
+import { InvoicesModule } from '../invoices/invoices.module';
 import { CustomerMeasurement } from './entities/customer-measurement.entity';
 import { CustomerNote } from './entities/customer-note.entity';
 import { Customer } from './entities/customer.entity';
@@ -14,6 +15,7 @@ import { SalesService } from './sales.service';
 
 @Module({
   imports: [
+    InvoicesModule,
     TypeOrmModule.forFeature([
       Customer,
       Invoice,

@@ -25,10 +25,12 @@ import {
   Invoice,
   InvoiceWorkshopSnapshot,
 } from '../sales/entities/invoice.entity';
+import { Payment } from '../sales/entities/payment.entity';
 import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
 import { CancelInvoiceDto } from './dto/cancel-invoice.dto';
 import { CreateInvoiceFromOrderDto } from './dto/create-invoice-from-order.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
@@ -48,6 +50,7 @@ type InvoiceFinancialInput = {
   currency?: string;
   notes?: string;
   invoiceStatus?: InvoiceStatus;
+  initialPayment?: CreateInvoicePaymentDto;
 };
 
 type PreparedInvoiceLine = {
@@ -88,8 +91,6 @@ export class InvoicesService {
         'Use the from-order invoice operation for an existing order',
       );
     }
-    this.rejectInitialPayment(dto.initialPayment);
-
     return this.dataSource.transaction(async (manager) => {
       const customer = await this.requireActiveCustomer(
         manager,
@@ -103,14 +104,15 @@ export class InvoicesService {
         dto,
         null,
       );
+      if (dto.initialPayment) {
+        await this.recordInvoicePayment(manager, invoice, dto.initialPayment);
+      }
       await this.recalculateCustomerTotals(manager, customer);
       return this.loadInvoice(manager, invoice.id);
     });
   }
 
   async createFromOrder(orderId: number, dto: CreateInvoiceFromOrderDto) {
-    this.rejectInitialPayment(dto.initialPayment);
-
     return this.dataSource.transaction(async (manager) => {
       const order = await manager.getRepository(Order).findOne({
         where: { id: orderId },
@@ -152,6 +154,9 @@ export class InvoicesService {
         dto,
         order,
       );
+      if (dto.initialPayment) {
+        await this.recordInvoicePayment(manager, invoice, dto.initialPayment);
+      }
 
       if (requestedStatus === InvoiceStatus.ISSUED) {
         order.invoice = invoice;
@@ -226,8 +231,46 @@ export class InvoicesService {
     return this.loadInvoice(this.dataSource.manager, id);
   }
 
+  async addPayment(
+    invoiceId: number,
+    dto: CreateInvoicePaymentDto,
+    expectedCustomerId?: number,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const invoice = await this.loadInvoice(manager, invoiceId);
+      if (
+        expectedCustomerId !== undefined &&
+        invoice.customer.id !== expectedCustomerId
+      ) {
+        throw new BadRequestException(
+          'customerId does not match the invoice customer',
+        );
+      }
+      const payment = await this.recordInvoicePayment(manager, invoice, dto);
+      await this.recalculateCustomerTotals(manager, invoice.customer);
+      return {
+        payment,
+        invoice: await this.loadInvoice(manager, invoice.id),
+      };
+    });
+  }
+
+  async getPayments(invoiceId: number) {
+    await this.findOne(invoiceId);
+    const data = await this.dataSource.getRepository(Payment).find({
+      where: { invoice: { id: invoiceId } },
+      relations: { customer: true, invoice: true },
+      order: { date: 'DESC', createdAt: 'DESC', id: 'DESC' },
+    });
+    return { data };
+  }
+
   async updateDraft(id: number, dto: UpdateInvoiceDraftDto) {
-    this.rejectInitialPayment(dto.initialPayment);
+    if (dto.initialPayment) {
+      throw new BadRequestException(
+        'Use the invoice payment operation to add a payment',
+      );
+    }
     if (dto.invoiceStatus && dto.invoiceStatus !== InvoiceStatus.DRAFT) {
       throw new BadRequestException('Use the issue operation to issue a draft');
     }
@@ -495,6 +538,102 @@ export class InvoicesService {
     return repository.save(items);
   }
 
+  private async recordInvoicePayment(
+    manager: EntityManager,
+    invoice: Invoice,
+    dto: CreateInvoicePaymentDto,
+  ) {
+    if (invoice.invoiceStatus === InvoiceStatus.DRAFT) {
+      throw new BadRequestException('A draft invoice cannot receive payments');
+    }
+    if (invoice.invoiceStatus === InvoiceStatus.CANCELLED) {
+      throw new BadRequestException(
+        'A cancelled invoice cannot receive payments',
+      );
+    }
+
+    const amount = Number(dto.amount);
+    if (
+      !Number.isFinite(amount) ||
+      Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-6
+    ) {
+      throw new BadRequestException(
+        'Payment amount must contain at most two decimal places',
+      );
+    }
+    const amountMinor = toMinorUnits(amount);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+      throw new BadRequestException('Payment amount must be greater than zero');
+    }
+
+    const paymentRepository = manager.getRepository(Payment);
+    const existingPayments = await paymentRepository.find({
+      where: { invoice: { id: invoice.id } },
+    });
+    const linkedPaymentsMinor = existingPayments.reduce(
+      (sum, payment) =>
+        sum +
+        (Number.isInteger(payment.amountMinor)
+          ? payment.amountMinor
+          : toMinorUnits(payment.amount)),
+      0,
+    );
+    const recordedPaidMinor = Math.max(
+      linkedPaymentsMinor,
+      this.invoiceAmountMinor(invoice, 'paid'),
+    );
+    const totalAmountMinor = this.invoiceAmountMinor(invoice, 'total');
+    if (recordedPaidMinor > totalAmountMinor) {
+      throw new ConflictException(
+        'Invoice payment history exceeds the invoice total',
+      );
+    }
+
+    const remainingAmountMinor = totalAmountMinor - recordedPaidMinor;
+    if (amountMinor > remainingAmountMinor) {
+      throw new BadRequestException(
+        `Payment exceeds remaining amount (${fromMinorUnits(remainingAmountMinor)})`,
+      );
+    }
+
+    this.applyPaymentState(
+      invoice,
+      totalAmountMinor,
+      recordedPaidMinor + amountMinor,
+    );
+    await manager.getRepository(Invoice).save(invoice);
+    return paymentRepository.save(
+      paymentRepository.create({
+        customer: invoice.customer,
+        invoice,
+        amount: fromMinorUnits(amountMinor),
+        amountMinor,
+        paymentMethod: dto.paymentMethod,
+        date: dto.paymentDate ?? this.today(),
+        reference: this.optionalText(dto.reference),
+        notes: this.optionalText(dto.notes),
+      }),
+    );
+  }
+
+  private applyPaymentState(
+    invoice: Invoice,
+    totalAmountMinor: number,
+    paidAmountMinor: number,
+  ) {
+    const remainingAmountMinor = totalAmountMinor - paidAmountMinor;
+    invoice.paidAmountMinor = paidAmountMinor;
+    invoice.paidAmount = fromMinorUnits(paidAmountMinor);
+    invoice.remainingAmountMinor = remainingAmountMinor;
+    invoice.remainingAmount = fromMinorUnits(remainingAmountMinor);
+    invoice.paymentStatus =
+      remainingAmountMinor === 0
+        ? PaymentStatus.PAID
+        : paidAmountMinor > 0
+          ? PaymentStatus.PARTIALLY_PAID
+          : PaymentStatus.UNPAID;
+  }
+
   private async resolveManualLines(
     manager: EntityManager,
     items: InvoiceLineDto[],
@@ -721,14 +860,6 @@ export class InvoicesService {
       stampPath: settings.stampPath ?? null,
       invoiceFooter: settings.invoiceFooter ?? null,
     };
-  }
-
-  private rejectInitialPayment(initialPayment: unknown) {
-    if (initialPayment) {
-      throw new BadRequestException(
-        'Initial payments will be available with the payment workflow',
-      );
-    }
   }
 
   private optionalText(value: string | null | undefined) {

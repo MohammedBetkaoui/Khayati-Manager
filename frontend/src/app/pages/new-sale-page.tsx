@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   CircleDollarSign,
+  FileSearch,
   Minus,
   PackageSearch,
   Plus,
@@ -13,6 +14,10 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { CustomerFormModal } from "../components/customer-form-modal";
+import {
+  InvoiceDraftPreviewModal,
+  type InvoicePreviewData,
+} from "../components/invoices/invoice-preview-modal";
 import {
   PageHeading,
   StatePanel,
@@ -30,6 +35,7 @@ import type {
   ApiInvoice,
   FinishedProduct,
   ProductVariant,
+  WorkshopSettings,
 } from "../lib/commerce";
 
 type CartLine = {
@@ -129,6 +135,7 @@ export function NewSalePage() {
   const customerFromUrl = searchParams.get("customerId");
   const [customers, setCustomers] = useState<ApiCustomer[]>([]);
   const [products, setProducts] = useState<FinishedProduct[]>([]);
+  const [workshop, setWorkshop] = useState<WorkshopSettings | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     customerFromUrl ?? "",
   );
@@ -139,14 +146,18 @@ export function NewSalePage() {
   const [category, setCategory] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discount, setDiscount] = useState("0");
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentReference, setPaymentReference] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customerModal, setCustomerModal] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -154,18 +165,26 @@ export function NewSalePage() {
       setLoading(true);
       setError(null);
       try {
-        const [customerList, productList] = await Promise.all([
-          fetchJson<{ data: ApiCustomer[] }>(
-            "/sales/customers?limit=100&status=ACTIVE",
-            { signal: controller.signal },
-          ),
-          fetchJson<{ data: FinishedProduct[] }>(
-            "/inventory/products?limit=100&status=ACTIVE&available=true",
-            { signal: controller.signal },
-          ),
-        ]);
+        const [customerList, productList, workshopSettings] = await Promise.all(
+          [
+            fetchJson<{ data: ApiCustomer[] }>(
+              "/sales/customers?limit=100&status=ACTIVE",
+              { signal: controller.signal },
+            ),
+            fetchJson<{ data: FinishedProduct[] }>(
+              "/inventory/products?limit=100&status=ACTIVE&available=true",
+              { signal: controller.signal },
+            ),
+            fetchJson<WorkshopSettings>("/settings/workshop", {
+              signal: controller.signal,
+            }),
+          ],
+        );
         setCustomers(customerList.data);
         setProducts(productList.data);
+        setWorkshop(workshopSettings);
+        setTaxEnabled(workshopSettings.defaultTaxEnabled);
+        setTaxRate(String(workshopSettings.defaultTaxRate ?? 0));
         if (
           customerFromUrl &&
           customerList.data.some(
@@ -214,9 +233,15 @@ export function NewSalePage() {
     0,
   );
   const numericDiscount = Math.max(0, Number(discount) || 0);
-  const total = Math.max(0, subtotal - numericDiscount);
+  const amountAfterDiscount = Math.max(0, subtotal - numericDiscount);
+  const numericTaxRate = Math.min(100, Math.max(0, Number(taxRate) || 0));
+  const taxAmount = roundMoney(
+    taxEnabled ? (amountAfterDiscount * numericTaxRate) / 100 : 0,
+  );
+  const total = roundMoney(amountAfterDiscount + taxAmount);
   const numericPaid = Math.max(0, Number(paidAmount) || 0);
   const remaining = Math.max(0, total - numericPaid);
+  const issueDate = toDateInputValue(new Date());
 
   function addToCart(product: FinishedProduct, variant: ProductVariant) {
     setError(null);
@@ -267,7 +292,7 @@ export function NewSalePage() {
     );
   }
 
-  async function submit(event: FormEvent) {
+  function openPreview(event: FormEvent) {
     event.preventDefault();
     if (!selectedCustomer) {
       setError(
@@ -301,7 +326,21 @@ export function NewSalePage() {
       );
       return;
     }
+    if (taxEnabled && (numericTaxRate < 0 || numericTaxRate > 100)) {
+      setError(
+        lang === "ar"
+          ? "نسبة الضريبة يجب أن تكون بين 0 و100."
+          : "Le taux de taxe doit être compris entre 0 et 100.",
+      );
+      return;
+    }
 
+    setError(null);
+    setPreviewOpen(true);
+  }
+
+  async function confirmSale() {
+    if (!selectedCustomer || !cart.length) return;
     setSaving(true);
     setError(null);
     try {
@@ -316,8 +355,14 @@ export function NewSalePage() {
             unitPrice: line.unitPrice,
           })),
           discount: numericDiscount,
+          taxEnabled,
+          taxRate: taxEnabled ? numericTaxRate : undefined,
           paidAmount: numericPaid,
           paymentMethod: numericPaid > 0 ? paymentMethod : undefined,
+          paymentReference:
+            numericPaid > 0 && paymentReference.trim()
+              ? paymentReference.trim()
+              : undefined,
           dueDate: remaining > 0 && dueDate ? dueDate : undefined,
           notes: notes || undefined,
         }),
@@ -331,6 +376,37 @@ export function NewSalePage() {
       setSaving(false);
     }
   }
+
+  const previewData: InvoicePreviewData | null = selectedCustomer
+    ? {
+        customer: selectedCustomer,
+        workshop,
+        issueDate,
+        dueDate: remaining > 0 && dueDate ? dueDate : null,
+        lines: cart.map((line) => ({
+          key: line.key,
+          productName: line.productName,
+          reference: line.productSku,
+          variant: line.variantLabel,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+        })),
+        subtotal,
+        discount: numericDiscount,
+        taxEnabled,
+        taxRate: numericTaxRate,
+        taxAmount,
+        totalAmount: total,
+        paidAmount: numericPaid,
+        remainingAmount: remaining,
+        paymentMethod: numericPaid > 0 ? paymentMethod : null,
+        paymentReference:
+          numericPaid > 0 && paymentReference.trim()
+            ? paymentReference.trim()
+            : null,
+        notes: notes.trim() || null,
+      }
+    : null;
 
   const text =
     lang === "ar"
@@ -354,13 +430,15 @@ export function NewSalePage() {
           lineTotal: "المجموع",
           subtotal: "المجموع الفرعي",
           discount: "التخفيض",
+          tax: "الضريبة",
+          taxRate: "نسبة الضريبة",
           total: "الإجمالي النهائي",
           paid: "المبلغ المدفوع",
           remaining: "المتبقي",
           method: "طريقة الدفع",
           due: "تاريخ الاستحقاق",
           notes: "ملاحظات",
-          validate: "تأكيد البيع وإصدار الفاتورة",
+          validate: "معاينة الفاتورة",
           emptyCart: "السلة فارغة. أضف منتجات من القائمة.",
         }
       : {
@@ -383,13 +461,15 @@ export function NewSalePage() {
           lineTotal: "Sous-total",
           subtotal: "Sous-total",
           discount: "Remise",
+          tax: "Taxe",
+          taxRate: "Taux de taxe",
           total: "Total final",
           paid: "Montant payé",
           remaining: "Reste à payer",
           method: "Mode de paiement",
           due: "Échéance",
           notes: "Notes",
-          validate: "Valider la vente et créer la facture",
+          validate: "Prévisualiser la facture",
           emptyCart:
             "Le panier est vide. Ajoutez des produits depuis le catalogue.",
         };
@@ -411,7 +491,7 @@ export function NewSalePage() {
       </div>
       {!loading && !error ? (
         <form
-          onSubmit={submit}
+          onSubmit={openPreview}
           className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(380px,0.8fr)]"
         >
           <div className="flex min-w-0 flex-col gap-5">
@@ -782,6 +862,35 @@ export function NewSalePage() {
                   style={{ textAlign: "end" }}
                 />
               </div>
+              <div className="grid grid-cols-2 items-center gap-3">
+                <label
+                  className="flex items-center gap-2"
+                  style={{ fontSize: 13, color: palette.muted }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={taxEnabled}
+                    onChange={(event) => setTaxEnabled(event.target.checked)}
+                    className="h-4 w-4 accent-[#123c4a]"
+                  />
+                  {text.tax}
+                </label>
+                <TextInput
+                  aria-label={text.taxRate}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  type="number"
+                  value={taxRate}
+                  disabled={!taxEnabled}
+                  onChange={(event) => setTaxRate(event.target.value)}
+                  style={{ textAlign: "end" }}
+                />
+              </div>
+              <SummaryLine
+                label={`${text.tax}${taxEnabled ? ` (${numericTaxRate}%)` : ""}`}
+                value={formatMoney(taxAmount, lang)}
+              />
               <SummaryLine
                 label={text.total}
                 value={formatMoney(total, lang)}
@@ -825,6 +934,19 @@ export function NewSalePage() {
                   </option>
                 </Select>
               </Field>
+              {numericPaid > 0 ? (
+                <Field
+                  label={lang === "ar" ? "مرجع الدفع" : "Référence du paiement"}
+                >
+                  <TextInput
+                    value={paymentReference}
+                    onChange={(event) =>
+                      setPaymentReference(event.target.value)
+                    }
+                    placeholder={lang === "ar" ? "اختياري" : "Facultatif"}
+                  />
+                </Field>
+              ) : null}
               {remaining > 0 ? (
                 <Field label={text.due}>
                   <TextInput
@@ -862,7 +984,7 @@ export function NewSalePage() {
                 full
                 disabled={saving || !cart.length || !selectedCustomer}
               >
-                <CheckCircle2 size={17} />{" "}
+                {saving ? <CheckCircle2 size={17} /> : <FileSearch size={17} />}{" "}
                 {saving
                   ? lang === "ar"
                     ? "جاري تأكيد البيع..."
@@ -883,8 +1005,27 @@ export function NewSalePage() {
           setSelectedCustomerId(String(customer.id));
         }}
       />
+      <InvoiceDraftPreviewModal
+        open={previewOpen}
+        data={previewData}
+        lang={lang}
+        saving={saving}
+        onClose={() => setPreviewOpen(false)}
+        onConfirm={() => void confirmSale()}
+      />
     </PageBackground>
   );
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function SummaryLine({

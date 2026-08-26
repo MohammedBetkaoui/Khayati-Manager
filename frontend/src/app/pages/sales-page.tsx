@@ -11,7 +11,6 @@ import {
   ShoppingBag,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
@@ -22,6 +21,7 @@ import {
   formatDate,
   formatMoney,
 } from "../components/commerce-ui";
+import { InvoicePdfModal } from "../components/invoices/invoice-preview-modal";
 import { Badge, Button, Field, Select, TextInput } from "../components/kit";
 import { ModalShell, Textarea } from "../components/modal-shell";
 import { PageBackground } from "../components/page-background";
@@ -254,6 +254,7 @@ export function SalesPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [payInvoice, setPayInvoice] = useState<ApiInvoice | null>(null);
+  const [pdfInvoice, setPdfInvoice] = useState<ApiInvoice | null>(null);
   const [notice, setNotice] = useState<string | null>(
     searchParams.get("created")
       ? lang === "ar"
@@ -572,6 +573,7 @@ export function SalesPage() {
               labels={text}
               selectedId={selected?.id ?? null}
               onOpen={openInvoice}
+              onPdf={setPdfInvoice}
               onPay={setPayInvoice}
               onDelete={(invoice) => void deleteInvoice(invoice)}
             />
@@ -590,6 +592,7 @@ export function SalesPage() {
           lang={lang}
           onClose={closeDetails}
           onPay={() => setPayInvoice(selected)}
+          onPdf={() => setPdfInvoice(selected)}
           onCustomer={() =>
             navigate(`/customer-profile/${selected.customerId}`)
           }
@@ -607,6 +610,11 @@ export function SalesPage() {
           );
           reload();
         }}
+      />
+      <InvoicePdfModal
+        invoice={pdfInvoice}
+        lang={lang}
+        onClose={() => setPdfInvoice(null)}
       />
     </PageBackground>
   );
@@ -633,6 +641,7 @@ function InvoicesTable({
   labels,
   selectedId,
   onOpen,
+  onPdf,
   onPay,
   onDelete,
 }: {
@@ -641,6 +650,7 @@ function InvoicesTable({
   labels: Record<string, string>;
   selectedId: number | null;
   onOpen: (invoice: ApiInvoice) => void;
+  onPdf: (invoice: ApiInvoice) => void;
   onPay: (invoice: ApiInvoice) => void;
   onDelete: (invoice: ApiInvoice) => void;
 }) {
@@ -763,6 +773,17 @@ function InvoicesTable({
                     >
                       <Eye size={15} />
                     </button>
+                    <button
+                      type="button"
+                      aria-label={
+                        lang === "ar" ? "معاينة ملف PDF" : "Aperçu PDF"
+                      }
+                      onClick={() => onPdf(invoice)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-amber-50"
+                      style={{ color: "#a87d3c" }}
+                    >
+                      <FileText size={15} />
+                    </button>
                     {invoice.remainingAmount > 0 ? (
                       <button
                         type="button"
@@ -801,242 +822,235 @@ function InvoiceDetails({
   lang,
   onClose,
   onPay,
+  onPdf,
   onCustomer,
 }: {
   invoice: ApiInvoice;
   lang: "ar" | "fr";
   onClose: () => void;
   onPay: () => void;
+  onPdf: () => void;
   onCustomer: () => void;
 }) {
   const colors = paymentColors(invoice.paymentStatusCode);
   return (
-    <section
-      className="mt-5 print:border-0"
-      style={{
-        backgroundColor: palette.surface,
-        border: `1px solid ${palette.border}`,
-        borderRadius: 22,
-        padding: 22,
-      }}
+    <ModalShell
+      open
+      onClose={onClose}
+      title={`${lang === "ar" ? "تفاصيل البيع" : "Détail de la vente"} · ${invoice.invoiceNumber}`}
+      maxWidth={1180}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-11 w-11 items-center justify-center rounded-xl"
-              style={{
-                backgroundColor: "rgba(18,60,74,0.08)",
-                color: palette.primary,
-              }}
-            >
-              <Receipt size={20} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 19, fontWeight: 900 }}>
-                {invoice.invoiceNumber}
-              </h2>
-              <p style={{ fontSize: 12, color: palette.muted }}>
-                {formatDate(invoice.date, lang)}
-              </p>
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-xl"
+                style={{
+                  backgroundColor: "rgba(18,60,74,0.08)",
+                  color: palette.primary,
+                }}
+              >
+                <Receipt size={20} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 19, fontWeight: 900 }}>
+                  {invoice.invoiceNumber}
+                </h2>
+                <p style={{ fontSize: 12, color: palette.muted }}>
+                  {formatDate(invoice.date, lang)}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2 print:hidden">
-          {invoice.remainingAmount > 0 ? (
-            <Button variant="primary" onClick={onPay}>
-              <CreditCard size={16} />{" "}
-              {lang === "ar" ? "تسجيل دفعة" : "Paiement"}
+          <div className="flex items-center gap-2 print:hidden">
+            {invoice.remainingAmount > 0 ? (
+              <Button variant="primary" onClick={onPay}>
+                <CreditCard size={16} />{" "}
+                {lang === "ar" ? "تسجيل دفعة" : "Paiement"}
+              </Button>
+            ) : null}
+            <Button onClick={onPdf}>
+              <Printer size={16} />{" "}
+              {lang === "ar" ? "PDF / طباعة" : "PDF / Imprimer"}
             </Button>
-          ) : null}
-          <Button onClick={() => window.print()}>
-            <Printer size={16} /> {lang === "ar" ? "طباعة" : "Imprimer"}
-          </Button>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border"
-            style={{ borderColor: palette.border }}
-          >
-            <X size={17} />
-          </button>
-        </div>
-      </div>
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div
-          className="rounded-2xl p-4"
-          style={{ backgroundColor: palette.bg }}
-        >
-          <div style={{ fontSize: 11.5, color: palette.muted }}>
-            {lang === "ar" ? "الزبون" : "Client"}
-          </div>
-          <button
-            type="button"
-            onClick={onCustomer}
-            className="mt-1 text-start"
-            style={{ fontSize: 15, fontWeight: 900, color: palette.primary }}
-          >
-            {invoice.customerName}
-          </button>
-          <div style={{ fontSize: 12, direction: "ltr", textAlign: "start" }}>
-            {invoice.customerPhone}
           </div>
         </div>
-        <div
-          className="rounded-2xl p-4"
-          style={{ backgroundColor: palette.bg }}
-        >
-          <div style={{ fontSize: 11.5, color: palette.muted }}>
-            {lang === "ar" ? "حالة الدفع" : "Statut du paiement"}
-          </div>
-          <div className="mt-2">
-            <Badge bg={colors.bg} fg={colors.fg}>
-              {statusLabel(invoice.paymentStatusCode, lang)}
-            </Badge>
-          </div>
-          {invoice.dueDate ? (
-            <div className="mt-2 text-xs" style={{ color: palette.muted }}>
-              {lang === "ar" ? "الاستحقاق" : "Échéance"}:{" "}
-              {formatDate(invoice.dueDate, lang)}
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div
+            className="rounded-2xl p-4"
+            style={{ backgroundColor: palette.bg }}
+          >
+            <div style={{ fontSize: 11.5, color: palette.muted }}>
+              {lang === "ar" ? "الزبون" : "Client"}
             </div>
-          ) : null}
-        </div>
-        <div
-          className="rounded-2xl p-4"
-          style={{
-            background:
-              "linear-gradient(120deg, rgba(18,60,74,0.08), rgba(195,154,91,0.12))",
-          }}
-        >
-          <div style={{ fontSize: 11.5, color: palette.muted }}>
-            {lang === "ar" ? "الإجمالي النهائي" : "Total final"}
+            <button
+              type="button"
+              onClick={onCustomer}
+              className="mt-1 text-start"
+              style={{ fontSize: 15, fontWeight: 900, color: palette.primary }}
+            >
+              {invoice.customerName}
+            </button>
+            <div style={{ fontSize: 12, direction: "ltr", textAlign: "start" }}>
+              {invoice.customerPhone}
+            </div>
           </div>
           <div
-            className="mt-1"
-            style={{ fontSize: 23, fontWeight: 900, color: palette.primary }}
+            className="rounded-2xl p-4"
+            style={{ backgroundColor: palette.bg }}
           >
-            {formatMoney(invoice.totalAmount, lang)}
-          </div>
-        </div>
-      </div>
-      <div className="mt-5 overflow-x-auto">
-        <table
-          className="w-full"
-          style={{ minWidth: 650, borderCollapse: "collapse" }}
-        >
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
-              {(lang === "ar"
-                ? [
-                    "المنتج",
-                    "المرجع",
-                    "التنويعة",
-                    "الكمية",
-                    "سعر الوحدة",
-                    "المجموع",
-                  ]
-                : [
-                    "Produit",
-                    "Référence",
-                    "Variante",
-                    "Quantité",
-                    "Prix unitaire",
-                    "Total",
-                  ]
-              ).map((label) => (
-                <th key={label} style={headStyle}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {invoice.items.map((item) => (
-              <tr
-                key={item.id}
-                style={{ borderBottom: `1px solid ${palette.border}` }}
-              >
-                <td style={{ ...cellStyle, fontWeight: 800 }}>
-                  {item.productName}
-                </td>
-                <td style={cellStyle}>{item.productSku || "-"}</td>
-                <td style={cellStyle}>{item.variant || "-"}</td>
-                <td style={{ ...cellStyle, fontWeight: 800 }}>
-                  {item.quantity}
-                </td>
-                <td style={cellStyle}>{formatMoney(item.unitPrice, lang)}</td>
-                <td style={{ ...cellStyle, fontWeight: 900 }}>
-                  {formatMoney(item.total, lang)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div
-        className="mt-5 ms-auto flex max-w-md flex-col gap-2 rounded-2xl p-5"
-        style={{ backgroundColor: palette.bg }}
-      >
-        <AmountLine
-          label={lang === "ar" ? "المجموع الفرعي" : "Sous-total"}
-          value={formatMoney(invoice.subtotal, lang)}
-        />
-        <AmountLine
-          label={lang === "ar" ? "التخفيض" : "Remise"}
-          value={formatMoney(invoice.discount, lang)}
-        />
-        <AmountLine
-          label={lang === "ar" ? "الإجمالي" : "Total"}
-          value={formatMoney(invoice.totalAmount, lang)}
-          strong
-        />
-        <AmountLine
-          label={lang === "ar" ? "المدفوع" : "Payé"}
-          value={formatMoney(invoice.paidAmount, lang)}
-          green
-        />
-        <AmountLine
-          label={lang === "ar" ? "المتبقي" : "Reste"}
-          value={formatMoney(invoice.remainingAmount, lang)}
-          danger={invoice.remainingAmount > 0}
-        />
-      </div>
-      {invoice.payments.length ? (
-        <div className="mt-5">
-          <h3 style={{ fontSize: 14, fontWeight: 900 }}>
-            {lang === "ar" ? "سجل المدفوعات" : "Paiements"}
-          </h3>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {invoice.payments.map((payment) => (
-              <div
-                key={payment.id}
-                className="rounded-xl border px-4 py-3"
-                style={{ borderColor: palette.border }}
-              >
-                <div
-                  style={{ fontSize: 13, fontWeight: 900, color: "#4d8a6a" }}
-                >
-                  {formatMoney(payment.amount, lang)}
-                </div>
-                <div style={{ fontSize: 11.5, color: palette.muted }}>
-                  {formatDate(payment.date, lang)} · {payment.paymentMethod}
-                </div>
+            <div style={{ fontSize: 11.5, color: palette.muted }}>
+              {lang === "ar" ? "حالة الدفع" : "Statut du paiement"}
+            </div>
+            <div className="mt-2">
+              <Badge bg={colors.bg} fg={colors.fg}>
+                {statusLabel(invoice.paymentStatusCode, lang)}
+              </Badge>
+            </div>
+            {invoice.dueDate ? (
+              <div className="mt-2 text-xs" style={{ color: palette.muted }}>
+                {lang === "ar" ? "الاستحقاق" : "Échéance"}:{" "}
+                {formatDate(invoice.dueDate, lang)}
               </div>
-            ))}
+            ) : null}
+          </div>
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background:
+                "linear-gradient(120deg, rgba(18,60,74,0.08), rgba(195,154,91,0.12))",
+            }}
+          >
+            <div style={{ fontSize: 11.5, color: palette.muted }}>
+              {lang === "ar" ? "الإجمالي النهائي" : "Total final"}
+            </div>
+            <div
+              className="mt-1"
+              style={{ fontSize: 23, fontWeight: 900, color: palette.primary }}
+            >
+              {formatMoney(invoice.totalAmount, lang)}
+            </div>
           </div>
         </div>
-      ) : null}
-      {invoice.notes ? (
+        <div className="mt-5 overflow-x-auto">
+          <table
+            className="w-full"
+            style={{ minWidth: 650, borderCollapse: "collapse" }}
+          >
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
+                {(lang === "ar"
+                  ? [
+                      "المنتج",
+                      "المرجع",
+                      "التنويعة",
+                      "الكمية",
+                      "سعر الوحدة",
+                      "المجموع",
+                    ]
+                  : [
+                      "Produit",
+                      "Référence",
+                      "Variante",
+                      "Quantité",
+                      "Prix unitaire",
+                      "Total",
+                    ]
+                ).map((label) => (
+                  <th key={label} style={headStyle}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.items.map((item) => (
+                <tr
+                  key={item.id}
+                  style={{ borderBottom: `1px solid ${palette.border}` }}
+                >
+                  <td style={{ ...cellStyle, fontWeight: 800 }}>
+                    {item.productName}
+                  </td>
+                  <td style={cellStyle}>{item.productSku || "-"}</td>
+                  <td style={cellStyle}>{item.variant || "-"}</td>
+                  <td style={{ ...cellStyle, fontWeight: 800 }}>
+                    {item.quantity}
+                  </td>
+                  <td style={cellStyle}>{formatMoney(item.unitPrice, lang)}</td>
+                  <td style={{ ...cellStyle, fontWeight: 900 }}>
+                    {formatMoney(item.total, lang)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div
-          className="mt-5 rounded-xl p-4 text-sm"
+          className="mt-5 ms-auto flex max-w-md flex-col gap-2 rounded-2xl p-5"
           style={{ backgroundColor: palette.bg }}
         >
-          <strong>{lang === "ar" ? "ملاحظات: " : "Notes : "}</strong>
-          {invoice.notes}
+          <AmountLine
+            label={lang === "ar" ? "المجموع الفرعي" : "Sous-total"}
+            value={formatMoney(invoice.subtotal, lang)}
+          />
+          <AmountLine
+            label={lang === "ar" ? "التخفيض" : "Remise"}
+            value={formatMoney(invoice.discount, lang)}
+          />
+          <AmountLine
+            label={lang === "ar" ? "الإجمالي" : "Total"}
+            value={formatMoney(invoice.totalAmount, lang)}
+            strong
+          />
+          <AmountLine
+            label={lang === "ar" ? "المدفوع" : "Payé"}
+            value={formatMoney(invoice.paidAmount, lang)}
+            green
+          />
+          <AmountLine
+            label={lang === "ar" ? "المتبقي" : "Reste"}
+            value={formatMoney(invoice.remainingAmount, lang)}
+            danger={invoice.remainingAmount > 0}
+          />
         </div>
-      ) : null}
-    </section>
+        {invoice.payments.length ? (
+          <div className="mt-5">
+            <h3 style={{ fontSize: 14, fontWeight: 900 }}>
+              {lang === "ar" ? "سجل المدفوعات" : "Paiements"}
+            </h3>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {invoice.payments.map((payment) => (
+                <div
+                  key={payment.id}
+                  className="rounded-xl border px-4 py-3"
+                  style={{ borderColor: palette.border }}
+                >
+                  <div
+                    style={{ fontSize: 13, fontWeight: 900, color: "#4d8a6a" }}
+                  >
+                    {formatMoney(payment.amount, lang)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: palette.muted }}>
+                    {formatDate(payment.date, lang)} · {payment.paymentMethod}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {invoice.notes ? (
+          <div
+            className="mt-5 rounded-xl p-4 text-sm"
+            style={{ backgroundColor: palette.bg }}
+          >
+            <strong>{lang === "ar" ? "ملاحظات: " : "Notes : "}</strong>
+            {invoice.notes}
+          </div>
+        ) : null}
+      </div>
+    </ModalShell>
   );
 }
 

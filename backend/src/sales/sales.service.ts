@@ -10,7 +10,9 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   CustomerStatus,
   CustomerType,
+  DiscountType,
   FinishedProductStatus,
+  InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
   ProductStockMovementType,
@@ -18,6 +20,9 @@ import {
 import { FinishedProduct } from '../inventory/entities/finished-product.entity';
 import { ProductStockMovement } from '../inventory/entities/product-stock-movement.entity';
 import { ProductVariant } from '../inventory/entities/product-variant.entity';
+import { InvoicesService } from '../invoices/invoices.service';
+import { InvoiceNumberService } from '../invoices/invoice-number.service';
+import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
 import { CreateCustomerNoteDto } from './dto/create-customer-note.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import {
@@ -80,10 +85,11 @@ export class SalesService implements OnModuleInit {
     @InjectRepository(FinishedProduct)
     private readonly productsRepository: Repository<FinishedProduct>,
     private readonly dataSource: DataSource,
+    private readonly invoiceNumberService: InvoiceNumberService,
+    private readonly invoicePaymentsService: InvoicesService,
   ) {}
 
   async onModuleInit() {
-    await this.seedSalesIfEmpty();
     await this.recalculateAllCustomers();
   }
 
@@ -276,7 +282,19 @@ export class SalesService implements OnModuleInit {
         preparedItems.reduce((sum, item) => sum + item.total, 0),
       );
       const discount = this.roundMoney(dto.discount ?? 0);
-      const totalAmount = this.calculateTotalAmount(subtotal, discount);
+      const amountAfterDiscount = this.calculateTotalAmount(subtotal, discount);
+      const settings = await manager.getRepository(WorkshopSettings).findOne({
+        where: {},
+        order: { id: 'ASC' },
+      });
+      const taxEnabled = dto.taxEnabled ?? settings?.defaultTaxEnabled ?? false;
+      const taxRate = taxEnabled
+        ? (dto.taxRate ?? settings?.defaultTaxRate ?? 0)
+        : 0;
+      const taxAmount = this.roundMoney(
+        taxEnabled ? (amountAfterDiscount * taxRate) / 100 : 0,
+      );
+      const totalAmount = this.roundMoney(amountAfterDiscount + taxAmount);
       const paidAmount = this.roundMoney(dto.paidAmount ?? 0);
       this.validateInvoiceAmounts(totalAmount, paidAmount, discount, subtotal);
       if (paidAmount > 0 && !dto.paymentMethod) {
@@ -285,18 +303,50 @@ export class SalesService implements OnModuleInit {
         );
       }
 
+      const issueDate = dto.date ?? this.toDateKey(new Date());
       const invoice = await manager.getRepository(Invoice).save(
         manager.getRepository(Invoice).create({
-          invoiceNumber: await this.nextInvoiceNumber(manager),
+          invoiceNumber: await this.invoiceNumberService.next(
+            manager,
+            issueDate,
+          ),
           customer,
-          date: dto.date ?? this.toDateKey(new Date()),
+          customerSnapshot: {
+            fullName: customer.fullName,
+            phone: customer.phone,
+            address: customer.address ?? null,
+            email: customer.email ?? null,
+          },
+          workshopSnapshot: settings
+            ? {
+                workshopName: settings.workshopName,
+                commercialName: settings.commercialName ?? null,
+                address: settings.address ?? null,
+                phone: settings.phone ?? null,
+                email: settings.email ?? null,
+                taxNumber: settings.taxNumber ?? null,
+                commercialRegister: settings.commercialRegister ?? null,
+                logoPath: settings.logoPath ?? null,
+                stampPath: settings.stampPath ?? null,
+                invoiceFooter: settings.invoiceFooter ?? null,
+              }
+            : null,
+          date: issueDate,
           dueDate: dto.dueDate ?? null,
           subtotal,
           discount,
+          discountType: discount > 0 ? DiscountType.FIXED : DiscountType.NONE,
+          discountValue: discount,
+          discountAmount: discount,
+          taxEnabled,
+          taxRate,
+          taxAmount,
           totalAmount,
           paidAmount,
           remainingAmount: this.roundMoney(totalAmount - paidAmount),
           paymentStatus: this.resolvePaymentStatus(totalAmount, paidAmount),
+          invoiceStatus: InvoiceStatus.ISSUED,
+          currency: settings?.defaultCurrency ?? 'DZD',
           notes: this.optionalText(dto.notes),
         }),
       );
@@ -312,6 +362,7 @@ export class SalesService implements OnModuleInit {
             amount: paidAmount,
             paymentMethod: dto.paymentMethod,
             date: invoice.date,
+            reference: this.optionalText(dto.paymentReference),
             notes: 'Initial sale payment',
           }),
         );
@@ -364,9 +415,22 @@ export class SalesService implements OnModuleInit {
 
       if (dto.discount !== undefined)
         invoice.discount = this.roundMoney(dto.discount);
-      invoice.totalAmount = this.calculateTotalAmount(
+      invoice.discountType =
+        invoice.discount > 0 ? DiscountType.FIXED : DiscountType.NONE;
+      invoice.discountValue = invoice.discount;
+      invoice.discountAmount = invoice.discount;
+      const amountAfterDiscount = this.calculateTotalAmount(
         invoice.subtotal,
         invoice.discount,
+      );
+      if (dto.taxEnabled !== undefined) invoice.taxEnabled = dto.taxEnabled;
+      if (dto.taxRate !== undefined) invoice.taxRate = dto.taxRate;
+      if (!invoice.taxEnabled) invoice.taxRate = 0;
+      invoice.taxAmount = this.roundMoney(
+        invoice.taxEnabled ? (amountAfterDiscount * invoice.taxRate) / 100 : 0,
+      );
+      invoice.totalAmount = this.roundMoney(
+        amountAfterDiscount + invoice.taxAmount,
       );
 
       const recordedPayments = this.roundMoney(
@@ -399,6 +463,7 @@ export class SalesService implements OnModuleInit {
             amount: this.roundMoney(requestedPaid - currentPaid),
             paymentMethod: dto.paymentMethod,
             date: dto.date ?? this.toDateKey(new Date()),
+            reference: this.optionalText(dto.paymentReference),
             notes: 'Payment recorded during sale update',
           }),
         );
@@ -450,51 +515,20 @@ export class SalesService implements OnModuleInit {
   }
 
   async createPayment(dto: CreatePaymentDto) {
-    const paymentId = await this.dataSource.transaction(async (manager) => {
-      const invoice = await this.findInvoiceOrFail(dto.invoiceId, manager);
-      if (invoice.customer.id !== dto.customerId) {
-        throw new BadRequestException(
-          'customerId does not match the sale customer',
-        );
-      }
-      const amount = this.roundMoney(dto.amount);
-      if (amount > invoice.remainingAmount) {
-        throw new BadRequestException(
-          `Payment exceeds remaining amount (${invoice.remainingAmount})`,
-        );
-      }
-      const payment = await manager.getRepository(Payment).save(
-        manager.getRepository(Payment).create({
-          customer: invoice.customer,
-          invoice,
-          amount,
-          paymentMethod: dto.paymentMethod,
-          date: dto.date ?? this.toDateKey(new Date()),
-          reference: this.optionalText(dto.reference),
-          notes: this.optionalText(dto.notes),
-        }),
-      );
-      invoice.paidAmount = this.roundMoney(invoice.paidAmount + amount);
-      invoice.remainingAmount = this.roundMoney(
-        invoice.totalAmount - invoice.paidAmount,
-      );
-      invoice.paymentStatus = this.resolvePaymentStatus(
-        invoice.totalAmount,
-        invoice.paidAmount,
-      );
-      await manager.getRepository(Invoice).save(invoice);
-      await this.recalculateCustomer(manager, invoice.customer.id);
-      return payment.id;
-    });
-
-    const payment = await this.paymentsRepository.findOne({
-      where: { id: paymentId },
-      relations: { customer: true, invoice: true },
-    });
-    if (!payment) throw new NotFoundException('Payment not found');
+    const result = await this.invoicePaymentsService.addPayment(
+      dto.invoiceId,
+      {
+        amount: dto.amount,
+        paymentMethod: dto.paymentMethod,
+        paymentDate: dto.date,
+        reference: dto.reference,
+        notes: dto.notes,
+      },
+      dto.customerId,
+    );
     return {
-      payment: this.serializePayment(payment),
-      invoice: await this.findInvoiceById(dto.invoiceId),
+      payment: this.serializePayment(result.payment),
+      invoice: this.serializeInvoice(result.invoice),
     };
   }
 
@@ -971,19 +1005,6 @@ export class SalesService implements OnModuleInit {
     }
   }
 
-  private async nextInvoiceNumber(manager: EntityManager) {
-    const last = await manager.getRepository(Invoice).findOne({
-      where: {},
-      order: { id: 'DESC' },
-      select: { invoiceNumber: true },
-    });
-    const next = Math.max(
-      1024,
-      Number(last?.invoiceNumber.match(/(\d+)$/)?.[1] ?? 1023) + 1,
-    );
-    return `#INV-${next}`;
-  }
-
   private async recalculateCustomer(
     manager: EntityManager,
     customerId: number,
@@ -1001,6 +1022,9 @@ export class SalesService implements OnModuleInit {
       .addSelect('MIN(invoice.date)', 'firstVisit')
       .addSelect('MAX(invoice.date)', 'lastVisit')
       .where('invoice.customerId = :customerId', { customerId })
+      .andWhere('invoice.invoiceStatus = :invoiceStatus', {
+        invoiceStatus: InvoiceStatus.ISSUED,
+      })
       .getRawOne<Record<string, number | string | null>>();
     customer.totalPurchases = this.roundMoney(Number(totals?.purchases ?? 0));
     customer.totalPaid = this.roundMoney(Number(totals?.paid ?? 0));
@@ -1135,6 +1159,9 @@ export class SalesService implements OnModuleInit {
       dueDate: invoice.dueDate ?? null,
       subtotal: invoice.subtotal,
       discount: invoice.discount,
+      taxEnabled: invoice.taxEnabled,
+      taxRate: invoice.taxRate,
+      taxAmount: invoice.taxAmount,
       totalAmount: invoice.totalAmount,
       total: invoice.totalAmount,
       paidAmount: invoice.paidAmount,
@@ -1143,6 +1170,7 @@ export class SalesService implements OnModuleInit {
       remaining: invoice.remainingAmount,
       paymentStatus: invoice.paymentStatus,
       paymentStatusCode: statusCode,
+      invoiceStatus: invoice.invoiceStatus,
       statusCode,
       status: statusCode,
       notes: invoice.notes ?? null,

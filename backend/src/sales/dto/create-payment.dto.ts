@@ -23,7 +23,7 @@ export class CreatePaymentDto {
   invoiceId!: number;
 
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   amount!: number;
 

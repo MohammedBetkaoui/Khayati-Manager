@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -9,7 +10,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { PaymentMethod } from '../../common/enums';
@@ -67,9 +70,24 @@ export class CreateInvoiceDto {
   discount?: number;
 
   @IsOptional()
+  @IsBoolean()
+  taxEnabled?: boolean;
+
+  @ValidateIf((dto: CreateInvoiceDto) => dto.taxEnabled === true)
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  taxRate?: number;
+
+  @IsOptional()
   @Transform(enumValueTransform(PaymentMethod))
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string;
 
   @IsOptional()
   @Type(() => Number)

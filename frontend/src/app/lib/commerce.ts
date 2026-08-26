@@ -73,6 +73,9 @@ export type ApiInvoice = {
   dueDate: string | null;
   subtotal: number;
   discount: number;
+  taxEnabled: boolean;
+  taxRate: number;
+  taxAmount: number;
   totalAmount: number;
   total: number;
   paidAmount: number;
@@ -81,6 +84,7 @@ export type ApiInvoice = {
   remaining: number;
   paymentStatus: string;
   paymentStatusCode: "PAID" | "PARTIAL" | "UNPAID";
+  invoiceStatus: "DRAFT" | "ISSUED" | "CANCELLED";
   statusCode: "PAID" | "PARTIAL" | "UNPAID";
   status: "PAID" | "PARTIAL" | "UNPAID";
   notes: string | null;
@@ -88,6 +92,23 @@ export type ApiInvoice = {
   payments: ApiPayment[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type WorkshopSettings = {
+  id?: number;
+  workshopName: string;
+  commercialName: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  taxNumber: string | null;
+  commercialRegister: string | null;
+  logoPath: string | null;
+  stampPath: string | null;
+  defaultCurrency: string;
+  defaultTaxEnabled: boolean;
+  defaultTaxRate: number;
+  invoiceFooter: string | null;
 };
 
 export type ProductVariant = {

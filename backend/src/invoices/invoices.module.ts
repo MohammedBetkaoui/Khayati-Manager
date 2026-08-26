@@ -10,7 +10,9 @@ import { Invoice } from '../sales/entities/invoice.entity';
 import { Payment } from '../sales/entities/payment.entity';
 import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
 import { DocumentSequence } from './entities/document-sequence.entity';
+import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceNumberService } from './invoice-number.service';
+import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 
 @Module({
@@ -28,7 +30,13 @@ import { InvoicesService } from './invoices.service';
       WorkshopSettings,
     ]),
   ],
-  providers: [InvoiceNumberService, InvoicesService],
-  exports: [TypeOrmModule, InvoicesService],
+  controllers: [InvoicesController],
+  providers: [InvoiceNumberService, InvoicesService, InvoicePdfService],
+  exports: [
+    TypeOrmModule,
+    InvoiceNumberService,
+    InvoicesService,
+    InvoicePdfService,
+  ],
 })
 export class InvoicesModule {}
