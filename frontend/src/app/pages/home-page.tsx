@@ -1,8 +1,7 @@
 import { useNavigate } from "react-router";
 import { palette, sections } from "../content";
 import { useLanguage } from "../language-context";
-import { AppHeader } from "../components/app-header";
-import { PageBackground, StitchDivider } from "../components/page-background";
+import { PageBackground } from "../components/page-background";
 import { DashboardCard } from "../components/dashboard-card";
 
 const routeFor: Record<string, string> = {
@@ -22,10 +21,7 @@ export function HomePage() {
 
   return (
     <PageBackground>
-      <AppHeader />
-      <StitchDivider className="mt-6" />
-
-      <section className="mt-8">
+      <section className="mt-4 sm:mt-6">
         <h1 style={{ fontSize: 28, fontWeight: 800, color: palette.text }}>
           {t.pageTitle}
         </h1>

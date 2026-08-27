@@ -8,6 +8,7 @@ import {
 import { LanguageProvider } from "./language-context";
 import { ThemeProvider } from "./theme-context";
 import { palette } from "./content";
+import { WindowTitleBar } from "./components/window-title-bar";
 
 const HomePage = lazy(() =>
   import("./pages/home-page").then((module) => ({ default: module.HomePage })),
@@ -92,22 +93,30 @@ function RootLayout() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <Suspense
-          fallback={
-            <div
-              className="flex size-full items-center justify-center"
-              style={{
-                backgroundColor: palette.bg,
-                color: palette.primary,
-                fontFamily: "'Cairo', sans-serif",
-              }}
-            >
-              جاري تحميل الصفحة...
-            </div>
-          }
+        <div
+          className="flex size-full min-h-0 flex-col"
+          style={{ backgroundColor: palette.bg }}
         >
-          <Outlet />
-        </Suspense>
+          <WindowTitleBar />
+          <div className="min-h-0 flex-1">
+            <Suspense
+              fallback={
+                <div
+                  className="flex size-full items-center justify-center"
+                  style={{
+                    backgroundColor: palette.bg,
+                    color: palette.primary,
+                    fontFamily: "'Cairo', sans-serif",
+                  }}
+                >
+                  جاري تحميل الصفحة...
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+          </div>
+        </div>
       </LanguageProvider>
     </ThemeProvider>
   );
