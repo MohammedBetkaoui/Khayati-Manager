@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SalaryType, WorkerRole, WorkerStatus } from '../../common/enums';
+import { SalaryType, WorkerStatus } from '../../common/enums';
 import { Advance } from '../../payroll/entities/advance.entity';
 import { Loan } from '../../payroll/entities/loan.entity';
 import { Payroll } from '../../payroll/entities/payroll.entity';
@@ -25,8 +25,8 @@ export class Worker {
   @Column({ type: 'text', nullable: true })
   phone?: string | null;
 
-  @Column({ type: 'simple-enum', enum: WorkerRole })
-  role!: WorkerRole;
+  @Column({ type: 'text' })
+  role!: string;
 
   @Column({ type: 'simple-enum', enum: SalaryType })
   salaryType!: SalaryType;

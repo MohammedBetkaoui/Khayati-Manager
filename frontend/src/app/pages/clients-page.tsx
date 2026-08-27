@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Archive,
   CircleDollarSign,
   ContactRound,
@@ -21,6 +22,7 @@ import {
   formatMoney,
 } from "../components/commerce-ui";
 import { Badge, Button, Select } from "../components/kit";
+import { ModalShell } from "../components/modal-shell";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
@@ -75,6 +77,8 @@ export function ClientsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ApiCustomer | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<ApiCustomer | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -116,27 +120,29 @@ export function ClientsPage() {
   const reload = () => setRefreshKey((value) => value + 1);
 
   async function archiveCustomer(customer: ApiCustomer) {
-    const confirmed = window.confirm(
-      lang === "ar"
-        ? `هل تريد أرشفة الزبون ${customer.fullName}؟ ستبقى مبيعاته ومدفوعاته محفوظة.`
-        : `Archiver ${customer.fullName} ? Ses ventes et paiements resteront conservés.`,
-    );
-    if (!confirmed) return;
-
+    setArchiving(true);
+    setError(null);
     try {
       await fetchJson(`/sales/customers/${customer.id}/archive`, {
         method: "PATCH",
       });
+      setArchiveTarget(null);
       setNotice(
         lang === "ar"
           ? "تمت أرشفة الزبون مع الاحتفاظ بسجله التجاري."
           : "Client archivé, historique commercial conservé.",
       );
-      reload();
+      if (customers.length === 1 && page > 1) {
+        setPage((value) => Math.max(1, value - 1));
+      } else {
+        reload();
+      }
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Unable to archive customer",
       );
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -199,15 +205,21 @@ export function ClientsPage() {
         title={text.title}
         subtitle={text.subtitle}
         actions={
-          <Button
-            variant="primary"
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus size={17} /> {text.add}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => navigate("/clients/archives")}>
+              <Archive size={16} />
+              {lang === "ar" ? "أرشيف الزبائن" : "Archives"}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus size={17} /> {text.add}
+            </Button>
+          </div>
         }
       />
 
@@ -319,9 +331,6 @@ export function ClientsPage() {
               <option value="ACTIVE">{lang === "ar" ? "نشط" : "Actif"}</option>
               <option value="INACTIVE">
                 {lang === "ar" ? "غير نشط" : "Inactif"}
-              </option>
-              <option value="ARCHIVED">
-                {lang === "ar" ? "مؤرشف" : "Archivé"}
               </option>
             </Select>
           </div>
@@ -493,8 +502,12 @@ export function ClientsPage() {
                             {customer.statusCode !== "ARCHIVED" ? (
                               <button
                                 type="button"
-                                aria-label="Archive customer"
-                                onClick={() => void archiveCustomer(customer)}
+                                aria-label={
+                                  lang === "ar"
+                                    ? "أرشفة الزبون"
+                                    : "Archiver le client"
+                                }
+                                onClick={() => setArchiveTarget(customer)}
                                 className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-red-50"
                                 style={{ color: "#b46a66" }}
                               >
@@ -531,6 +544,163 @@ export function ClientsPage() {
           reload();
         }}
       />
+      <ArchiveCustomerModal
+        customer={archiveTarget}
+        lang={lang}
+        saving={archiving}
+        onClose={() => {
+          if (!archiving) setArchiveTarget(null);
+        }}
+        onConfirm={() => {
+          if (archiveTarget) void archiveCustomer(archiveTarget);
+        }}
+      />
     </PageBackground>
+  );
+}
+
+function ArchiveCustomerModal({
+  customer,
+  lang,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  customer: ApiCustomer | null;
+  lang: "ar" | "fr";
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const hasDebt = Boolean(customer && customer.totalDebt > 0);
+
+  return (
+    <ModalShell
+      open={Boolean(customer)}
+      onClose={onClose}
+      title={lang === "ar" ? "تأكيد أرشفة الزبون" : "Confirmer l'archivage"}
+      maxWidth={590}
+    >
+      {customer ? (
+        <div className="p-6">
+          <div
+            className="flex items-start gap-3 rounded-2xl p-4"
+            style={{
+              backgroundColor: hasDebt
+                ? "rgba(201,138,134,0.13)"
+                : "rgba(195,154,91,0.12)",
+              border: `1px solid ${hasDebt ? "rgba(180,106,102,0.28)" : "rgba(195,154,91,0.3)"}`,
+            }}
+          >
+            <div
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                color: hasDebt ? "#b46a66" : "#a87d3c",
+                backgroundColor: hasDebt
+                  ? "rgba(180,106,102,0.14)"
+                  : "rgba(195,154,91,0.16)",
+              }}
+            >
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, color: palette.text }}>
+                {lang === "ar"
+                  ? `هل تريد أرشفة الزبون «${customer.fullName}»؟`
+                  : `Voulez-vous archiver « ${customer.fullName} » ?`}
+              </div>
+              <p
+                className="mt-1 text-sm"
+                style={{ color: palette.muted, lineHeight: 1.75 }}
+              >
+                {lang === "ar"
+                  ? "سيختفي من قائمة الزبائن الرئيسية ولن يكون متاحاً في المبيعات الجديدة. سيبقى ملفه وكل فواتيره ومدفوعاته محفوظة في الأرشيف."
+                  : "Il disparaîtra de la liste principale et ne pourra plus être sélectionné dans une nouvelle vente. Son profil, ses factures et ses paiements resteront conservés dans les archives."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ArchiveCustomerInfo
+              label={lang === "ar" ? "عدد المبيعات" : "Ventes"}
+              value={String(customer.salesCount)}
+            />
+            <ArchiveCustomerInfo
+              label={lang === "ar" ? "إجمالي المشتريات" : "Total achats"}
+              value={formatMoney(customer.totalPurchases, lang)}
+            />
+            <ArchiveCustomerInfo
+              label={lang === "ar" ? "الدين الحالي" : "Dette actuelle"}
+              value={formatMoney(customer.totalDebt, lang)}
+              danger={hasDebt}
+            />
+          </div>
+
+          {hasDebt ? (
+            <p
+              className="mt-4 rounded-xl px-4 py-3 text-sm"
+              style={{
+                color: "#a94f4a",
+                backgroundColor: "rgba(201,138,134,0.11)",
+              }}
+            >
+              {lang === "ar"
+                ? "تنبيه: لدى هذا الزبون دين مفتوح. ستبقى قيمة الدين محفوظة وقابلة للمتابعة من ملفه المؤرشف."
+                : "Attention : ce client possède une créance ouverte. Elle restera conservée et consultable depuis son profil archivé."}
+            </p>
+          ) : null}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={onClose} disabled={saving}>
+              {lang === "ar" ? "إلغاء" : "Annuler"}
+            </Button>
+            <Button variant="primary" onClick={onConfirm} disabled={saving}>
+              <Archive size={15} />
+              {saving
+                ? lang === "ar"
+                  ? "جاري الأرشفة..."
+                  : "Archivage..."
+                : lang === "ar"
+                  ? "تأكيد الأرشفة"
+                  : "Confirmer l'archivage"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </ModalShell>
+  );
+}
+
+function ArchiveCustomerInfo({
+  label,
+  value,
+  danger = false,
+}: {
+  label: string;
+  value: string;
+  danger?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-3"
+      style={{
+        backgroundColor: palette.bg,
+        border: `1px solid ${palette.border}`,
+      }}
+    >
+      <div style={{ fontSize: 11.5, color: palette.muted, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div
+        className="mt-1"
+        style={{
+          fontSize: 15,
+          fontWeight: 900,
+          color: danger ? "#b46a66" : palette.text,
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }

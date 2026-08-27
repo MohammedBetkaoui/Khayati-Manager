@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
 import { Button, Field, Select, TextInput } from "../kit";
 import {
-  roleLabels,
   salaryLabels,
   statusLabels,
   workersText,
   type RoleId,
   type SalaryId,
   type StatusId,
+  type WorkerRoleChoice,
 } from "../../pages/workers-data";
 
 export type AddWorkerForm = {
@@ -42,6 +42,8 @@ export function AddWorkerModal({
   initialValues,
   isSaving = false,
   mode = "create",
+  roleChoices,
+  onCreateRole,
 }: {
   open: boolean;
   onClose: () => void;
@@ -49,17 +51,52 @@ export function AddWorkerModal({
   initialValues?: AddWorkerForm | null;
   isSaving?: boolean;
   mode?: "create" | "edit";
+  roleChoices: WorkerRoleChoice[];
+  onCreateRole: (name: string) => Promise<WorkerRoleChoice>;
 }) {
   const { lang, dir } = useLanguage();
   const t = workersText[lang].modal;
 
   const [form, setForm] = useState<AddWorkerForm>(initialValues ?? initialForm);
+  const [newRole, setNewRole] = useState("");
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [isSavingRole, setIsSavingRole] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(initialValues ?? initialForm);
+      setNewRole("");
+      setRoleError(null);
     }
   }, [open, initialValues]);
+
+  async function handleCreateRole() {
+    const name = newRole.trim().replace(/\s+/g, " ");
+    if (!name) {
+      setRoleError(
+        lang === "ar" ? "أدخل اسم الوظيفة الجديدة." : "Saisissez le nouveau poste.",
+      );
+      return;
+    }
+
+    setIsSavingRole(true);
+    setRoleError(null);
+    try {
+      const createdRole = await onCreateRole(name);
+      setForm((current) => ({ ...current, role: createdRole.value }));
+      setNewRole("");
+    } catch (error) {
+      setRoleError(
+        error instanceof Error
+          ? error.message
+          : lang === "ar"
+            ? "تعذر حفظ الوظيفة الجديدة."
+            : "Impossible d'enregistrer le nouveau poste.",
+      );
+    } finally {
+      setIsSavingRole(false);
+    }
+  }
 
   if (!open) return null;
 
@@ -141,15 +178,65 @@ export function AddWorkerModal({
             />
           </Field>
 
-          <Field label={t.role}>
-            <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as RoleId })}>
-              {(Object.keys(roleLabels) as RoleId[]).map((r) => (
-                <option key={r} value={r}>
-                  {roleLabels[r][lang]}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div>
+            <Field label={t.role}>
+              <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as RoleId })}>
+                {roleChoices.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="mt-2 flex items-center gap-2">
+              <TextInput
+                value={newRole}
+                maxLength={100}
+                onChange={(event) => {
+                  setNewRole(event.target.value);
+                  if (roleError) setRoleError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleCreateRole();
+                  }
+                }}
+                placeholder={
+                  lang === "ar"
+                    ? "اكتب وظيفة جديدة غير موجودة"
+                    : "Ajouter un poste non proposé"
+                }
+                aria-label={
+                  lang === "ar" ? "اسم الوظيفة الجديدة" : "Nouveau poste"
+                }
+              />
+              <Button
+                variant="secondary"
+                disabled={isSavingRole || !newRole.trim()}
+                onClick={() => void handleCreateRole()}
+              >
+                <Plus size={16} />
+                {isSavingRole
+                  ? lang === "ar"
+                    ? "جارٍ الحفظ"
+                    : "Ajout..."
+                  : lang === "ar"
+                    ? "إضافة"
+                    : "Ajouter"}
+              </Button>
+            </div>
+            {roleError ? (
+              <p className="mt-1.5 text-xs" style={{ color: palette.rose }}>
+                {roleError}
+              </p>
+            ) : null}
+            <p className="mt-1.5 text-xs" style={{ color: palette.muted }}>
+              {lang === "ar"
+                ? "تُحفظ الوظيفة الجديدة وتظهر في القائمة لاحقاً."
+                : "Le nouveau poste sera conservé dans cette liste."}
+            </p>
+          </div>
 
           <Field label={t.startDate}>
             <TextInput required type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />

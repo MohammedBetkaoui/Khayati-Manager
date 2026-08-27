@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Not, Repository } from 'typeorm';
 import {
   CustomerStatus,
   CustomerType,
@@ -155,6 +155,10 @@ export class SalesService implements OnModuleInit {
     if (query.type) qb.andWhere('customer.type = :type', { type: query.type });
     if (query.status) {
       qb.andWhere('customer.status = :status', { status: query.status });
+    } else {
+      qb.andWhere('customer.status != :archivedStatus', {
+        archivedStatus: CustomerStatus.ARCHIVED,
+      });
     }
 
     qb.orderBy(`customer.${sortBy}`, sortOrder)
@@ -177,16 +181,26 @@ export class SalesService implements OnModuleInit {
   async getCustomerStats() {
     const [totalCustomers, activeCustomers, importantCustomers, debt] =
       await Promise.all([
-        this.customersRepository.count(),
+        this.customersRepository.count({
+          where: { status: Not(CustomerStatus.ARCHIVED) },
+        }),
         this.customersRepository.count({
           where: { status: CustomerStatus.ACTIVE },
         }),
-        this.customersRepository.count({ where: { type: CustomerType.VIP } }),
+        this.customersRepository.count({
+          where: {
+            type: CustomerType.VIP,
+            status: Not(CustomerStatus.ARCHIVED),
+          },
+        }),
         this.customersRepository
           .createQueryBuilder('customer')
           .select('COUNT(customer.id)', 'customersWithDebt')
           .addSelect('COALESCE(SUM(customer.totalDebt), 0)', 'totalDebt')
           .where('customer.totalDebt > 0')
+          .andWhere('customer.status != :archivedStatus', {
+            archivedStatus: CustomerStatus.ARCHIVED,
+          })
           .getRawOne<Record<string, number | string>>(),
       ]);
     return {
@@ -244,8 +258,36 @@ export class SalesService implements OnModuleInit {
 
   async archiveCustomer(id: number) {
     const customer = await this.findCustomerOrFail(id);
-    customer.status = CustomerStatus.ARCHIVED;
-    customer.archivedAt = new Date();
+    if (customer.status !== CustomerStatus.ARCHIVED) {
+      customer.status = CustomerStatus.ARCHIVED;
+      customer.archivedAt = new Date();
+      await this.customersRepository.save(customer);
+    }
+    return this.findCustomerById(id);
+  }
+
+  async restoreCustomer(id: number) {
+    const customer = await this.findCustomerOrFail(id);
+    if (customer.status !== CustomerStatus.ARCHIVED) {
+      return this.findCustomerById(id);
+    }
+
+    const duplicate = await this.customersRepository
+      .createQueryBuilder('customer')
+      .where('customer.phone = :phone', { phone: customer.phone })
+      .andWhere('customer.id != :id', { id })
+      .andWhere('customer.status != :archivedStatus', {
+        archivedStatus: CustomerStatus.ARCHIVED,
+      })
+      .getOne();
+    if (duplicate) {
+      throw new ConflictException(
+        `Cannot restore this customer because phone ${customer.phone} is already used by an active customer`,
+      );
+    }
+
+    customer.status = CustomerStatus.ACTIVE;
+    customer.archivedAt = null;
     await this.customersRepository.save(customer);
     return this.findCustomerById(id);
   }

@@ -115,6 +115,14 @@ export function CalculateSalaryModal({
 
   async function submit() {
     if (!worker) return;
+    if (!start || !end || end < start) {
+      setError(
+        lang === "ar"
+          ? "يجب أن يكون تاريخ نهاية الفترة مساوياً لتاريخ البداية أو بعده."
+          : "La date de fin doit être égale ou postérieure à la date de début.",
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -141,19 +149,19 @@ export function CalculateSalaryModal({
       onSaved();
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to save payroll.");
+      setError(payrollPeriodError(caught, lang));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "حساب راتب أسبوعي" : "Nouvelle paie hebdomadaire"} maxWidth={720}>
+    <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "حساب راتب جديد" : "Nouvelle paie"} maxWidth={720}>
       <form className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <Field label={lang === "ar" ? "العامل" : "Travailleur"}><WorkerSelect workers={workers} value={workerId} onChange={(value) => { setWorkerId(value); setAdvanceAmounts({}); setManualAmountOpen(false); setManualGrossAmount(""); }} /></Field>
         <Field label={lang === "ar" ? "نوع الأجر" : "Type de rémunération"}><TextInput readOnly value={salaryType === "monthly" ? (lang === "ar" ? "شهري مقسّم أسبوعياً" : "Mensuel par tranches") : (lang === "ar" ? "حسب القطعة" : "À la pièce")} /></Field>
-        <Field label={lang === "ar" ? "بداية الفترة" : "Début de période"}><TextInput required type="date" value={start} onChange={(event) => setStart(event.target.value)} /></Field>
-        <Field label={lang === "ar" ? "نهاية الفترة" : "Fin de période"}><TextInput required type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></Field>
+        <Field label={lang === "ar" ? "بداية الفترة" : "Début de période"}><TextInput required type="date" max={end || undefined} value={start} onChange={(event) => setStart(event.target.value)} /></Field>
+        <Field label={lang === "ar" ? "نهاية الفترة" : "Fin de période"}><TextInput required type="date" min={start || undefined} value={end} onChange={(event) => setEnd(event.target.value)} /></Field>
 
         {salaryType === "monthly" ? (
           <>
@@ -210,6 +218,26 @@ export function CalculateSalaryModal({
       </form>
     </ModalShell>
   );
+}
+
+function payrollPeriodError(caught: unknown, lang: "ar" | "fr") {
+  const message =
+    caught instanceof Error ? caught.message : "Unable to save payroll.";
+  const conflict = message.match(
+    /\[(PAYROLL_PERIOD_DUPLICATE|PAYROLL_PERIOD_OVERLAP)\|(\d{4}-\d{2}-\d{2})\|(\d{4}-\d{2}-\d{2})\]/,
+  );
+  if (!conflict) return message;
+
+  const [, code, conflictStart, conflictEnd] = conflict;
+  if (code === "PAYROLL_PERIOD_DUPLICATE") {
+    return lang === "ar"
+      ? `تم تسجيل راتب لهذا العامل لنفس الفترة من ${conflictStart} إلى ${conflictEnd}. اختر فترة أخرى.`
+      : `Une paie est déjà enregistrée pour ce travailleur sur la même période, du ${conflictStart} au ${conflictEnd}. Choisissez une autre période.`;
+  }
+
+  return lang === "ar"
+    ? `الفترة المختارة تتقاطع، ولو بيوم واحد، مع فترة مسجلة من ${conflictStart} إلى ${conflictEnd}. اختر فترة لا تحتوي على أيام مسجلة سابقاً.`
+    : `La période choisie chevauche, même d'un seul jour, une période déjà enregistrée du ${conflictStart} au ${conflictEnd}. Choisissez une période sans jour déjà comptabilisé.`;
 }
 
 function BalanceInputs({ title, rows, values, onChange, lang }: { title: string; rows: BalanceRecord[]; values: Record<number, string>; onChange: (value: Record<number, string>) => void; lang: "ar" | "fr" }) {

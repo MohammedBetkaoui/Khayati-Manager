@@ -300,6 +300,7 @@ export function CustomerProfilePage() {
   }, [customerId, navigate, refreshKey]);
 
   const reload = () => setRefreshKey((value) => value + 1);
+  const archived = profile?.customer.statusCode === "ARCHIVED";
   const text =
     lang === "ar"
       ? {
@@ -345,25 +346,43 @@ export function CustomerProfilePage() {
       <PageHeading
         title={profile?.customer.fullName || text.title}
         subtitle={text.subtitle}
-        backTo="/clients"
+        backTo={archived ? "/clients/archives" : "/clients"}
         actions={
           profile ? (
             <>
               <Button onClick={() => setEditOpen(true)}>
                 <Pencil size={16} /> {text.edit}
               </Button>
-              <Button
-                variant="primary"
-                onClick={() =>
-                  navigate(`/sales/new?customerId=${profile.customer.id}`)
-                }
-              >
-                <Plus size={17} /> {text.newSale}
-              </Button>
+              {!archived ? (
+                <Button
+                  variant="primary"
+                  onClick={() =>
+                    navigate(`/sales/new?customerId=${profile.customer.id}`)
+                  }
+                >
+                  <Plus size={17} /> {text.newSale}
+                </Button>
+              ) : null}
             </>
           ) : null
         }
       />
+
+      {archived ? (
+        <div
+          className="mt-5 rounded-2xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: "rgba(195,154,91,0.28)",
+            backgroundColor: "rgba(195,154,91,0.1)",
+            color: "#a87d3c",
+            lineHeight: 1.7,
+          }}
+        >
+          {lang === "ar"
+            ? "هذا الزبون مؤرشف. يبقى ملفه التجاري وتاريخه المالي قابلين للاستشارة، لكنه غير متاح لتسجيل مبيعات جديدة حتى تتم إعادته من صفحة الأرشيف."
+            : "Ce client est archivé. Son dossier commercial et son historique financier restent consultables, mais aucune nouvelle vente ne peut être enregistrée avant sa restauration depuis les archives."}
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <StatePanel

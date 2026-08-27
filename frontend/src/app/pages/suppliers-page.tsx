@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
-import { Archive, Eye, Pencil, Plus, Search, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, Archive, Eye, Pencil, Plus, Search, Truck, Wallet } from "lucide-react";
 import { useNavigate } from "react-router";
 import { PageHeading, StatePanel, StatCard, formatDate, formatMoney } from "../components/commerce-ui";
 import { Badge, Button, Field, TextInput } from "../components/kit";
@@ -38,6 +38,9 @@ export function SuppliersPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Supplier | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const text =
     lang === "ar"
@@ -105,14 +108,22 @@ export function SuppliersPage() {
   });
 
   async function archiveSupplier(supplier: Supplier) {
-    const ok = window.confirm(
-      lang === "ar"
-        ? `أرشفة ${supplier.name}؟ سيبقى التاريخ المالي محفوظاً.`
-        : `Archiver ${supplier.name} ? Son historique financier sera conservé.`,
-    );
-    if (!ok) return;
-    await fetchJson(`/inventory/suppliers/${supplier.id}`, { method: "DELETE" });
-    setRefreshKey((value) => value + 1);
+    setArchiving(true);
+    setError(null);
+    try {
+      await fetchJson(`/inventory/suppliers/${supplier.id}`, { method: "DELETE" });
+      setArchiveTarget(null);
+      setNotice(
+        lang === "ar"
+          ? "تمت أرشفة المورد مع الاحتفاظ بسجله المالي والتجاري."
+          : "Fournisseur archivé, historique financier et commercial conservé.",
+      );
+      setRefreshKey((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to archive supplier");
+    } finally {
+      setArchiving(false);
+    }
   }
 
   return (
@@ -121,11 +132,23 @@ export function SuppliersPage() {
         title={text.title}
         subtitle={text.subtitle}
         actions={
-          <Button variant="primary" onClick={() => setModalOpen(true)}>
-            <Plus size={16} /> {text.add}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => navigate("/suppliers/archives")}>
+              <Archive size={16} />
+              {lang === "ar" ? "أرشيف الموردين" : "Archives"}
+            </Button>
+            <Button variant="primary" onClick={() => setModalOpen(true)}>
+              <Plus size={16} /> {text.add}
+            </Button>
+          </div>
         }
       />
+
+      {notice ? (
+        <div className="mt-5 rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: "rgba(77,138,106,0.11)", color: "#3f765a" }}>
+          {notice}
+        </div>
+      ) : null}
 
       <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Truck} label={text.total} value={stats.totalSuppliers} />
@@ -169,7 +192,7 @@ export function SuppliersPage() {
               setEditingSupplier(supplier);
               setModalOpen(true);
             }}
-            onArchive={archiveSupplier}
+            onArchive={setArchiveTarget}
           />
         ) : null}
       </section>
@@ -183,7 +206,110 @@ export function SuppliersPage() {
         }}
         onSaved={() => setRefreshKey((value) => value + 1)}
       />
+      <ArchiveSupplierModal
+        supplier={archiveTarget}
+        lang={lang}
+        saving={archiving}
+        onClose={() => {
+          if (!archiving) setArchiveTarget(null);
+        }}
+        onConfirm={() => {
+          if (archiveTarget) void archiveSupplier(archiveTarget);
+        }}
+      />
     </PageBackground>
+  );
+}
+
+function ArchiveSupplierModal({
+  supplier,
+  lang,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  supplier: Supplier | null;
+  lang: "ar" | "fr";
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const hasDebt = Boolean(supplier && supplier.totalDebt > 0);
+
+  return (
+    <ModalShell
+      open={Boolean(supplier)}
+      onClose={onClose}
+      title={lang === "ar" ? "تأكيد أرشفة المورد" : "Confirmer l'archivage"}
+      maxWidth={600}
+    >
+      {supplier ? (
+        <div className="p-6">
+          <div
+            className="flex items-start gap-3 rounded-2xl p-4"
+            style={{
+              backgroundColor: hasDebt ? "rgba(201,138,134,0.13)" : "rgba(195,154,91,0.12)",
+              border: `1px solid ${hasDebt ? "rgba(180,106,102,0.28)" : "rgba(195,154,91,0.3)"}`,
+            }}
+          >
+            <div
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                color: hasDebt ? "#b46a66" : "#a87d3c",
+                backgroundColor: hasDebt ? "rgba(180,106,102,0.14)" : "rgba(195,154,91,0.16)",
+              }}
+            >
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, color: palette.text }}>
+                {lang === "ar"
+                  ? `هل تريد أرشفة المورد «${supplier.name}»؟`
+                  : `Voulez-vous archiver « ${supplier.name} » ?`}
+              </div>
+              <p className="mt-1 text-sm" style={{ color: palette.muted, lineHeight: 1.75 }}>
+                {lang === "ar"
+                  ? "سيختفي من قائمة الموردين ولن يكون متاحاً لتسجيل مشتريات جديدة. ستبقى مشترياته ومدفوعاته ودفعاته المسبقة محفوظة في الأرشيف."
+                  : "Il disparaîtra de la liste principale et ne pourra plus être sélectionné pour un nouvel achat. Ses achats, paiements et avances resteront conservés dans les archives."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ArchiveSupplierInfo label={lang === "ar" ? "إجمالي المشتريات" : "Total achats"} value={formatMoney(supplier.totalPurchases, lang)} />
+            <ArchiveSupplierInfo label={lang === "ar" ? "إجمالي المدفوع" : "Total payé"} value={formatMoney(supplier.totalPaid, lang)} />
+            <ArchiveSupplierInfo label={lang === "ar" ? "الدين الحالي" : "Dette actuelle"} value={formatMoney(supplier.totalDebt, lang)} danger={hasDebt} />
+          </div>
+
+          {hasDebt ? (
+            <p className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#a94f4a", backgroundColor: "rgba(201,138,134,0.11)" }}>
+              {lang === "ar"
+                ? "تنبيه: يوجد دين مفتوح لهذا المورد. ستبقى قيمة الدين محفوظة ويمكن متابعة تسديدها من ملفه المؤرشف."
+                : "Attention : une dette fournisseur reste ouverte. Elle sera conservée et pourra toujours être réglée depuis son profil archivé."}
+            </p>
+          ) : null}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={onClose} disabled={saving}>{lang === "ar" ? "إلغاء" : "Annuler"}</Button>
+            <Button variant="primary" onClick={onConfirm} disabled={saving}>
+              <Archive size={15} />
+              {saving
+                ? lang === "ar" ? "جاري الأرشفة..." : "Archivage..."
+                : lang === "ar" ? "تأكيد الأرشفة" : "Confirmer l'archivage"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </ModalShell>
+  );
+}
+
+function ArchiveSupplierInfo({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className="rounded-2xl p-3" style={{ backgroundColor: palette.bg, border: `1px solid ${palette.border}` }}>
+      <div style={{ fontSize: 11.5, color: palette.muted, fontWeight: 700 }}>{label}</div>
+      <div className="mt-1" style={{ fontSize: 15, fontWeight: 900, color: danger ? "#b46a66" : palette.text }}>{value}</div>
+    </div>
   );
 }
 

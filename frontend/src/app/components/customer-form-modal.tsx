@@ -206,9 +206,11 @@ export function CustomerFormModal({
                   <option value="INACTIVE">
                     {lang === "ar" ? "غير نشط" : "Inactif"}
                   </option>
-                  <option value="ARCHIVED">
-                    {lang === "ar" ? "مؤرشف" : "Archivé"}
-                  </option>
+                  {customer?.statusCode === "ARCHIVED" ? (
+                    <option value="ARCHIVED" disabled>
+                      {lang === "ar" ? "مؤرشف" : "Archivé"}
+                    </option>
+                  ) : null}
                 </Select>
               </Field>
             </>

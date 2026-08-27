@@ -106,13 +106,14 @@ export function SupplierProfilePage() {
           debt: "Dette actuelle",
           average: "Achat moyen",
         };
+  const archived = profile?.supplier.statusCode === "ARCHIVED";
 
   return (
     <PageBackground>
       <PageHeading
         title={profile?.supplier.name ?? text.title}
         subtitle={text.subtitle}
-        backTo="/suppliers"
+        backTo={archived ? "/suppliers/archives" : "/suppliers"}
         actions={
           profile ? (
             <Button
@@ -126,6 +127,21 @@ export function SupplierProfilePage() {
           ) : null
         }
       />
+      {archived ? (
+        <div
+          className="mt-5 rounded-2xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: "rgba(195,154,91,0.28)",
+            backgroundColor: "rgba(195,154,91,0.1)",
+            color: "#a87d3c",
+            lineHeight: 1.7,
+          }}
+        >
+          {lang === "ar"
+            ? "هذا المورد مؤرشف. يبقى ملفه المالي وكل مشترياته ومدفوعاته قابلة للاستشارة، ويمكن تسديد ديونه القديمة، لكنه غير متاح للمشتريات الجديدة حتى تتم إعادته من صفحة الأرشيف."
+            : "Ce fournisseur est archivé. Son dossier financier, ses achats et paiements restent consultables et ses anciennes dettes peuvent être réglées, mais aucun nouvel achat ne peut lui être associé avant sa restauration."}
+        </div>
+      ) : null}
       <StatePanel
         loading={loading}
         error={error}
@@ -149,7 +165,12 @@ export function SupplierProfilePage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 18, fontWeight: 900 }}>{profile.supplier.name}</h2>
-                  <Badge bg="rgba(77,138,106,0.12)" fg="#4d8a6a">{profile.supplier.status}</Badge>
+                  <Badge
+                    bg={archived ? "rgba(107,106,98,.14)" : "rgba(77,138,106,0.12)"}
+                    fg={archived ? "#6b6a62" : "#4d8a6a"}
+                  >
+                    {profile.supplier.status}
+                  </Badge>
                 </div>
               </div>
               <div className="mt-5 grid gap-3 text-sm" style={{ color: palette.text }}>
@@ -170,7 +191,7 @@ export function SupplierProfilePage() {
               title={text.payments}
               actions={
                 <Button onClick={() => setPaymentHistoryModalOpen(true)}>
-                  <Eye size={15} /> {lang === "ar" ? "Ø¹Ø±Ø¶" : "Voir"}
+                  <Eye size={15} /> {lang === "ar" ? "عرض" : "Voir"}
                 </Button>
               }
             >

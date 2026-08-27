@@ -9,11 +9,13 @@ import {
   AttendanceStatus,
   ProductionTaskType,
   SalaryType,
+  WorkerRole,
   WorkerStatus,
 } from '../common/enums';
 import { PayrollService } from '../payroll/payroll.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { CreateProductionDto } from './dto/create-production.dto';
+import { CreateWorkerRoleDto } from './dto/create-worker-role.dto';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { normalizeEnumValue } from './dto/normalize-enum-value';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
@@ -21,6 +23,7 @@ import { UpdateProductionDto } from './dto/update-production.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
 import { WorkerFilterDto } from './dto/worker-filter.dto';
 import { Attendance } from './entities/attendance.entity';
+import { WorkerRoleOption } from './entities/worker-role-option.entity';
 import { WorkerProduction } from './entities/worker-production.entity';
 import { Worker } from './entities/worker.entity';
 
@@ -61,6 +64,8 @@ export class WorkersService {
   constructor(
     @InjectRepository(Worker)
     private readonly workersRepository: Repository<Worker>,
+    @InjectRepository(WorkerRoleOption)
+    private readonly roleOptionsRepository: Repository<WorkerRoleOption>,
     @InjectRepository(Attendance)
     private readonly attendanceRepository: Repository<Attendance>,
     @InjectRepository(WorkerProduction)
@@ -68,12 +73,64 @@ export class WorkersService {
     private readonly payrollService: PayrollService,
   ) {}
 
+  async getRoleOptions() {
+    const customRoles = await this.roleOptionsRepository.find({
+      order: { name: 'ASC' },
+    });
+    const systemRoles = Object.values(WorkerRole);
+    const systemRoleKeys = new Set(
+      systemRoles.map((name) => this.normalizeRoleKey(name)),
+    );
+
+    return {
+      data: [
+        ...systemRoles.map((name) => ({
+          id: null,
+          name,
+          isCustom: false,
+        })),
+        ...customRoles
+          .filter((role) => !systemRoleKeys.has(role.normalizedName))
+          .map((role) => ({
+            id: role.id,
+            name: role.name,
+            isCustom: true,
+          })),
+      ],
+    };
+  }
+
+  async createRoleOption(dto: CreateWorkerRoleDto) {
+    const name = this.normalizeRole(dto.name);
+    const normalizedName = this.normalizeRoleKey(name);
+    const systemRole = Object.values(WorkerRole).find(
+      (role) => this.normalizeRoleKey(role) === normalizedName,
+    );
+
+    if (systemRole) {
+      return { id: null, name: systemRole, isCustom: false };
+    }
+
+    const existing = await this.roleOptionsRepository.findOneBy({
+      normalizedName,
+    });
+    if (existing) {
+      return { id: existing.id, name: existing.name, isCustom: true };
+    }
+
+    const saved = await this.roleOptionsRepository.save(
+      this.roleOptionsRepository.create({ name, normalizedName }),
+    );
+    return { id: saved.id, name: saved.name, isCustom: true };
+  }
+
   async create(dto: CreateWorkerDto) {
     this.validateMonthlySalary(dto.salaryType, dto.monthlySalary ?? 0);
+    const role = await this.ensureRoleOption(dto.role);
     const worker = this.workersRepository.create({
       fullName: dto.fullName.trim(),
       phone: this.normalizeOptionalText(dto.phone),
-      role: dto.role,
+      role,
       salaryType: dto.salaryType,
       monthlySalary:
         dto.salaryType === SalaryType.MONTHLY ? (dto.monthlySalary ?? 0) : 0,
@@ -109,7 +166,9 @@ export class WorkersService {
     }
 
     if (query.role) {
-      qb.andWhere('worker.role = :role', { role: query.role });
+      qb.andWhere('worker.role = :role', {
+        role: this.normalizeRole(query.role),
+      });
     }
 
     if (query.salaryType) {
@@ -150,7 +209,7 @@ export class WorkersService {
     }
 
     if (dto.role !== undefined) {
-      worker.role = dto.role;
+      worker.role = await this.ensureRoleOption(dto.role);
     }
 
     if (dto.salaryType !== undefined) {
@@ -731,6 +790,28 @@ export class WorkersService {
 
     const trimmed = value.trim();
     return trimmed ? trimmed : null;
+  }
+
+  private normalizeRole(value: string) {
+    const normalized = normalizeEnumValue(value, WorkerRole, {
+      IRONING_MANAGER: WorkerRole.IRONING,
+      PACKAGING_MANAGER: WorkerRole.PACKAGING,
+    });
+
+    if (typeof normalized !== 'string' || !normalized.trim()) {
+      throw new BadRequestException('Worker role is required.');
+    }
+
+    return normalized.trim().replace(/\s+/g, ' ');
+  }
+
+  private normalizeRoleKey(value: string) {
+    return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  }
+
+  private async ensureRoleOption(value: string) {
+    const role = await this.createRoleOption({ name: value });
+    return role.name;
   }
 
   private normalizeDate(value: string) {

@@ -1,20 +1,14 @@
 import type { Lang } from "../content";
 
-export type RoleId =
-  | "tailor"
-  | "assistant"
-  | "cutter"
-  | "ironing"
-  | "packaging"
-  | "seller"
-  | "supervisor";
+export type RoleId = string;
+export type WorkerRoleChoice = { value: RoleId; label: string };
 
 export type SalaryId = "monthly" | "piece";
 export type StatusId = "active" | "leave" | "inactive" | "archived";
 
 type Bilingual = { ar: string; fr: string };
 
-export const roleLabels: Record<RoleId, Bilingual> = {
+export const roleLabels: Record<string, Bilingual> = {
   tailor: { ar: "خياط", fr: "Couturier" },
   assistant: { ar: "مساعد", fr: "Assistant" },
   cutter: { ar: "قاطع قماش", fr: "Coupeur" },
@@ -24,7 +18,7 @@ export const roleLabels: Record<RoleId, Bilingual> = {
   supervisor: { ar: "مشرف", fr: "Superviseur" },
 };
 
-export const roleColors: Record<RoleId, { bg: string; fg: string }> = {
+export const roleColors: Record<string, { bg: string; fg: string }> = {
   tailor: { bg: "rgba(103,165,175,0.13)", fg: "var(--app-primary)" },
   assistant: { bg: "rgba(138,136,127,0.14)", fg: "#6b6a62" },
   cutter: { bg: "rgba(195,154,91,0.16)", fg: "#a87d3c" },
@@ -33,6 +27,19 @@ export const roleColors: Record<RoleId, { bg: string; fg: string }> = {
   seller: { bg: "rgba(96,120,160,0.14)", fg: "#4f6a99" },
   supervisor: { bg: "rgba(103,165,175,0.16)", fg: "var(--app-primary)" },
 };
+
+const customRoleColors = {
+  bg: "rgba(103,165,175,0.13)",
+  fg: "var(--app-primary)",
+};
+
+export function getRoleLabel(role: RoleId, lang: Lang) {
+  return roleLabels[role]?.[lang] ?? role;
+}
+
+export function getRoleColors(role: RoleId) {
+  return roleColors[role] ?? customRoleColors;
+}
 
 export const salaryLabels: Record<SalaryId, Bilingual> = {
   monthly: { ar: "شهري", fr: "Mensuel" },

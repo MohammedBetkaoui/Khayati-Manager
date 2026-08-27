@@ -2,12 +2,14 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
-import { SalaryType, WorkerRole, WorkerStatus } from '../../common/enums';
+import { SalaryType, WorkerStatus } from '../../common/enums';
 import { enumValueTransform } from './normalize-enum-value';
 
 export class CreateWorkerDto {
@@ -18,14 +20,13 @@ export class CreateWorkerDto {
   @IsString()
   phone?: string;
 
-  @Transform(
-    enumValueTransform(WorkerRole, {
-      IRONING_MANAGER: WorkerRole.IRONING,
-      PACKAGING_MANAGER: WorkerRole.PACKAGING,
-    }),
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value,
   )
-  @IsEnum(WorkerRole)
-  role!: WorkerRole;
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  role!: string;
 
   @Transform(
     enumValueTransform(SalaryType, {

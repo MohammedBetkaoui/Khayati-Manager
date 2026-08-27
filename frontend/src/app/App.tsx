@@ -32,6 +32,11 @@ const SuppliersPage = lazy(() =>
     default: module.SuppliersPage,
   })),
 );
+const SupplierArchivesPage = lazy(() =>
+  import("./pages/supplier-archives-page").then((module) => ({
+    default: module.SupplierArchivesPage,
+  })),
+);
 const SupplierProfilePage = lazy(() =>
   import("./pages/supplier-profile-page").then((module) => ({
     default: module.SupplierProfilePage,
@@ -50,6 +55,11 @@ const NewSalePage = lazy(() =>
 const ClientsPage = lazy(() =>
   import("./pages/clients-page").then((module) => ({
     default: module.ClientsPage,
+  })),
+);
+const CustomerArchivesPage = lazy(() =>
+  import("./pages/customer-archives-page").then((module) => ({
+    default: module.CustomerArchivesPage,
   })),
 );
 const SalaryPage = lazy(() =>
@@ -113,8 +123,10 @@ const router = createHashRouter([
       { path: "stock", element: <StockPage /> },
       { path: "stock/archives", element: <ProductArchivesPage /> },
       { path: "suppliers", element: <SuppliersPage /> },
+      { path: "suppliers/archives", element: <SupplierArchivesPage /> },
       { path: "suppliers/:supplierId", element: <SupplierProfilePage /> },
       { path: "clients", element: <ClientsPage /> },
+      { path: "clients/archives", element: <CustomerArchivesPage /> },
       { path: "sales", element: <SalesPage /> },
       { path: "sales/new", element: <NewSalePage /> },
       { path: "customer-profile", element: <Navigate to="/clients" replace /> },

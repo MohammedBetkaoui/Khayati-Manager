@@ -1,10 +1,10 @@
-import { Phone, CalendarDays, Wallet, Coins, CheckCircle2, Package, Gauge, Pencil, CalendarCheck, StickyNote, ArrowLeft, ArrowRight, UserRound, X } from "lucide-react";
+import { Phone, CalendarDays, Wallet, Coins, CheckCircle2, Package, Pencil, CalendarCheck, StickyNote, ArrowLeft, ArrowRight, UserRound, X } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
-import { Avatar, Badge, Button, ProgressBar } from "../kit";
+import { Avatar, Badge, Button } from "../kit";
 import {
-  roleColors,
-  roleLabels,
+  getRoleColors,
+  getRoleLabel,
   salaryLabels,
   statusColors,
   statusLabels,
@@ -48,6 +48,7 @@ export function WorkerDetailsPanel({
   }
 
   const present = worker.attendance === "present";
+  const roleColor = getRoleColors(worker.role);
 
   return (
     <div
@@ -89,8 +90,8 @@ export function WorkerDetailsPanel({
           {worker.name[lang]}
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <Badge bg={roleColors[worker.role].bg} fg={roleColors[worker.role].fg}>
-            {roleLabels[worker.role][lang]}
+          <Badge bg={roleColor.bg} fg={roleColor.fg}>
+            {getRoleLabel(worker.role, lang)}
           </Badge>
           <Badge bg={`${statusColors[worker.status]}1f`} fg={statusColors[worker.status]} dot={statusColors[worker.status]}>
             {statusLabels[worker.status][lang]}
@@ -111,15 +112,6 @@ export function WorkerDetailsPanel({
           }
         />
         <Row icon={Package} label={t.panel.pieces} value={worker.pieces} />
-
-        {/* Performance */}
-        <div className="pt-3.5">
-          <div className="mb-1.5 flex items-center gap-2" style={{ color: palette.muted, fontSize: 13 }}>
-            <Gauge size={16} strokeWidth={1.9} />
-            {t.panel.performance}
-          </div>
-          <ProgressBar value={worker.productivity} />
-        </div>
 
         {/* Latest note */}
         <div className="mt-4">

@@ -91,6 +91,11 @@ export class InventoryController {
     return this.inventoryService.archiveSupplier(id);
   }
 
+  @Patch('suppliers/:id/restore')
+  restoreSupplier(@Param('id', ParseIntPipe) id: number) {
+    return this.inventoryService.restoreSupplier(id);
+  }
+
   @Post('suppliers/:id/advances')
   createSupplierAdvance(
     @Param('id', ParseIntPipe) id: number,

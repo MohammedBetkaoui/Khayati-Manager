@@ -2,7 +2,6 @@ import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   CircleDollarSign,
-  FileSearch,
   Minus,
   PackageSearch,
   Plus,
@@ -14,10 +13,6 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { CustomerFormModal } from "../components/customer-form-modal";
-import {
-  InvoiceDraftPreviewModal,
-  type InvoicePreviewData,
-} from "../components/invoices/invoice-preview-modal";
 import {
   PageHeading,
   StatePanel,
@@ -32,7 +27,6 @@ import { useLanguage } from "../language-context";
 import { fetchJson } from "../lib/api";
 import type {
   ApiCustomer,
-  ApiInvoice,
   FinishedProduct,
   ProductVariant,
   WorkshopSettings,
@@ -135,7 +129,6 @@ export function NewSalePage() {
   const customerFromUrl = searchParams.get("customerId");
   const [customers, setCustomers] = useState<ApiCustomer[]>([]);
   const [products, setProducts] = useState<FinishedProduct[]>([]);
-  const [workshop, setWorkshop] = useState<WorkshopSettings | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     customerFromUrl ?? "",
   );
@@ -154,16 +147,16 @@ export function NewSalePage() {
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customerModal, setCustomerModal] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       setLoading(true);
-      setError(null);
+      setLoadError(null);
       try {
         const [customerList, productList, workshopSettings] = await Promise.all(
           [
@@ -182,7 +175,6 @@ export function NewSalePage() {
         );
         setCustomers(customerList.data);
         setProducts(productList.data);
-        setWorkshop(workshopSettings);
         setTaxEnabled(workshopSettings.defaultTaxEnabled);
         setTaxRate(String(workshopSettings.defaultTaxRate ?? 0));
         if (
@@ -194,7 +186,7 @@ export function NewSalePage() {
           setSelectedCustomerId(customerFromUrl);
       } catch (caught) {
         if (!controller.signal.aborted)
-          setError(
+          setLoadError(
             caught instanceof Error ? caught.message : "Unable to prepare sale",
           );
       } finally {
@@ -241,8 +233,6 @@ export function NewSalePage() {
   const total = roundMoney(amountAfterDiscount + taxAmount);
   const numericPaid = Math.max(0, Number(paidAmount) || 0);
   const remaining = Math.max(0, total - numericPaid);
-  const issueDate = toDateInputValue(new Date());
-
   function addToCart(product: FinishedProduct, variant: ProductVariant) {
     setError(null);
     setCart((current) => {
@@ -292,8 +282,9 @@ export function NewSalePage() {
     );
   }
 
-  function openPreview(event: FormEvent) {
+  async function submitSale(event: FormEvent) {
     event.preventDefault();
+    if (saving) return;
     if (!selectedCustomer) {
       setError(
         lang === "ar"
@@ -335,16 +326,10 @@ export function NewSalePage() {
       return;
     }
 
-    setError(null);
-    setPreviewOpen(true);
-  }
-
-  async function confirmSale() {
-    if (!selectedCustomer || !cart.length) return;
     setSaving(true);
     setError(null);
     try {
-      const invoice = await fetchJson<ApiInvoice>("/sales/invoices", {
+      await fetchJson("/sales/invoices", {
         method: "POST",
         body: JSON.stringify({
           customerId: selectedCustomer.id,
@@ -367,7 +352,7 @@ export function NewSalePage() {
           notes: notes || undefined,
         }),
       });
-      navigate(`/sales?invoice=${invoice.id}&created=1`);
+      navigate("/sales?created=1");
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Unable to create sale",
@@ -376,37 +361,6 @@ export function NewSalePage() {
       setSaving(false);
     }
   }
-
-  const previewData: InvoicePreviewData | null = selectedCustomer
-    ? {
-        customer: selectedCustomer,
-        workshop,
-        issueDate,
-        dueDate: remaining > 0 && dueDate ? dueDate : null,
-        lines: cart.map((line) => ({
-          key: line.key,
-          productName: line.productName,
-          reference: line.productSku,
-          variant: line.variantLabel,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-        })),
-        subtotal,
-        discount: numericDiscount,
-        taxEnabled,
-        taxRate: numericTaxRate,
-        taxAmount,
-        totalAmount: total,
-        paidAmount: numericPaid,
-        remainingAmount: remaining,
-        paymentMethod: numericPaid > 0 ? paymentMethod : null,
-        paymentReference:
-          numericPaid > 0 && paymentReference.trim()
-            ? paymentReference.trim()
-            : null,
-        notes: notes.trim() || null,
-      }
-    : null;
 
   const text =
     lang === "ar"
@@ -438,7 +392,7 @@ export function NewSalePage() {
           method: "طريقة الدفع",
           due: "تاريخ الاستحقاق",
           notes: "ملاحظات",
-          validate: "معاينة الفاتورة",
+          validate: "تسجيل البيع",
           emptyCart: "السلة فارغة. أضف منتجات من القائمة.",
         }
       : {
@@ -469,7 +423,7 @@ export function NewSalePage() {
           method: "Mode de paiement",
           due: "Échéance",
           notes: "Notes",
-          validate: "Prévisualiser la facture",
+          validate: "Enregistrer la vente",
           emptyCart:
             "Le panier est vide. Ajoutez des produits depuis le catalogue.",
         };
@@ -484,14 +438,14 @@ export function NewSalePage() {
       <div className="mt-6">
         <StatePanel
           loading={loading}
-          error={loading ? null : error}
+          error={loading ? null : loadError}
           empty={false}
           emptyTitle=""
         />
       </div>
-      {!loading && !error ? (
+      {!loading && !loadError ? (
         <form
-          onSubmit={openPreview}
+          onSubmit={submitSale}
           className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(380px,0.8fr)]"
         >
           <div className="flex min-w-0 flex-col gap-5">
@@ -984,11 +938,11 @@ export function NewSalePage() {
                 full
                 disabled={saving || !cart.length || !selectedCustomer}
               >
-                {saving ? <CheckCircle2 size={17} /> : <FileSearch size={17} />}{" "}
+                <CheckCircle2 size={17} />{" "}
                 {saving
                   ? lang === "ar"
-                    ? "جاري تأكيد البيع..."
-                    : "Validation en cours..."
+                    ? "جاري تسجيل البيع..."
+                    : "Enregistrement en cours..."
                   : text.validate}
               </Button>
             </div>
@@ -1005,27 +959,12 @@ export function NewSalePage() {
           setSelectedCustomerId(String(customer.id));
         }}
       />
-      <InvoiceDraftPreviewModal
-        open={previewOpen}
-        data={previewData}
-        lang={lang}
-        saving={saving}
-        onClose={() => setPreviewOpen(false)}
-        onConfirm={() => void confirmSale()}
-      />
     </PageBackground>
   );
 }
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function toDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function SummaryLine({

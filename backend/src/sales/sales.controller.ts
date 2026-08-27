@@ -103,6 +103,11 @@ export class SalesController {
     return this.salesService.archiveCustomer(id);
   }
 
+  @Patch('customers/:id/restore')
+  restoreCustomer(@Param('id', ParseIntPipe) id: number) {
+    return this.salesService.restoreCustomer(id);
+  }
+
   @Delete('customers/:id')
   deleteCustomer(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.deleteCustomer(id);

@@ -12,7 +12,7 @@ import { palette } from "../content";
 import { useLanguage } from "../language-context";
 import { API_BASE_URL } from "../lib/api";
 import { PageBackground } from "../components/page-background";
-import { Avatar, Badge, ProgressBar } from "../components/kit";
+import { Avatar, Badge } from "../components/kit";
 import { SummaryCards } from "../components/workers/summary-cards";
 import { ActionBar, type Filters } from "../components/workers/action-bar";
 import { WorkersTable } from "../components/workers/workers-table";
@@ -29,16 +29,17 @@ import {
   type NoteForm,
 } from "../components/workers/worker-action-modals";
 import {
-  roleColors,
+  getRoleColors,
+  getRoleLabel,
   roleLabels,
   workersText,
-  type RoleId,
   type SalaryId,
   type StatusId,
   type Worker,
+  type WorkerRoleChoice,
 } from "./workers-data";
 
-type TabId = "all" | "attendance" | "productivity" | "notes";
+type TabId = "all" | "attendance" | "notes";
 
 type ApiWorker = {
   id: number;
@@ -75,6 +76,14 @@ type ApiWorkersStats = {
   totalPiecesThisMonth: number;
 };
 
+type ApiWorkerRole = {
+  id: number | null;
+  name: string;
+  isCustom: boolean;
+};
+
+type ApiWorkerRolesResponse = { data: ApiWorkerRole[] };
+
 type ApiAttendanceStatus = "حاضر" | "غائب" | "متأخر";
 
 type ApiAttendanceResponse = {
@@ -95,7 +104,7 @@ const emptyStats: ApiWorkersStats = {
   totalPiecesThisMonth: 0,
 };
 
-const roleToApi: Record<RoleId, string> = {
+const roleToApi: Record<string, string> = {
   tailor: "خياط",
   assistant: "مساعد",
   cutter: "قاطع قماش",
@@ -107,7 +116,7 @@ const roleToApi: Record<RoleId, string> = {
 
 const roleFromApi = Object.fromEntries(
   Object.entries(roleToApi).map(([key, value]) => [value, key]),
-) as Record<string, RoleId>;
+) as Record<string, string>;
 
 const salaryToApi: Record<SalaryId, string> = {
   monthly: "شهري",
@@ -166,7 +175,7 @@ function formatSalaryRate(salaryType: SalaryId, value: unknown) {
 }
 
 function mapApiWorker(worker: ApiWorker): Worker {
-  const role = roleFromApi[worker.role] ?? "assistant";
+  const role = roleFromApi[worker.role] ?? worker.role;
   const salaryType = salaryFromApi[worker.salaryType] ?? "monthly";
   const status = statusFromApi[worker.status ?? ""] ?? "active";
   const attendanceStatus = worker.attendanceStatusToday ?? "";
@@ -218,7 +227,7 @@ function workerPayloadFromForm(form: AddWorkerForm) {
   return {
     fullName: form.name.trim(),
     phone: form.phone.trim(),
-    role: roleToApi[form.role],
+    role: roleToApi[form.role] ?? form.role,
     salaryType: salaryToApi[form.salaryType],
     monthlySalary:
       form.salaryType === "monthly" ? parseSalaryValue(form.monthlySalary) : 0,
@@ -275,6 +284,21 @@ export function WorkersPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [savingWorker, setSavingWorker] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
+  const [roleOptionNames, setRoleOptionNames] = useState<string[]>(() =>
+    Object.values(roleToApi),
+  );
+
+  const roleChoices = useMemo<WorkerRoleChoice[]>(
+    () =>
+      roleOptionNames.map((name) => {
+        const value = roleFromApi[name] ?? name;
+        return {
+          value,
+          label: roleLabels[value]?.[lang] ?? name,
+        };
+      }),
+    [lang, roleOptionNames],
+  );
 
   const workersQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -285,7 +309,9 @@ export function WorkersPage() {
     });
 
     if (filters.query.trim()) params.set("search", filters.query.trim());
-    if (filters.role !== "all") params.set("role", roleToApi[filters.role]);
+    if (filters.role !== "all") {
+      params.set("role", roleToApi[filters.role] ?? filters.role);
+    }
     if (filters.salary !== "all")
       params.set("salaryType", salaryToApi[filters.salary]);
     if (filters.status !== "all")
@@ -293,6 +319,25 @@ export function WorkersPage() {
 
     return params.toString();
   }, [filters.query, filters.role, filters.salary, filters.status]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetchJson<ApiWorkerRolesResponse>("/workers/roles", {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setRoleOptionNames(
+          Array.from(new Set(response.data.map((role) => role.name))),
+        );
+      })
+      .catch(() => {
+        // Keep the built-in roles available if this secondary request fails.
+      });
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -370,6 +415,23 @@ export function WorkersPage() {
     } finally {
       setSavingWorker(false);
     }
+  }
+
+  async function handleCreateRole(name: string): Promise<WorkerRoleChoice> {
+    const created = await fetchJson<ApiWorkerRole>("/workers/roles", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+
+    setRoleOptionNames((current) =>
+      current.includes(created.name) ? current : [...current, created.name],
+    );
+
+    const value = roleFromApi[created.name] ?? created.name;
+    return {
+      value,
+      label: roleLabels[value]?.[lang] ?? created.name,
+    };
   }
 
   async function openEditWorker(id: string) {
@@ -531,7 +593,6 @@ export function WorkersPage() {
   const tabs: { id: TabId; label: string }[] = [
     { id: "all", label: t.tabs.all },
     { id: "attendance", label: t.tabs.attendance },
-    { id: "productivity", label: t.tabs.productivity },
     { id: "notes", label: t.tabs.notes },
   ];
 
@@ -580,6 +641,7 @@ export function WorkersPage() {
           filters={filters}
           onChange={setFilters}
           onAdd={() => setModalOpen(true)}
+          roleChoices={roleChoices}
         />
       </div>
 
@@ -660,9 +722,6 @@ export function WorkersPage() {
                     onChangeAttendance={openAttendance}
                   />
                 )}
-                {tab === "productivity" && (
-                  <ProductivityList rows={rows} onSelect={setSelectedId} />
-                )}
                 {tab === "notes" && (
                   <NotesList rows={rows} onSelect={setSelectedId} />
                 )}
@@ -703,6 +762,8 @@ export function WorkersPage() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleCreateWorker}
         isSaving={savingWorker}
+        roleChoices={roleChoices}
+        onCreateRole={handleCreateRole}
       />
       <DeleteWorkerModal
         open={!!workerToDelete}
@@ -719,6 +780,8 @@ export function WorkersPage() {
         initialValues={editingForm}
         isSaving={savingWorker}
         mode="edit"
+        roleChoices={roleChoices}
+        onCreateRole={handleCreateRole}
       />
       <MarkAttendanceModal
         open={!!attendanceWorkerId}
@@ -854,7 +917,7 @@ function RowShell({
       <div className="min-w-0 flex-1">
         <div style={{ fontWeight: 600, fontSize: 14 }}>{worker.name[lang]}</div>
         <div style={{ fontSize: 12, color: palette.muted }}>
-          {roleLabels[worker.role][lang]}
+          {getRoleLabel(worker.role, lang)}
         </div>
       </div>
       {children}
@@ -919,40 +982,6 @@ function AttendanceList({
   );
 }
 
-function ProductivityList({
-  rows,
-  onSelect,
-}: {
-  rows: Worker[];
-  onSelect: (id: string) => void;
-}) {
-  const { lang } = useLanguage();
-  const t = workersText[lang];
-  const sorted = [...rows].sort((a, b) => b.productivity - a.productivity);
-  return (
-    <div className="flex flex-col gap-2.5">
-      {sorted.map((w) => (
-        <RowShell key={w.id} worker={w} onSelect={onSelect}>
-          <div className="flex items-center gap-4" style={{ width: 240 }}>
-            <span
-              style={{
-                fontSize: 12.5,
-                color: palette.muted,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {w.pieces} {t.pieceUnit}
-            </span>
-            <div style={{ flex: 1 }}>
-              <ProgressBar value={w.productivity} />
-            </div>
-          </div>
-        </RowShell>
-      ))}
-    </div>
-  );
-}
-
 function NotesList({
   rows,
   onSelect,
@@ -983,8 +1012,8 @@ function NotesList({
                 {w.name[lang]}
               </div>
             </div>
-            <Badge bg={roleColors[w.role].bg} fg={roleColors[w.role].fg}>
-              {roleLabels[w.role][lang]}
+            <Badge bg={getRoleColors(w.role).bg} fg={getRoleColors(w.role).fg}>
+              {getRoleLabel(w.role, lang)}
             </Badge>
           </div>
           <div

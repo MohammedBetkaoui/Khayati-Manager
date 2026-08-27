@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { Search, Plus, Download, CalendarCheck, CalendarRange, Filter } from "lucide-react";
+import { Search, Plus, CalendarRange, Filter } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
 import { Button, Select } from "../kit";
 import {
-  roleLabels,
   salaryLabels,
   statusLabels,
   workersText,
   type RoleId,
   type SalaryId,
   type StatusId,
+  type WorkerRoleChoice,
 } from "../../pages/workers-data";
 
 export type Filters = {
@@ -25,10 +25,12 @@ export function ActionBar({
   filters,
   onChange,
   onAdd,
+  roleChoices,
 }: {
   filters: Filters;
   onChange: (next: Filters) => void;
   onAdd: () => void;
+  roleChoices: WorkerRoleChoice[];
 }) {
   const { lang } = useLanguage();
   const t = workersText[lang];
@@ -45,14 +47,6 @@ export function ActionBar({
         </Button>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="ghost" onClick={() => {}}>
-            <CalendarCheck size={17} />
-            {t.markToday}
-          </Button>
-          <Button variant="secondary" onClick={() => {}}>
-            <Download size={17} />
-            {t.export}
-          </Button>
           <Button variant="primary" onClick={onAdd}>
             <Plus size={18} />
             {t.addWorker}
@@ -101,9 +95,9 @@ export function ActionBar({
           <div className="w-[150px]">
             <Select value={filters.role} onChange={(e) => set("role", e.target.value as Filters["role"])}>
               <option value="all">{t.allRoles}</option>
-              {(Object.keys(roleLabels) as RoleId[]).map((r) => (
-                <option key={r} value={r}>
-                  {roleLabels[r][lang]}
+              {roleChoices.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
                 </option>
               ))}
             </Select>

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -473,6 +474,9 @@ export class InventoryService implements OnModuleInit {
       .addSelect('COALESCE(SUM(supplier.totalPurchases), 0)', 'totalPurchases')
       .addSelect('COALESCE(SUM(supplier.totalPaid), 0)', 'totalPaid')
       .addSelect('COALESCE(SUM(supplier.totalDebt), 0)', 'totalDebt')
+      .where('supplier.status != :archived', {
+        archived: SupplierStatus.ARCHIVED,
+      })
       .setParameter('active', SupplierStatus.ACTIVE)
       .getRawOne<Record<string, string | number | null>>();
 
@@ -486,8 +490,16 @@ export class InventoryService implements OnModuleInit {
   }
 
   async createSupplier(dto: CreateSupplierDto) {
+    const name = this.normalizeRequiredText(dto.name, 'supplier name');
+    const existing = await this.suppliersRepository.findOne({ where: { name } });
+    if (existing?.status === SupplierStatus.ARCHIVED) {
+      throw new ConflictException(
+        'This supplier is archived. Restore it from the supplier archives instead of creating it again.',
+      );
+    }
+
     const supplier = await this.upsertSupplierByName({
-      name: dto.name,
+      name,
       phone: dto.phone,
       address: dto.address,
       city: dto.city,
@@ -515,10 +527,24 @@ export class InventoryService implements OnModuleInit {
 
   async archiveSupplier(id: number) {
     const supplier = await this.findSupplierOrFail(id);
-    supplier.status = SupplierStatus.ARCHIVED;
-    supplier.archivedAt = new Date();
-    await this.suppliersRepository.save(supplier);
+    if (supplier.status !== SupplierStatus.ARCHIVED) {
+      supplier.status = SupplierStatus.ARCHIVED;
+      supplier.archivedAt = new Date();
+      await this.suppliersRepository.save(supplier);
+    }
     return { archived: true, supplier: this.serializeSupplierDetail(supplier) };
+  }
+
+  async restoreSupplier(id: number) {
+    const supplier = await this.findSupplierOrFail(id);
+    if (supplier.status !== SupplierStatus.ARCHIVED) {
+      return this.serializeSupplierDetail(supplier);
+    }
+
+    supplier.status = SupplierStatus.ACTIVE;
+    supplier.archivedAt = null;
+    await this.suppliersRepository.save(supplier);
+    return this.serializeSupplierDetail(supplier);
   }
 
   async findSupplierProfile(id: number) {
@@ -601,6 +627,11 @@ export class InventoryService implements OnModuleInit {
   async createMaterialPurchase(dto: CreateMaterialPurchaseDto) {
     const purchaseId = await this.dataSource.transaction(async (manager) => {
       const supplier = await this.resolvePurchaseSupplier(manager, dto);
+      if (supplier.status === SupplierStatus.ARCHIVED) {
+        throw new BadRequestException(
+          'Archived suppliers cannot receive new purchases. Restore the supplier first.',
+        );
+      }
       const item = await this.resolvePurchasedMaterial(manager, dto, supplier);
       const totalAmount = this.roundMoney(dto.totalAmount);
       const paidAmount = this.roundMoney(dto.paidAmount ?? 0);

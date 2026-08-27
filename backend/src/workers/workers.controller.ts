@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { CreateProductionDto } from './dto/create-production.dto';
+import { CreateWorkerRoleDto } from './dto/create-worker-role.dto';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateProductionDto } from './dto/update-production.dto';
@@ -21,6 +22,16 @@ import { WorkersService } from './workers.service';
 @Controller('workers')
 export class WorkersController {
   constructor(private readonly workersService: WorkersService) {}
+
+  @Get('roles')
+  getRoles() {
+    return this.workersService.getRoleOptions();
+  }
+
+  @Post('roles')
+  createRole(@Body() dto: CreateWorkerRoleDto) {
+    return this.workersService.createRoleOption(dto);
+  }
 
   @Get('stats')
   getStats() {

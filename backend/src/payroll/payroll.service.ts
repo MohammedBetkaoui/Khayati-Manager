@@ -640,7 +640,7 @@ export class PayrollService implements OnModuleInit {
   ): Promise<PayrollValues> {
     const periodStart = this.dateKey(dto.periodStart);
     const periodEnd = this.dateKey(dto.periodEnd);
-    this.validateWeeklyPeriod(periodStart, periodEnd);
+    this.validatePayrollPeriod(periodStart, periodEnd);
     const otherDeductions = this.money(dto.otherDeductions ?? 0);
 
     const salaryType = snapshot?.salaryType ?? worker.salaryType;
@@ -902,25 +902,43 @@ export class PayrollService implements OnModuleInit {
     periodEnd: string,
     excludeId?: number,
   ) {
+    const normalizedStart = this.dateKey(periodStart);
+    const normalizedEnd = this.dateKey(periodEnd);
+    this.validatePayrollPeriod(normalizedStart, normalizedEnd);
+
     const qb = manager
       .getRepository(Payroll)
       .createQueryBuilder('payroll')
       .where('payroll.workerId = :workerId', { workerId })
-      .andWhere('payroll.periodStart = :periodStart', {
-        periodStart: this.dateKey(periodStart),
+      .andWhere('payroll.periodStart <= :periodEnd', {
+        periodEnd: normalizedEnd,
       })
-      .andWhere('payroll.periodEnd = :periodEnd', {
-        periodEnd: this.dateKey(periodEnd),
+      .andWhere('payroll.periodEnd >= :periodStart', {
+        periodStart: normalizedStart,
       })
       .andWhere('payroll.status != :cancelled', {
         cancelled: PayrollStatus.CANCELLED,
-      });
+      })
+      .orderBy(
+        'CASE WHEN payroll.periodStart = :periodStart AND payroll.periodEnd = :periodEnd THEN 0 ELSE 1 END',
+        'ASC',
+      );
     if (excludeId) qb.andWhere('payroll.id != :excludeId', { excludeId });
-    if (await qb.getOne()) {
+    const conflict = await qb.getOne();
+    if (!conflict) return;
+
+    if (
+      conflict.periodStart === normalizedStart &&
+      conflict.periodEnd === normalizedEnd
+    ) {
       throw new ConflictException(
-        'A payroll already exists for this worker and period.',
+        `A payroll already exists for exactly this worker period. [PAYROLL_PERIOD_DUPLICATE|${conflict.periodStart}|${conflict.periodEnd}]`,
       );
     }
+
+    throw new ConflictException(
+      `The selected period overlaps an existing payroll period. [PAYROLL_PERIOD_OVERLAP|${conflict.periodStart}|${conflict.periodEnd}]`,
+    );
   }
 
   private async findWorkerOrFail(manager: EntityManager, id: number) {
@@ -939,14 +957,16 @@ export class PayrollService implements OnModuleInit {
     }
   }
 
-  private validateWeeklyPeriod(start: string, end: string) {
+  private validatePayrollPeriod(start: string, end: string) {
     const startDate = new Date(`${start}T00:00:00Z`);
     const endDate = new Date(`${end}T00:00:00Z`);
-    const days =
-      Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
-    if (!Number.isFinite(days) || days < 1 || days > 7) {
+    if (
+      !Number.isFinite(startDate.getTime()) ||
+      !Number.isFinite(endDate.getTime()) ||
+      endDate < startDate
+    ) {
       throw new BadRequestException(
-        'A payroll period must contain between one and seven days.',
+        'The payroll period end date must be on or after its start date.',
       );
     }
   }

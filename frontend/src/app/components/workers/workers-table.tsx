@@ -1,10 +1,10 @@
-import { Eye, Pencil, StickyNote, Trash2, UserRound } from "lucide-react";
+import { Eye, Pencil, Trash2, UserRound } from "lucide-react";
 import { palette } from "../../content";
 import { useLanguage } from "../../language-context";
-import { Avatar, Badge, ProgressBar } from "../kit";
+import { Avatar, Badge } from "../kit";
 import {
-  roleColors,
-  roleLabels,
+  getRoleColors,
+  getRoleLabel,
   salaryLabels,
   statusColors,
   statusLabels,
@@ -78,7 +78,7 @@ export function WorkersTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 920 }}>
+      <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 800 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
             <th style={headStyle}>{t.cols.name}</th>
@@ -88,7 +88,6 @@ export function WorkersTable({
             <th style={headStyle}>{t.cols.salary}</th>
             <th style={headStyle}>{t.cols.attendance}</th>
             <th style={headStyle}>{t.cols.pieces}</th>
-            <th style={{ ...headStyle, minWidth: 130 }}>{t.cols.productivity}</th>
             <th style={headStyle}>{t.cols.status}</th>
             <th style={{ ...headStyle, textAlign: "center" }}>{t.cols.actions}</th>
           </tr>
@@ -97,6 +96,7 @@ export function WorkersTable({
           {rows.map((w) => {
             const selected = w.id === selectedId;
             const present = w.attendance === "present";
+            const roleColor = getRoleColors(w.role);
             return (
               <tr
                 key={w.id}
@@ -120,8 +120,8 @@ export function WorkersTable({
                   </div>
                 </td>
                 <td style={cellStyle}>
-                  <Badge bg={roleColors[w.role].bg} fg={roleColors[w.role].fg}>
-                    {roleLabels[w.role][lang]}
+                  <Badge bg={roleColor.bg} fg={roleColor.fg}>
+                    {getRoleLabel(w.role, lang)}
                   </Badge>
                 </td>
                 <td style={{ ...cellStyle, direction: "ltr", color: palette.muted }}>{w.phone}</td>
@@ -149,9 +149,6 @@ export function WorkersTable({
                 </td>
                 <td style={{ ...cellStyle, fontWeight: 700 }}>{w.pieces}</td>
                 <td style={cellStyle}>
-                  <ProgressBar value={w.productivity} />
-                </td>
-                <td style={cellStyle}>
                   <Badge
                     bg={`${statusColors[w.status]}1f`}
                     fg={statusColors[w.status]}
@@ -165,7 +162,6 @@ export function WorkersTable({
                     <ActionIcon icon={Eye} label={t.view} onClick={(e) => { e.stopPropagation(); onSelect(w.id); }} />
                     <ActionIcon icon={UserRound} label={t.panel.fullDetails} onClick={(e) => { e.stopPropagation(); onOpenProfile?.(w.id); }} />
                     <ActionIcon icon={Pencil} label={t.edit} onClick={(e) => { e.stopPropagation(); onEdit?.(w.id); }} />
-                    <ActionIcon icon={StickyNote} label={t.notes} onClick={(e) => e.stopPropagation()} />
                     <ActionIcon icon={Trash2} label={t.delete} danger onClick={(e) => { e.stopPropagation(); onDelete?.(w.id); }} />
                   </div>
                 </td>
