@@ -11,6 +11,7 @@ import {
   type PayrollRecord,
 } from "../../pages/salary-data";
 import { Badge, Button } from "../kit";
+import { ModalShell } from "../modal-shell";
 
 function AmountLine({ label, value, color = palette.text }: { label: string; value: string; color?: string }) {
   return <div className="flex items-center justify-between gap-4 text-sm"><span style={{ color: palette.muted }}>{label}</span><strong style={{ color }}>{value}</strong></div>;
@@ -22,12 +23,14 @@ export function SalaryDetailsBar({
   onPay,
   onCancel,
   onDelete,
+  showCloseButton = true,
 }: {
   record: PayrollRecord;
   onClose: () => void;
   onPay: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  showCloseButton?: boolean;
 }) {
   const { lang } = useLanguage();
   const status = payrollStatusCode(record.status);
@@ -55,7 +58,7 @@ export function SalaryDetailsBar({
           {record.remainingAmount > 0 && status !== "cancelled" ? <Button variant="primary" onClick={onPay}><Wallet size={15} />{lang === "ar" ? "تسجيل دفع" : "Enregistrer un paiement"}</Button> : null}
           {record.paidAmount === 0 && status !== "cancelled" ? <Button variant="secondary" onClick={onCancel}><Ban size={15} />{lang === "ar" ? "إلغاء مسجل" : "Annuler avec trace"}</Button> : null}
           <Button variant="secondary" onClick={onDelete}><Trash2 size={15} />{lang === "ar" ? "حذف نهائي" : "Supprimer"}</Button>
-          <button type="button" aria-label="close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ color: palette.muted, border: `1px solid ${palette.border}` }}><X size={17} /></button>
+          {showCloseButton ? <button type="button" aria-label="close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ color: palette.muted, border: `1px solid ${palette.border}` }}><X size={17} /></button> : null}
         </div>
       </div>
 
@@ -101,5 +104,45 @@ export function SalaryDetailsBar({
       </div>
       {record.notes ? <p className="mt-4 text-sm" style={{ color: palette.muted }}>{record.notes}</p> : null}
     </section>
+  );
+}
+
+export function SalaryDetailsModal({
+  open,
+  record,
+  onClose,
+  onPay,
+  onCancel,
+  onDelete,
+}: {
+  open: boolean;
+  record: PayrollRecord | null;
+  onClose: () => void;
+  onPay: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const { lang } = useLanguage();
+
+  return (
+    <ModalShell
+      open={open && Boolean(record)}
+      onClose={onClose}
+      title={lang === "ar" ? "تفاصيل الراتب" : "Détail de la paie"}
+      maxWidth={1080}
+    >
+      {record ? (
+        <div className="p-5">
+          <SalaryDetailsBar
+            record={record}
+            onClose={onClose}
+            onPay={onPay}
+            onCancel={onCancel}
+            onDelete={onDelete}
+            showCloseButton={false}
+          />
+        </div>
+      ) : null}
+    </ModalShell>
   );
 }

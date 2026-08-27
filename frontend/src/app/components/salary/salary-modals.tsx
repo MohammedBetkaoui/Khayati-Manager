@@ -252,6 +252,92 @@ function AdvanceMoneyModal({ open, onClose, onSaved, workers }: { open: boolean;
 
 export function AdvanceModal(props: Parameters<typeof AdvanceMoneyModal>[0]) { return <AdvanceMoneyModal {...props} />; }
 
+export function CancelPayrollModal({ open, onClose, onCancelled, record }: { open: boolean; onClose: () => void; onCancelled: () => void; record: PayrollRecord | null }) {
+  const { lang } = useLanguage();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setReason("");
+    setError(null);
+  }, [open, record?.id]);
+
+  const canCancel = Boolean(record && reason.trim().length >= 3);
+
+  async function submit() {
+    if (!record || !canCancel) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await fetchJson(`/payroll/${record.id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      onCancelled();
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to cancel payroll.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell open={open} onClose={onClose} title={lang === "ar" ? "إلغاء تسجيل الراتب" : "Annuler l'enregistrement de paie"} maxWidth={620}>
+      <form className="space-y-4 px-6 py-5" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+        <div className="rounded-2xl p-4" style={{ border: "1px solid rgba(192,125,79,.35)", backgroundColor: "rgba(192,125,79,.1)" }}>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: "rgba(192,125,79,.16)", color: "#a87d3c" }}><AlertTriangle size={20} /></div>
+            <div>
+              <h3 style={{ color: "#8a5f26", fontWeight: 800 }}>{lang === "ar" ? "تأكيد إلغاء مسجل" : "Confirmation d'annulation"}</h3>
+              <p className="mt-1 text-sm leading-6" style={{ color: "#8a5f26" }}>
+                {lang === "ar"
+                  ? "سيتم إلغاء هذا الراتب مع حفظ السبب في السجل. لا يمكن إلغاء راتب يحتوي على دفعات مسجلة؛ في هذه الحالة استخدم التصحيح أو الحذف النهائي عند الحاجة."
+                  : "Cette paie sera marquée comme annulée avec un motif conservé dans l'historique. Une paie qui contient déjà des paiements ne peut pas être annulée par cette action."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-4" style={{ backgroundColor: palette.bg, border: `1px solid ${palette.border}` }}>
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "العامل" : "Travailleur"}</span><strong style={{ color: palette.text }}>{record?.workerName ?? "-"}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "الفترة" : "Période"}</span><strong style={{ color: palette.text }}>{record ? `${record.periodStart} -> ${record.periodEnd}` : "-"}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "الصافي المستحق" : "Net dû"}</span><strong style={{ color: palette.primary }}>{money(record?.amountDue ?? 0, lang)}</strong>
+            <span style={{ color: palette.muted }}>{lang === "ar" ? "المدفوع" : "Payé"}</span><strong style={{ color: "#4d8a6a" }}>{money(record?.paidAmount ?? 0, lang)}</strong>
+          </div>
+        </div>
+
+        <Field label={lang === "ar" ? "سبب الإلغاء *" : "Motif d'annulation *"}>
+          <Textarea
+            required
+            rows={4}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder={lang === "ar" ? "مثال: خطأ في الفترة أو المبلغ..." : "Exemple : erreur de période ou de montant..."}
+          />
+        </Field>
+
+        <ErrorMessage message={error} />
+
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button variant="secondary" onClick={onClose}>{lang === "ar" ? "رجوع" : "Retour"}</Button>
+          <button
+            type="submit"
+            disabled={!canCancel || saving}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-opacity"
+            style={{ backgroundColor: "#a87d3c", color: "#fff", opacity: !canCancel || saving ? 0.55 : 1, cursor: !canCancel || saving ? "not-allowed" : "pointer" }}
+          >
+            <RotateCcw size={15} />{saving ? (lang === "ar" ? "جاري الإلغاء..." : "Annulation...") : (lang === "ar" ? "تأكيد الإلغاء" : "Confirmer l'annulation")}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
 export function DeletePayrollModal({ open, onClose, onDeleted, record }: { open: boolean; onClose: () => void; onDeleted: () => void; record: PayrollRecord | null }) {
   const { lang } = useLanguage();
   const [confirmation, setConfirmation] = useState("");

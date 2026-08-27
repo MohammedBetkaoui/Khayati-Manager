@@ -4,9 +4,9 @@ import { useNavigate } from "react-router";
 import { Button, Select, TextInput } from "../components/kit";
 import { PageBackground } from "../components/page-background";
 import { PayrollTable } from "../components/salary/payroll-table";
-import { SalaryDetailsBar } from "../components/salary/salary-details-bar";
+import { SalaryDetailsModal } from "../components/salary/salary-details-bar";
 import { SummaryCards } from "../components/salary/summary-cards";
-import { AdvanceModal, CalculateSalaryModal, DeletePayrollModal, PaymentModal } from "../components/salary/salary-modals";
+import { AdvanceModal, CalculateSalaryModal, CancelPayrollModal, DeletePayrollModal, PaymentModal } from "../components/salary/salary-modals";
 import { useLanguage } from "../language-context";
 import { fetchJson, getArrayFromPayload } from "../lib/api";
 import { palette, type DashboardStats, type PayrollRecord, type WorkerOption } from "./salary-data";
@@ -53,6 +53,7 @@ export function SalaryPage() {
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [paymentRecord, setPaymentRecord] = useState<PayrollRecord | null>(null);
+  const [cancelRecord, setCancelRecord] = useState<PayrollRecord | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<PayrollRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export function SalaryPage() {
         setRecords(nextRecords);
         setStats(statsPayload);
         setWorkers(getArrayFromPayload(workersPayload) as WorkerOption[]);
-        setSelectedId((current) => nextRecords.some((item) => item.id === current) ? current : nextRecords[0]?.id ?? null);
+        setSelectedId((current) => nextRecords.some((item) => item.id === current) ? current : null);
       } catch (caught) {
         if (!cancelled) { setRecords([]); setStats(emptyStats); setError(caught instanceof Error ? caught.message : "Unable to load payroll."); }
       } finally { if (!cancelled) setLoading(false); }
@@ -100,15 +101,10 @@ export function SalaryPage() {
     setEndDate((value) => shiftWeek(value, amount));
   }
 
-  async function cancelPayroll(record: PayrollRecord) {
-    const reason = window.prompt(lang === "ar" ? "سبب الإلغاء (سيبقى مسجلاً في التاريخ):" : "Motif de l’annulation (conservé dans l’historique) :");
-    if (!reason?.trim()) return;
-    try {
-      await fetchJson(`/payroll/${record.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
-      refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to cancel payroll.");
-    }
+  function afterPayrollCancelled() {
+    if (cancelRecord?.id === selectedId) setSelectedId(null);
+    setCancelRecord(null);
+    refresh();
   }
 
   function afterPayrollDeleted() {
@@ -155,16 +151,16 @@ export function SalaryPage() {
       </section>
 
       {error ? <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ color: "#b46a66", backgroundColor: "rgba(180,106,102,.1)" }}>{error}</div> : null}
-      {selected ? <div className="mt-5"><SalaryDetailsBar record={selected} onClose={() => setSelectedId(null)} onPay={() => setPaymentRecord(selected)} onCancel={() => void cancelPayroll(selected)} onDelete={() => setDeleteRecord(selected)} /></div> : null}
-
       <section className="mt-5 mb-10 overflow-hidden rounded-[20px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${palette.border}` }}><h2 style={{ color: palette.text, fontWeight: 800 }}>{lang === "ar" ? "قائمة الرواتب" : "Paies de la période"}</h2>{loading ? <span className="text-sm" style={{ color: palette.muted }}>{lang === "ar" ? "جاري التحميل..." : "Chargement..."}</span> : <span className="text-sm" style={{ color: palette.muted }}>{records.length}</span>}</div>
-        <PayrollTable records={records} selectedId={selectedId} onSelect={setSelectedId} onPay={setPaymentRecord} onDelete={setDeleteRecord} />
+        <PayrollTable records={records} selectedId={selectedId} onSelect={setSelectedId} onCancel={setCancelRecord} onPay={setPaymentRecord} onDelete={setDeleteRecord} />
       </section>
 
+      <SalaryDetailsModal open={Boolean(selected)} record={selected} onClose={() => setSelectedId(null)} onPay={() => selected && setPaymentRecord(selected)} onCancel={() => { if (selected) { setCancelRecord(selected); setSelectedId(null); } }} onDelete={() => selected && setDeleteRecord(selected)} />
       <CalculateSalaryModal open={payrollOpen} onClose={() => setPayrollOpen(false)} onSaved={refresh} workers={workers} periodStart={startDate} periodEnd={endDate} />
       <AdvanceModal open={advanceOpen} onClose={() => setAdvanceOpen(false)} onSaved={refresh} workers={workers} />
       <PaymentModal open={Boolean(paymentRecord)} onClose={() => setPaymentRecord(null)} onSaved={refresh} record={paymentRecord} />
+      <CancelPayrollModal open={Boolean(cancelRecord)} onClose={() => setCancelRecord(null)} onCancelled={afterPayrollCancelled} record={cancelRecord} />
       <DeletePayrollModal open={Boolean(deleteRecord)} onClose={() => setDeleteRecord(null)} onDeleted={afterPayrollDeleted} record={deleteRecord} />
     </PageBackground>
   );
