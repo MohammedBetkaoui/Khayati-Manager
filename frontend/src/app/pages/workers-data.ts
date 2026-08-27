@@ -25,13 +25,13 @@ export const roleLabels: Record<RoleId, Bilingual> = {
 };
 
 export const roleColors: Record<RoleId, { bg: string; fg: string }> = {
-  tailor: { bg: "rgba(18,60,74,0.10)", fg: "#123c4a" },
+  tailor: { bg: "rgba(103,165,175,0.13)", fg: "var(--app-primary)" },
   assistant: { bg: "rgba(138,136,127,0.14)", fg: "#6b6a62" },
   cutter: { bg: "rgba(195,154,91,0.16)", fg: "#a87d3c" },
   ironing: { bg: "rgba(201,138,134,0.16)", fg: "#b46a66" },
   packaging: { bg: "rgba(90,130,120,0.14)", fg: "#4d7a6b" },
   seller: { bg: "rgba(96,120,160,0.14)", fg: "#4f6a99" },
-  supervisor: { bg: "rgba(18,60,74,0.14)", fg: "#0d2d38" },
+  supervisor: { bg: "rgba(103,165,175,0.16)", fg: "var(--app-primary)" },
 };
 
 export const salaryLabels: Record<SalaryId, Bilingual> = {
@@ -75,7 +75,8 @@ export const ar = {
   breadcrumbHome: "الرئيسية",
   breadcrumbWorkers: "تسيير العمال",
   title: "تسيير العمال",
-  subtitle: "إدارة معلومات العمال، الحضور، الإنتاجية وأنواع الأجور بطريقة واضحة ومنظمة",
+  subtitle:
+    "إدارة معلومات العمال، الحضور، الإنتاجية وأنواع الأجور بطريقة واضحة ومنظمة",
   summary: {
     total: "إجمالي العمال",
     present: "الحاضرون اليوم",
@@ -201,7 +202,8 @@ export const fr: typeof ar = {
   notes: "Notes",
   delete: "Archiver",
   emptyPanelTitle: "Aucun travailleur sélectionné",
-  emptyPanelText: "Sélectionnez un travailleur dans la liste pour voir ses détails.",
+  emptyPanelText:
+    "Sélectionnez un travailleur dans la liste pour voir ses détails.",
   panel: {
     phone: "Téléphone",
     start: "Date de début",

@@ -17,6 +17,7 @@ import { Invoice } from '../sales/entities/invoice.entity';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import {
   ExpenseFilterDto,
+  ExpenseLanguage,
   ExpensePeriodFilter,
   ExpenseTabFilter,
 } from './dto/expense-filter.dto';
@@ -102,6 +103,7 @@ export class ExpensesService {
   }
 
   async findAll(filters: ExpenseFilterDto = {}) {
+    const language = filters.lang ?? ExpenseLanguage.FR;
     const [manualExpenses, purchases, payrolls, supplierPayments, supplierAdvances, salaryPayments, invoices] =
       await Promise.all([
         this.expenseRepository.find({ where: { archivedAt: IsNull() }, order: { date: 'DESC', id: 'DESC' } }),
@@ -120,11 +122,11 @@ export class ExpensesService {
       ]);
 
     const rows = [
-      ...purchases.map((purchase) => this.serializePurchaseExpense(purchase)),
+      ...purchases.map((purchase) => this.serializePurchaseExpense(purchase, language)),
       ...payrolls
         .filter((payroll) => payroll.status !== 'CANCELLED')
-        .map((payroll) => this.serializePayrollExpense(payroll)),
-      ...manualExpenses.map((expense) => this.serializeManualExpense(expense)),
+        .map((payroll) => this.serializePayrollExpense(payroll, language)),
+      ...manualExpenses.map((expense) => this.serializeManualExpense(expense, language)),
     ].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
     const range = this.resolveRange(filters);
@@ -140,7 +142,7 @@ export class ExpensesService {
         manualExpenses,
         invoices,
       }),
-      alerts: this.buildAlerts(rows),
+      alerts: this.buildAlerts(rows, language),
       reports: this.buildReports(periodRows, rows),
       filters: {
         period: filters.period ?? ExpensePeriodFilter.MONTH,
@@ -214,7 +216,10 @@ export class ExpensesService {
     return expense;
   }
 
-  private serializePurchaseExpense(purchase: SupplierPurchase): UnifiedExpenseRow {
+  private serializePurchaseExpense(
+    purchase: SupplierPurchase,
+    language = ExpenseLanguage.FR,
+  ): UnifiedExpenseRow {
     const supplier = purchase.supplier;
     const totalAmount = this.money(purchase.totalAmount);
     const paidAmount = this.money(purchase.paidAmount);
@@ -224,10 +229,10 @@ export class ExpensesService {
       sourceId: purchase.id,
       sourceType: ExpenseSourceType.SUPPLIER_PURCHASE,
       date: this.dateKey(purchase.purchaseDate),
-      description: `Achat ${purchase.materialName}${purchase.materialColor ? ` - ${purchase.materialColor}` : ''}`,
+      description: `${language === ExpenseLanguage.AR ? 'شراء' : 'Achat'} ${purchase.materialName}${purchase.materialColor ? ` - ${purchase.materialColor}` : ''}`,
       category: ExpenseCategory.MATERIAL_PURCHASE,
-      originLabel: 'Achat fournisseur',
-      relatedName: supplier?.name ?? 'Fournisseur',
+      originLabel: language === ExpenseLanguage.AR ? 'شراء من مورد' : 'Achat fournisseur',
+      relatedName: supplier?.name ?? (language === ExpenseLanguage.AR ? 'مورد' : 'Fournisseur'),
       totalAmount,
       paidAmount,
       remainingAmount,
@@ -240,23 +245,26 @@ export class ExpensesService {
     };
   }
 
-  private serializePayrollExpense(payroll: Payroll): UnifiedExpenseRow {
+  private serializePayrollExpense(
+    payroll: Payroll,
+    language = ExpenseLanguage.FR,
+  ): UnifiedExpenseRow {
     const worker = payroll.worker;
     const totalAmount = this.money(payroll.grossAmount);
     const paidAmount = this.money(
       Math.min(totalAmount, (payroll.paidAmount ?? 0) + (payroll.advanceDeduction ?? 0)),
     );
     const remainingAmount = this.money(Math.max(0, totalAmount - paidAmount));
-    const workerName = worker?.fullName ?? 'Travailleur';
+    const workerName = worker?.fullName ?? (language === ExpenseLanguage.AR ? 'عامل' : 'Travailleur');
 
     return {
       id: `payroll-${payroll.id}`,
       sourceId: payroll.id,
       sourceType: ExpenseSourceType.PAYROLL,
       date: this.dateKey(payroll.periodEnd),
-      description: `Salaire ${workerName} (${this.dateKey(payroll.periodStart)} - ${this.dateKey(payroll.periodEnd)})`,
+      description: `${language === ExpenseLanguage.AR ? 'راتب' : 'Salaire'} ${workerName} (${this.displayDate(payroll.periodStart, language)} - ${this.displayDate(payroll.periodEnd, language)})`,
       category: ExpenseCategory.WORKER_SALARIES,
-      originLabel: 'Gestion des salaires',
+      originLabel: language === ExpenseLanguage.AR ? 'تسيير الرواتب' : 'Gestion des salaires',
       relatedName: workerName,
       totalAmount,
       paidAmount,
@@ -271,7 +279,10 @@ export class ExpensesService {
     };
   }
 
-  private serializeManualExpense(expense: Expense): UnifiedExpenseRow {
+  private serializeManualExpense(
+    expense: Expense,
+    language = ExpenseLanguage.FR,
+  ): UnifiedExpenseRow {
     const totalAmount = this.money(expense.amount);
     const paidAmount = this.money(expense.paidAmount ?? totalAmount);
     const remainingAmount = this.money(
@@ -284,7 +295,13 @@ export class ExpensesService {
       date: this.dateKey(expense.date),
       description: expense.name,
       category: expense.category,
-      originLabel: expense.isRecurring ? 'Récurrent' : 'Manuel',
+      originLabel: expense.isRecurring
+        ? language === ExpenseLanguage.AR
+          ? 'متكرر'
+          : 'Récurrent'
+        : language === ExpenseLanguage.AR
+          ? 'يدوي'
+          : 'Manuel',
       relatedName: expense.supplier ?? null,
       totalAmount,
       paidAmount,
@@ -379,7 +396,10 @@ export class ExpensesService {
     };
   }
 
-  private buildAlerts(rows: UnifiedExpenseRow[]) {
+  private buildAlerts(
+    rows: UnifiedExpenseRow[],
+    language = ExpenseLanguage.FR,
+  ) {
     const today = this.todayKey();
     const inSevenDays = this.addDays(today, 7);
 
@@ -392,7 +412,10 @@ export class ExpensesService {
         type: row.sourceType,
         severity: row.status === ExpenseStatus.OVERDUE ? 'high' : 'medium',
         title: row.relatedName || row.description,
-        message: `${row.remainingAmount.toLocaleString('fr-FR')} DZD restant à payer`,
+        message:
+          language === ExpenseLanguage.AR
+            ? `${row.remainingAmount.toLocaleString('ar-DZ')} دج متبقية للدفع`
+            : `${row.remainingAmount.toLocaleString('fr-FR')} DZD restant à payer`,
         amount: row.remainingAmount,
         route: row.route,
       }));
@@ -406,18 +429,26 @@ export class ExpensesService {
           row.status !== ExpenseStatus.PAID,
       )
       .slice(0, 3)
-      .map((row) => ({
-        id: `${row.id}-due`,
-        type: row.sourceType,
-        severity: row.nextDueDate && row.nextDueDate < today ? 'high' : 'low',
-        title: row.description,
-        message:
-          row.nextDueDate && row.nextDueDate < today
-            ? `Échéance en retard depuis ${row.nextDueDate}`
-            : `Échéance prochaine le ${row.nextDueDate}`,
-        amount: row.remainingAmount || row.totalAmount,
-        route: null,
-      }));
+      .map((row) => {
+        const dueDate = row.nextDueDate as string;
+        const isOverdue = dueDate < today;
+
+        return {
+          id: `${row.id}-due`,
+          type: row.sourceType,
+          severity: isOverdue ? 'high' : 'low',
+          title: row.description,
+          message: isOverdue
+            ? language === ExpenseLanguage.AR
+              ? `فات موعد الاستحقاق منذ ${this.displayDate(dueDate, language)}`
+              : `Échéance en retard depuis ${dueDate}`
+            : language === ExpenseLanguage.AR
+              ? `موعد الاستحقاق القادم ${this.displayDate(dueDate, language)}`
+              : `Échéance prochaine le ${dueDate}`,
+          amount: row.remainingAmount || row.totalAmount,
+          route: null,
+        };
+      });
 
     return [...recurringAlerts, ...debtAlerts].slice(0, 6);
   }
@@ -497,6 +528,14 @@ export class ExpensesService {
       return this.monthRange(this.dateKey(date));
     }
     return this.monthRange(today);
+  }
+
+  private displayDate(value: Date | string, language: ExpenseLanguage) {
+    const date = new Date(`${this.dateKey(value)}T00:00:00`);
+    return new Intl.DateTimeFormat(
+      language === ExpenseLanguage.AR ? 'ar-DZ' : 'fr-FR',
+      { day: '2-digit', month: '2-digit', year: 'numeric' },
+    ).format(date);
   }
 
   private deriveStatus(

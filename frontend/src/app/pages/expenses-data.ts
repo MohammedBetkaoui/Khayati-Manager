@@ -62,7 +62,7 @@ export const methodLabels: Record<PaymentMethod, Bilingual> = {
 
 export const methodColors: Record<PaymentMethod, string> = {
   cash: "#4d8a6a",
-  transfer: "#123c4a",
+  transfer: "var(--app-primary)",
   later: "#b46a66",
 };
 

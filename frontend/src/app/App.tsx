@@ -6,6 +6,7 @@ import {
   RouterProvider,
 } from "react-router";
 import { LanguageProvider } from "./language-context";
+import { ThemeProvider } from "./theme-context";
 import { palette } from "./content";
 
 const HomePage = lazy(() =>
@@ -79,24 +80,26 @@ const WorkerProfilePage = lazy(() =>
 
 function RootLayout() {
   return (
-    <LanguageProvider>
-      <Suspense
-        fallback={
-          <div
-            className="flex size-full items-center justify-center"
-            style={{
-              backgroundColor: palette.bg,
-              color: palette.primary,
-              fontFamily: "'Cairo', sans-serif",
-            }}
-          >
-            جاري تحميل الصفحة...
-          </div>
-        }
-      >
-        <Outlet />
-      </Suspense>
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <Suspense
+          fallback={
+            <div
+              className="flex size-full items-center justify-center"
+              style={{
+                backgroundColor: palette.bg,
+                color: palette.primary,
+                fontFamily: "'Cairo', sans-serif",
+              }}
+            >
+              جاري تحميل الصفحة...
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

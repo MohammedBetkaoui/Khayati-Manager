@@ -25,7 +25,19 @@ export enum ExpenseTabFilter {
   REPORTS = 'reports',
 }
 
+export enum ExpenseLanguage {
+  AR = 'ar',
+  FR = 'fr',
+}
+
 export class ExpenseFilterDto {
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toLowerCase() : value,
+  )
+  @IsEnum(ExpenseLanguage)
+  lang?: ExpenseLanguage;
+
   @IsOptional()
   @IsString()
   search?: string;

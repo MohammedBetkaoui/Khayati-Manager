@@ -127,19 +127,34 @@ const emptyStats: ExpenseStats = {
 };
 
 const categoryOptions = [
-  { value: "RENT", label: "Loyer", ar: "الكراء" },
-  { value: "ELECTRICITY", label: "Électricité", ar: "الكهرباء" },
-  { value: "WATER", label: "Eau", ar: "الماء" },
-  { value: "GAS", label: "Gaz", ar: "الغاز" },
-  { value: "INTERNET_PHONE", label: "Internet / Téléphone", ar: "الإنترنت / الهاتف" },
-  { value: "MAINTENANCE", label: "Maintenance", ar: "الصيانة" },
-  { value: "REPAIR", label: "Réparation", ar: "إصلاح" },
-  { value: "TRANSPORT", label: "Transport", ar: "النقل" },
-  { value: "FUEL", label: "Carburant", ar: "الوقود" },
-  { value: "SUPPLIES", label: "Fournitures", ar: "لوازم" },
-  { value: "CLEANING", label: "Nettoyage", ar: "التنظيف" },
-  { value: "OTHER", label: "Autre", ar: "أخرى" },
+  { value: "RENT", fr: "Loyer", ar: "الكراء" },
+  { value: "ELECTRICITY", fr: "Électricité", ar: "الكهرباء" },
+  { value: "WATER", fr: "Eau", ar: "الماء" },
+  { value: "GAS", fr: "Gaz", ar: "الغاز" },
+  { value: "INTERNET_PHONE", fr: "Internet / Téléphone", ar: "الإنترنت / الهاتف" },
+  { value: "MAINTENANCE", fr: "Maintenance", ar: "الصيانة" },
+  { value: "REPAIR", fr: "Réparation", ar: "الإصلاح" },
+  { value: "TRANSPORT", fr: "Transport", ar: "النقل" },
+  { value: "FUEL", fr: "Carburant", ar: "الوقود" },
+  { value: "SUPPLIES", fr: "Fournitures", ar: "اللوازم" },
+  { value: "CLEANING", fr: "Nettoyage", ar: "التنظيف" },
+  { value: "OTHER", fr: "Autre", ar: "أخرى" },
 ];
+
+const automaticCategoryLabels: Record<string, { ar: string; fr: string }> = {
+  MATERIAL_PURCHASE: { ar: "شراء مواد أولية", fr: "Achat matière" },
+  "Achat matière": { ar: "شراء مواد أولية", fr: "Achat matière" },
+  WORKER_SALARIES: { ar: "الرواتب", fr: "Salaires" },
+  Salaires: { ar: "الرواتب", fr: "Salaires" },
+  FABRIC_PURCHASE: { ar: "شراء أقمشة", fr: "Achat tissu" },
+  "Achat tissu": { ar: "شراء أقمشة", fr: "Achat tissu" },
+  THREADS_ACCESSORIES: { ar: "الخيوط واللوازم", fr: "Fils et accessoires" },
+  "Fils et accessoires": { ar: "الخيوط واللوازم", fr: "Fils et accessoires" },
+  UTILITIES: { ar: "مصاريف الخدمات", fr: "Charges utilitaires" },
+  "Charges utilitaires": { ar: "مصاريف الخدمات", fr: "Charges utilitaires" },
+  MACHINE_MAINTENANCE: { ar: "صيانة الآلات", fr: "Maintenance machines" },
+  "Maintenance machines": { ar: "صيانة الآلات", fr: "Maintenance machines" },
+};
 
 const tabOptions = [
   { id: "all", ar: "الكل", fr: "Toutes" },
@@ -166,11 +181,11 @@ const sourceLabels: Record<ExpenseSourceType, { ar: string; fr: string }> = {
 };
 
 const statusLabels: Record<ExpenseStatus, { ar: string; fr: string; color: string; bg: string }> = {
-  PAID: { ar: "مدفوع", fr: "Payé", color: "#2f6f52", bg: "rgba(77, 138, 106, 0.12)" },
-  PARTIALLY_PAID: { ar: "مدفوع جزئياً", fr: "Partiel", color: "#9a6b27", bg: "rgba(195, 154, 91, 0.16)" },
-  UNPAID: { ar: "غير مدفوع", fr: "Non payé", color: "#9f4f4b", bg: "rgba(201, 138, 134, 0.16)" },
-  UPCOMING: { ar: "قادم", fr: "À venir", color: "#587c92", bg: "rgba(107, 138, 160, 0.14)" },
-  OVERDUE: { ar: "متأخر", fr: "En retard", color: "#9f4f4b", bg: "rgba(180, 106, 102, 0.18)" },
+  PAID: { ar: "مدفوع", fr: "Payé", color: "var(--app-positive)", bg: "color-mix(in srgb, var(--app-positive) 14%, transparent)" },
+  PARTIALLY_PAID: { ar: "مدفوع جزئياً", fr: "Partiel", color: "var(--app-warning)", bg: "color-mix(in srgb, var(--app-warning) 15%, transparent)" },
+  UNPAID: { ar: "غير مدفوع", fr: "Non payé", color: "var(--app-negative)", bg: "color-mix(in srgb, var(--app-negative) 14%, transparent)" },
+  UPCOMING: { ar: "قادم", fr: "À venir", color: "var(--app-info)", bg: "color-mix(in srgb, var(--app-info) 14%, transparent)" },
+  OVERDUE: { ar: "متأخر", fr: "En retard", color: "var(--app-negative)", bg: "color-mix(in srgb, var(--app-negative) 16%, transparent)" },
   CANCELLED: { ar: "ملغى", fr: "Annulé", color: palette.muted, bg: "rgba(138, 136, 127, 0.12)" },
 };
 
@@ -178,13 +193,35 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatMoney(value: number) {
-  return `${Math.round(value || 0).toLocaleString("fr-FR")} DZD`;
+function formatMoney(value: number, lang: "ar" | "fr") {
+  const locale = lang === "ar" ? "ar-DZ" : "fr-FR";
+  const currency = lang === "ar" ? "دج" : "DZD";
+  return `${Math.round(value || 0).toLocaleString(locale)} ${currency}`;
+}
+
+function formatDate(value: string, lang: "ar" | "fr") {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(lang === "ar" ? "ar-DZ" : "fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMonth(value: string, lang: "ar" | "fr") {
+  const date = new Date(`${value}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(lang === "ar" ? "ar-DZ" : "fr-FR", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 function labelFromCategory(value: string, lang: "ar" | "fr") {
-  const option = categoryOptions.find((item) => item.value === value);
-  return option ? option[lang] : value;
+  const option = categoryOptions.find((item) => item.value === value || item.fr === value);
+  return option?.[lang] ?? automaticCategoryLabels[value]?.[lang] ?? value;
 }
 
 function safeStatus(value: string): ExpenseStatus {
@@ -226,22 +263,22 @@ function StatCard({
     <div
       className="flex min-h-[118px] flex-col justify-between"
       style={{
-        backgroundColor: palette.surface,
+        background: `linear-gradient(145deg, ${palette.surface}, ${palette.surfaceElevated})`,
         border: `1px solid ${palette.border}`,
         borderRadius: 20,
         padding: "18px 20px",
-        boxShadow: "0 2px 12px -8px rgba(18, 60, 74, 0.14)",
+        boxShadow: "0 10px 24px -20px rgba(2, 9, 11, 0.55)",
       }}
     >
       <div className="flex items-start justify-between gap-3">
         <div
           className="flex size-11 items-center justify-center"
-          style={{ borderRadius: 14, backgroundColor: `${tone}1f`, color: tone }}
+          style={{ borderRadius: 14, backgroundColor: `color-mix(in srgb, ${tone} 17%, transparent)`, color: tone }}
         >
           <Icon size={21} strokeWidth={1.9} />
         </div>
         <div className="text-end" style={{ fontSize: 22, fontWeight: 850, color: palette.text }}>
-          {value}
+          <span dir="ltr">{value}</span>
         </div>
       </div>
       <div>
@@ -264,6 +301,7 @@ function Badge({ children, color, bg }: { children: string; color: string; bg: s
         fontWeight: 750,
         color,
         backgroundColor: bg,
+        border: `1px solid color-mix(in srgb, ${color} 24%, transparent)`,
       }}
     >
       {children}
@@ -326,6 +364,7 @@ export function ExpensesPage() {
     setError(null);
 
     const params = new URLSearchParams();
+    params.set("lang", lang);
     params.set("tab", tab);
     params.set("period", period);
     if (search.trim()) params.set("search", search.trim());
@@ -341,11 +380,17 @@ export function ExpensesPage() {
     } catch (err) {
       setRows([]);
       setAlerts([]);
-      setError(err instanceof Error ? err.message : "Impossible de charger les dépenses.");
+      setError(
+        lang === "ar"
+          ? "تعذر تحميل المصاريف. يرجى المحاولة مجدداً."
+          : err instanceof Error
+            ? err.message
+            : "Impossible de charger les dépenses.",
+      );
     } finally {
       setLoading(false);
     }
-  }, [origin, period, search, status, tab]);
+  }, [lang, origin, period, search, status, tab]);
 
   useEffect(() => {
     void loadExpenses();
@@ -360,7 +405,7 @@ export function ExpensesPage() {
   const openEdit = (row: ExpenseRow) => {
     setEditing(row);
     setForm({
-      category: categoryOptions.find((item) => item.label === row.category || item.value === row.category)?.value ?? "OTHER",
+      category: categoryOptions.find((item) => item.fr === row.category || item.value === row.category)?.value ?? "OTHER",
       description: row.description,
       totalAmount: String(row.totalAmount),
       paidAmount: String(row.paidAmount),
@@ -402,7 +447,13 @@ export function ExpensesPage() {
       setFormOpen(false);
       await loadExpenses();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur pendant l'enregistrement.");
+      setError(
+        lang === "ar"
+          ? "تعذر حفظ المصروف. يرجى التحقق من البيانات والمحاولة مجدداً."
+          : err instanceof Error
+            ? err.message
+            : "Erreur pendant l'enregistrement.",
+      );
     } finally {
       setSaving(false);
     }
@@ -411,7 +462,7 @@ export function ExpensesPage() {
   const archiveExpense = async (row: ExpenseRow) => {
     const message =
       lang === "ar"
-        ? "هل تريد أرشفة هذه المصروف؟ سيبقى التاريخ محفوظاً."
+        ? "هل تريد أرشفة هذا المصروف؟ سيبقى السجل محفوظاً."
         : "Archiver cette dépense ? L'historique restera conservé.";
     if (!window.confirm(message)) return;
     await fetchJson(`/expenses/${row.sourceId}`, { method: "DELETE" });
@@ -425,6 +476,10 @@ export function ExpensesPage() {
       : "Centre financier qui regroupe achats fournisseurs, salaires, charges générales et restes à payer.";
 
   const visibleRows = useMemo(() => rows, [rows]);
+  const tableHeaders =
+    lang === "ar"
+      ? ["التاريخ", "الوصف", "الفئة", "المصدر", "المبلغ", "المدفوع", "الباقي", "الحالة", "الإجراءات"]
+      : ["Date", "Description", "Catégorie", "Origine", "Total", "Payé", "Reste", "Statut", "Actions"];
 
   return (
     <PageBackground>
@@ -465,12 +520,12 @@ export function ExpensesPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard title={lang === "ar" ? "مدفوع اليوم" : "Dépenses du jour"} subtitle={lang === "ar" ? "المبلغ الخارج اليوم" : "Payé aujourd'hui"} value={formatMoney(stats.todayPaid)} icon={Wallet} tone="#a87d3c" />
-        <StatCard title={lang === "ar" ? "مصروفات الشهر" : "Dépenses du mois"} subtitle={lang === "ar" ? "ال charges المسجلة" : "Charges enregistrées"} value={formatMoney(stats.monthCharges)} icon={CalendarDays} tone="#b46a66" />
-        <StatCard title={lang === "ar" ? "المدفوع فعلياً" : "Montant payé"} subtitle={lang === "ar" ? "حسب الفترة المختارة" : "Décaissement réel"} value={formatMoney(stats.periodPaid)} icon={Wallet} tone="#4d8a6a" />
-        <StatCard title={lang === "ar" ? "الباقي للدفع" : "Reste à payer"} subtitle={lang === "ar" ? "ديون ومصاريف غير مسددة" : "Dettes et charges ouvertes"} value={formatMoney(stats.remainingToPay)} icon={AlertCircle} tone="#c98a86" />
-        <StatCard title={lang === "ar" ? "رواتب الشهر" : "Salaires du mois"} subtitle={lang === "ar" ? "الرواتب المسجلة" : "Paies enregistrées"} value={formatMoney(stats.payrollMonth)} icon={FileBarChart} tone={palette.primary} />
-        <StatCard title={lang === "ar" ? "نتيجة تقديرية" : "Résultat estimé"} subtitle={lang === "ar" ? "المبيعات ناقص charges" : "Ventes moins charges"} value={formatMoney(stats.estimatedResult)} icon={FileBarChart} tone="#6b8aa0" />
+        <StatCard title={lang === "ar" ? "مدفوع اليوم" : "Dépenses du jour"} subtitle={lang === "ar" ? "المبلغ المصروف اليوم" : "Payé aujourd'hui"} value={formatMoney(stats.todayPaid, lang)} icon={Wallet} tone="#a87d3c" />
+        <StatCard title={lang === "ar" ? "مصاريف الشهر" : "Dépenses du mois"} subtitle={lang === "ar" ? "المصاريف المسجلة" : "Charges enregistrées"} value={formatMoney(stats.monthCharges, lang)} icon={CalendarDays} tone="#b46a66" />
+        <StatCard title={lang === "ar" ? "المدفوع فعلياً" : "Montant payé"} subtitle={lang === "ar" ? "حسب الفترة المختارة" : "Décaissement réel"} value={formatMoney(stats.periodPaid, lang)} icon={Wallet} tone="#4d8a6a" />
+        <StatCard title={lang === "ar" ? "الباقي للدفع" : "Reste à payer"} subtitle={lang === "ar" ? "ديون ومصاريف غير مسددة" : "Dettes et charges ouvertes"} value={formatMoney(stats.remainingToPay, lang)} icon={AlertCircle} tone="#c98a86" />
+        <StatCard title={lang === "ar" ? "رواتب الشهر" : "Salaires du mois"} subtitle={lang === "ar" ? "الرواتب المسجلة" : "Paies enregistrées"} value={formatMoney(stats.payrollMonth, lang)} icon={FileBarChart} tone={palette.primary} />
+        <StatCard title={lang === "ar" ? "النتيجة التقديرية" : "Résultat estimé"} subtitle={lang === "ar" ? "المبيعات ناقص المصاريف" : "Ventes moins charges"} value={formatMoney(stats.estimatedResult, lang)} icon={FileBarChart} tone="#6b8aa0" />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -532,7 +587,7 @@ export function ExpensesPage() {
       </div>
 
       {error ? (
-        <div className="mt-4 rounded-2xl px-4 py-3 text-sm" style={{ backgroundColor: "rgba(201, 138, 134, 0.12)", color: "#9f4f4b", border: `1px solid rgba(201, 138, 134, 0.25)` }}>
+        <div className="mt-4 rounded-2xl px-4 py-3 text-sm" style={{ backgroundColor: "color-mix(in srgb, var(--app-negative) 12%, transparent)", color: "var(--app-negative)", border: "1px solid color-mix(in srgb, var(--app-negative) 26%, transparent)" }}>
           {error}
         </div>
       ) : null}
@@ -540,12 +595,12 @@ export function ExpensesPage() {
       {tab === "reports" ? (
         <ReportsPanel reports={reports} lang={lang} />
       ) : (
-        <div className="mt-5 overflow-hidden rounded-[22px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+        <div className="mt-5 overflow-hidden rounded-[22px]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}`, boxShadow: "0 18px 40px -34px rgba(2, 9, 11, 0.7)" }}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-sm">
-              <thead style={{ backgroundColor: "#fbfaf7", color: palette.muted }}>
+            <table dir={dir} className="w-full min-w-[980px] border-collapse text-sm">
+              <thead style={{ backgroundColor: "var(--app-table-header)", color: palette.muted, borderBottom: `1px solid ${palette.borderStrong}` }}>
                 <tr>
-                  {["Date", lang === "ar" ? "الوصف" : "Description", lang === "ar" ? "الفئة" : "Catégorie", lang === "ar" ? "المصدر" : "Origine", lang === "ar" ? "المبلغ" : "Total", lang === "ar" ? "المدفوع" : "Payé", lang === "ar" ? "الباقي" : "Reste", lang === "ar" ? "الحالة" : "Statut", lang === "ar" ? "إجراءات" : "Actions"].map((head) => (
+                  {tableHeaders.map((head) => (
                     <th key={head} className="px-4 py-3 text-start font-bold">{head}</th>
                   ))}
                 </tr>
@@ -557,7 +612,7 @@ export function ExpensesPage() {
                   <tr>
                     <td colSpan={9} className="px-4 py-12 text-center" style={{ color: palette.muted }}>
                       <div style={{ fontWeight: 800, color: palette.text }}>{lang === "ar" ? "لا توجد مصاريف لهذه الفترة" : "Aucune dépense pour cette période"}</div>
-                      <div className="mt-1 text-xs">{lang === "ar" ? "المشتريات والرواتب تظهر هنا تلقائياً، ويمكنك إضافة charges عامة." : "Les achats fournisseurs et salaires apparaîtront automatiquement ici."}</div>
+                      <div className="mt-1 text-xs">{lang === "ar" ? "تظهر المشتريات والرواتب هنا تلقائياً، ويمكنك أيضاً إضافة مصاريف عامة." : "Les achats fournisseurs et salaires apparaîtront automatiquement ici."}</div>
                       <button type="button" onClick={openCreate} className="mt-4 rounded-2xl px-4 py-2 text-sm font-bold" style={{ backgroundColor: palette.primary, color: "#fff" }}>{lang === "ar" ? "مصروف جديد" : "Nouvelle dépense"}</button>
                     </td>
                   </tr>
@@ -565,28 +620,28 @@ export function ExpensesPage() {
                   visibleRows.map((row) => {
                     const statusInfo = statusLabels[safeStatus(row.status)];
                     return (
-                      <tr key={row.id} className="border-t" style={{ borderColor: palette.border }}>
-                        <td className="px-4 py-3" style={{ color: palette.muted }}>{row.date}</td>
+                      <tr key={row.id} className="expense-row border-t" style={{ borderColor: palette.border }}>
+                        <td className="px-4 py-3 whitespace-nowrap" style={{ color: palette.muted }}>{formatDate(row.date, lang)}</td>
                         <td className="px-4 py-3">
                           <button type="button" onClick={() => setSelected(row)} className="text-start font-bold hover:underline" style={{ color: palette.text }}>{row.description}</button>
                           {row.relatedName ? <div className="mt-0.5 text-xs" style={{ color: palette.muted }}>{row.relatedName}</div> : null}
                         </td>
                         <td className="px-4 py-3" style={{ color: palette.text }}>{labelFromCategory(row.category, lang)}</td>
-                        <td className="px-4 py-3"><Badge color={palette.primary} bg="rgba(18, 60, 74, 0.08)">{sourceLabels[row.sourceType]?.[lang] ?? row.originLabel}</Badge></td>
-                        <td className="px-4 py-3 font-bold" style={{ color: palette.text }}>{formatMoney(row.totalAmount)}</td>
-                        <td className="px-4 py-3" style={{ color: "#2f6f52" }}>{formatMoney(row.paidAmount)}</td>
-                        <td className="px-4 py-3" style={{ color: row.remainingAmount > 0 ? "#9f4f4b" : palette.muted }}>{formatMoney(row.remainingAmount)}</td>
+                        <td className="px-4 py-3"><Badge color={palette.primary} bg="color-mix(in srgb, var(--app-primary) 13%, transparent)">{sourceLabels[row.sourceType]?.[lang] ?? row.originLabel}</Badge></td>
+                        <td className="px-4 py-3 font-bold" style={{ color: palette.text }}><span dir="ltr">{formatMoney(row.totalAmount, lang)}</span></td>
+                        <td className="px-4 py-3" style={{ color: "var(--app-positive)" }}><span dir="ltr">{formatMoney(row.paidAmount, lang)}</span></td>
+                        <td className="px-4 py-3" style={{ color: row.remainingAmount > 0 ? "var(--app-negative)" : palette.muted }}><span dir="ltr">{formatMoney(row.remainingAmount, lang)}</span></td>
                         <td className="px-4 py-3"><Badge color={statusInfo.color} bg={statusInfo.bg}>{statusInfo[lang]}</Badge></td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => setSelected(row)} title="Voir" style={{ color: palette.primary }}><Eye size={17} /></button>
+                            <button type="button" onClick={() => setSelected(row)} title={lang === "ar" ? "عرض" : "Voir"} aria-label={lang === "ar" ? "عرض التفاصيل" : "Voir les détails"} style={{ color: palette.primary }}><Eye size={17} /></button>
                             {row.canEdit ? (
                               <>
-                                <button type="button" onClick={() => openEdit(row)} title="Modifier" style={{ color: "#a87d3c" }}><Pencil size={17} /></button>
-                                <button type="button" onClick={() => void archiveExpense(row)} title="Archiver" style={{ color: "#b46a66" }}><Trash2 size={17} /></button>
+                                <button type="button" onClick={() => openEdit(row)} title={lang === "ar" ? "تعديل" : "Modifier"} aria-label={lang === "ar" ? "تعديل المصروف" : "Modifier la dépense"} style={{ color: "#a87d3c" }}><Pencil size={17} /></button>
+                                <button type="button" onClick={() => void archiveExpense(row)} title={lang === "ar" ? "أرشفة" : "Archiver"} aria-label={lang === "ar" ? "أرشفة المصروف" : "Archiver la dépense"} style={{ color: "#b46a66" }}><Trash2 size={17} /></button>
                               </>
                             ) : row.route ? (
-                              <button type="button" onClick={() => navigate(row.route || "/expenses")} className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ backgroundColor: palette.accentSoft, color: "#8b6428" }}>
+                              <button type="button" onClick={() => navigate(row.route || "/expenses")} className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ backgroundColor: palette.accentSoft, color: "var(--app-warning)", border: "1px solid color-mix(in srgb, var(--app-warning) 24%, transparent)" }}>
                                 {lang === "ar" ? "المصدر" : "Source"}
                               </button>
                             ) : null}
@@ -602,8 +657,8 @@ export function ExpensesPage() {
         </div>
       )}
 
-      <div className="mb-10 mt-5 rounded-[20px] p-5" style={{ backgroundColor: "#fffdf9", border: "1px solid #eaddcb" }}>
-        <div className="mb-3 flex items-center gap-2" style={{ color: "#a87d3c", fontWeight: 850 }}>
+      <div className="mb-10 mt-5 rounded-[20px] p-5" style={{ backgroundColor: "var(--app-warning-panel)", border: "1px solid var(--app-warning-border)", boxShadow: "0 16px 34px -30px rgba(2, 9, 11, 0.75)" }}>
+        <div className="mb-3 flex items-center gap-2" style={{ color: "var(--app-warning)", fontWeight: 850 }}>
           <AlertCircle size={17} />
           {lang === "ar" ? "تنبيهات مالية" : "Alertes financières"}
         </div>
@@ -612,7 +667,7 @@ export function ExpensesPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {alerts.map((alert) => (
-              <button key={alert.id} type="button" onClick={() => alert.route && navigate(alert.route)} className="rounded-2xl p-3 text-start" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
+              <button key={alert.id} type="button" onClick={() => alert.route && navigate(alert.route)} className="rounded-2xl p-3 text-start transition-colors hover:bg-[var(--app-table-row-hover)]" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
                 <div className="font-bold" style={{ color: palette.text }}>{alert.title}</div>
                 <div className="mt-1 text-xs" style={{ color: palette.muted }}>{alert.message}</div>
               </button>
@@ -626,11 +681,11 @@ export function ExpensesPage() {
           <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
             <Detail label={lang === "ar" ? "الوصف" : "Description"} value={selected.description} />
             <Detail label={lang === "ar" ? "المصدر" : "Origine"} value={sourceLabels[selected.sourceType]?.[lang] ?? selected.originLabel} />
-            <Detail label={lang === "ar" ? "التاريخ" : "Date"} value={selected.date} />
+            <Detail label={lang === "ar" ? "التاريخ" : "Date"} value={formatDate(selected.date, lang)} />
             <Detail label={lang === "ar" ? "الفئة" : "Catégorie"} value={labelFromCategory(selected.category, lang)} />
-            <Detail label={lang === "ar" ? "المبلغ" : "Montant"} value={formatMoney(selected.totalAmount)} />
-            <Detail label={lang === "ar" ? "المدفوع" : "Payé"} value={formatMoney(selected.paidAmount)} />
-            <Detail label={lang === "ar" ? "الباقي" : "Reste"} value={formatMoney(selected.remainingAmount)} />
+            <Detail label={lang === "ar" ? "المبلغ" : "Montant"} value={formatMoney(selected.totalAmount, lang)} />
+            <Detail label={lang === "ar" ? "المدفوع" : "Payé"} value={formatMoney(selected.paidAmount, lang)} />
+            <Detail label={lang === "ar" ? "الباقي" : "Reste"} value={formatMoney(selected.remainingAmount, lang)} />
             <Detail label={lang === "ar" ? "الحالة" : "Statut"} value={statusLabels[safeStatus(selected.status)][lang]} />
             {selected.notes ? <Detail label={lang === "ar" ? "ملاحظات" : "Notes"} value={selected.notes} wide /> : null}
           </div>
@@ -639,7 +694,7 @@ export function ExpensesPage() {
 
       {formOpen ? (
         <ModalShell title={editing ? (lang === "ar" ? "تعديل المصروف" : "Modifier la dépense") : (lang === "ar" ? "مصروف جديد" : "Nouvelle dépense")} onClose={() => setFormOpen(false)}>
-          <form onSubmit={(event) => void submitForm(event)} className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+          <form dir={dir} onSubmit={(event) => void submitForm(event)} className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
             <Field label={lang === "ar" ? "الفئة" : "Catégorie"}>
               <select required value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="field">
                 {categoryOptions.map((item) => <option key={item.value} value={item.value}>{item[lang]}</option>)}
@@ -664,7 +719,7 @@ export function ExpensesPage() {
                 <option value="OTHER">{lang === "ar" ? "أخرى" : "Autre"}</option>
               </select>
             </Field>
-            <label className="flex items-center gap-2 self-end rounded-2xl px-3 py-3 text-sm font-bold" style={{ backgroundColor: "#fbfaf7", border: `1px solid ${palette.border}`, color: palette.text }}>
+            <label className="flex items-center gap-2 self-end rounded-2xl px-3 py-3 text-sm font-bold" style={{ backgroundColor: palette.surfaceElevated, border: `1px solid ${palette.border}`, color: palette.text }}>
               <input type="checkbox" checked={form.isRecurring} onChange={(event) => setForm((current) => ({ ...current, isRecurring: event.target.checked }))} />
               {lang === "ar" ? "مصروف متكرر؟" : "Dépense récurrente ?"}
             </label>
@@ -678,7 +733,7 @@ export function ExpensesPage() {
                     <option value="YEARLY">{lang === "ar" ? "سنوي" : "Annuel"}</option>
                   </select>
                 </Field>
-                <Field label={lang === "ar" ? "الإستحقاق القادم" : "Prochaine échéance"}>
+                <Field label={lang === "ar" ? "الاستحقاق القادم" : "Prochaine échéance"}>
                   <input type="date" value={form.nextDueDate} onChange={(event) => setForm((current) => ({ ...current, nextDueDate: event.target.value }))} className="field" />
                 </Field>
               </>
@@ -694,14 +749,14 @@ export function ExpensesPage() {
         </ModalShell>
       ) : null}
 
-      <style>{`.field{height:44px;width:100%;border-radius:14px;border:1px solid ${palette.border};background:${palette.surface};padding:0 12px;font-size:14px;color:${palette.text};outline:none}.field:focus{border-color:${palette.primary}}textarea.field{height:auto;padding-top:10px}`}</style>
+      <style>{`.field{height:44px;width:100%;border-radius:14px;border:1px solid ${palette.border};background:${palette.surface};padding:0 12px;font-size:14px;color:${palette.text};text-align:start;outline:none}.field:focus{border-color:${palette.primary}}textarea.field{height:auto;padding-top:10px}.expense-row{background:var(--app-surface);transition:background-color .16s ease}.expense-row:nth-child(even){background:var(--app-table-row-alt)}.expense-row:hover{background:var(--app-table-row-hover)}`}</style>
     </PageBackground>
   );
 }
 
 function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
   return (
-    <div className={wide ? "sm:col-span-2" : ""} style={{ backgroundColor: "#fbfaf7", border: `1px solid ${palette.border}`, borderRadius: 16, padding: 13 }}>
+    <div className={wide ? "sm:col-span-2" : ""} style={{ backgroundColor: palette.surfaceElevated, border: `1px solid ${palette.border}`, borderRadius: 16, padding: 13 }}>
       <div style={{ fontSize: 11.5, color: palette.muted, fontWeight: 700 }}>{label}</div>
       <div className="mt-1" style={{ fontSize: 14, color: palette.text, fontWeight: 800 }}>{value}</div>
     </div>
@@ -729,7 +784,7 @@ function ReportsPanel({ reports, lang }: { reports: ExpenseReports; lang: "ar" |
             <div key={item.category}>
               <div className="mb-1 flex justify-between text-sm">
                 <span style={{ color: palette.text, fontWeight: 750 }}>{labelFromCategory(item.category, lang)}</span>
-                <span style={{ color: palette.muted }}>{formatMoney(item.amount)} · {Math.round(item.percentage)}%</span>
+                <span dir="ltr" style={{ color: palette.muted }}>{formatMoney(item.amount, lang)} · {Math.round(item.percentage).toLocaleString(lang === "ar" ? "ar-DZ" : "fr-FR")}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full" style={{ backgroundColor: palette.accentSoft }}>
                 <div className="h-full rounded-full" style={{ width: `${Math.min(100, item.percentage)}%`, backgroundColor: palette.accent }} />
@@ -741,12 +796,18 @@ function ReportsPanel({ reports, lang }: { reports: ExpenseReports; lang: "ar" |
       <div className="rounded-[22px] p-5" style={{ backgroundColor: palette.surface, border: `1px solid ${palette.border}` }}>
         <h3 style={{ color: palette.text, fontWeight: 850 }}>{lang === "ar" ? "التطور الشهري" : "Évolution mensuelle"}</h3>
         <div className="mt-4 flex flex-col gap-2">
+          <div className="grid grid-cols-4 gap-2 px-3 text-xs font-bold" style={{ color: palette.muted }}>
+            <span>{lang === "ar" ? "الشهر" : "Mois"}</span>
+            <span>{lang === "ar" ? "المصاريف" : "Charges"}</span>
+            <span>{lang === "ar" ? "المدفوع" : "Payé"}</span>
+            <span>{lang === "ar" ? "الباقي" : "Reste"}</span>
+          </div>
           {reports.monthlyTrend.map((item) => (
-            <div key={item.month} className="grid grid-cols-4 gap-2 rounded-2xl px-3 py-2 text-sm" style={{ backgroundColor: "#fbfaf7" }}>
-              <span style={{ color: palette.text, fontWeight: 800 }}>{item.month}</span>
-              <span style={{ color: palette.muted }}>{formatMoney(item.charges)}</span>
-              <span style={{ color: "#2f6f52" }}>{formatMoney(item.paid)}</span>
-              <span style={{ color: item.remaining > 0 ? "#9f4f4b" : palette.muted }}>{formatMoney(item.remaining)}</span>
+            <div key={item.month} className="grid grid-cols-4 gap-2 rounded-2xl px-3 py-2 text-sm" style={{ backgroundColor: palette.surfaceElevated, border: `1px solid ${palette.border}` }}>
+              <span style={{ color: palette.text, fontWeight: 800 }}>{formatMonth(item.month, lang)}</span>
+              <span dir="ltr" style={{ color: palette.muted }}>{formatMoney(item.charges, lang)}</span>
+              <span dir="ltr" style={{ color: "var(--app-positive)" }}>{formatMoney(item.paid, lang)}</span>
+              <span dir="ltr" style={{ color: item.remaining > 0 ? "var(--app-negative)" : palette.muted }}>{formatMoney(item.remaining, lang)}</span>
             </div>
           ))}
         </div>

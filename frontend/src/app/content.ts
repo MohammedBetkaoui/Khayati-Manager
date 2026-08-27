@@ -13,17 +13,18 @@ import {
 export type Lang = "ar" | "fr";
 
 export const palette = {
-  bg: "#f5f4f0",
-  surface: "#ffffff",
-  primary: "#123c4a",
-  primaryHover: "#0d2d38",
-  accent: "#c39a5b",
-  accentSoft: "#efe6d6",
-  rose: "#c98a86",
-  border: "#e5e2da",
-  borderStrong: "#cfcabc",
-  text: "#2b2b2b",
-  muted: "#8a887f",
+  bg: "var(--app-bg)",
+  surface: "var(--app-surface)",
+  surfaceElevated: "var(--app-surface-elevated)",
+  primary: "var(--app-primary)",
+  primaryHover: "var(--app-primary-hover)",
+  accent: "var(--app-accent)",
+  accentSoft: "var(--app-accent-soft)",
+  rose: "var(--app-rose)",
+  border: "var(--app-border)",
+  borderStrong: "var(--app-border-strong)",
+  text: "var(--app-text)",
+  muted: "var(--app-muted)",
 };
 
 export const ui = {
@@ -33,7 +34,7 @@ export const ui = {
     pageTitle: "لوحة التسيير",
     welcome: "اختر القسم الذي تريد تسييره",
     openSection: "فتح القسم",
-    userName:"عيسى ميسور",
+    userName: "عيسى ميسور",
     userRole: "مسؤول الورشة",
     footer: "خياطي Manager ",
   },
@@ -73,7 +74,7 @@ export const sections: Section[] = [
       desc: "Suivi du personnel, des rôles, des présences et de la productivité",
     },
     tint: "rgba(18, 60, 74, 0.08)",
-    iconColor: "#123c4a",
+    iconColor: "var(--app-primary)",
   },
   {
     id: "clients",
@@ -153,7 +154,7 @@ export const sections: Section[] = [
       desc: "Salaires journaliers, hebdomadaires, mensuels et à la pièce",
     },
     tint: "rgba(18, 60, 74, 0.08)",
-    iconColor: "#123c4a",
+    iconColor: "var(--app-primary)",
   },
   {
     id: "expenses",

@@ -185,13 +185,13 @@ const emptyDashboard: AnalyticsDashboard = {
 };
 
 const colors = {
-  teal: "#123c4a",
-  gold: "#c39a5b",
+  teal: "var(--app-primary)",
+  gold: "var(--app-accent)",
   green: "#4d8a6a",
   red: "#c46f67",
   blue: "#6b8fa4",
   sand: "#dfc89f",
-  gray: "#9a9287",
+  gray: "var(--app-muted)",
 };
 
 export function AnalyticsPage() {
@@ -324,8 +324,12 @@ export function AnalyticsPage() {
               onValueChange={(value) => setMonths(Number(value))}
             >
               <SelectTrigger
-                className="w-[155px] rounded-xl bg-white"
-                style={{ borderColor: palette.border }}
+                className="w-[155px] rounded-xl"
+                style={{
+                  borderColor: palette.border,
+                  backgroundColor: palette.surface,
+                  color: palette.text,
+                }}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -448,29 +452,29 @@ export function AnalyticsPage() {
                       contentStyle={tooltipStyle}
                     />
                     <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-                  <Line
-                    type="monotone"
-                    dataKey="sales"
-                    isAnimationActive={false}
+                    <Line
+                      type="monotone"
+                      dataKey="sales"
+                      isAnimationActive={false}
                       name={ar ? "المبيعات" : "Ventes"}
                       stroke={colors.teal}
                       strokeWidth={2.7}
                       dot={{ r: 2.5, strokeWidth: 0 }}
                       activeDot={{ r: 4 }}
                     />
-                  <Line
-                    type="monotone"
-                    dataKey="receipts"
-                    isAnimationActive={false}
+                    <Line
+                      type="monotone"
+                      dataKey="receipts"
+                      isAnimationActive={false}
                       name={ar ? "التحصيلات" : "Encaissements"}
                       stroke={colors.green}
                       strokeWidth={2.4}
                       dot={{ r: 2.5, strokeWidth: 0 }}
                     />
-                  <Line
-                    type="monotone"
-                    dataKey="outflows"
-                    isAnimationActive={false}
+                    <Line
+                      type="monotone"
+                      dataKey="outflows"
+                      isAnimationActive={false}
                       name={ar ? "المدفوعات" : "Décaissements"}
                       stroke={colors.red}
                       strokeWidth={2.4}
@@ -520,44 +524,44 @@ export function AnalyticsPage() {
                       contentStyle={tooltipStyle}
                     />
                     <Legend wrapperStyle={{ fontSize: 10.5, paddingTop: 12 }} />
-                  <Bar
-                    dataKey="salaries"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="salaries"
+                      isAnimationActive={false}
                       name={ar ? "الرواتب" : "Salaires"}
                       stackId="charges"
                       fill={colors.teal}
                     />
-                  <Bar
-                    dataKey="materials"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="materials"
+                      isAnimationActive={false}
                       name={ar ? "المواد" : "Matières"}
                       stackId="charges"
                       fill={colors.gold}
                     />
-                  <Bar
-                    dataKey="rent"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="rent"
+                      isAnimationActive={false}
                       name={ar ? "الكراء" : "Loyer"}
                       stackId="charges"
                       fill={colors.blue}
                     />
-                  <Bar
-                    dataKey="maintenance"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="maintenance"
+                      isAnimationActive={false}
                       name={ar ? "الصيانة" : "Maintenance"}
                       stackId="charges"
                       fill={colors.green}
                     />
-                  <Bar
-                    dataKey="transport"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="transport"
+                      isAnimationActive={false}
                       name={ar ? "النقل" : "Transport"}
                       stackId="charges"
                       fill={colors.sand}
                     />
-                  <Bar
-                    dataKey="other"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="other"
+                      isAnimationActive={false}
                       name={ar ? "أخرى" : "Autres"}
                       stackId="charges"
                       fill={colors.gray}
@@ -606,16 +610,16 @@ export function AnalyticsPage() {
                       contentStyle={tooltipStyle}
                     />
                     <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-                  <Bar
-                    dataKey="produced"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="produced"
+                      isAnimationActive={false}
                       name={ar ? "منتجة" : "Produites"}
                       fill={colors.teal}
                       radius={[5, 5, 0, 0]}
                     />
-                  <Bar
-                    dataKey="sold"
-                    isAnimationActive={false}
+                    <Bar
+                      dataKey="sold"
+                      isAnimationActive={false}
                       name={ar ? "مباعة" : "Vendues"}
                       fill={colors.gold}
                       radius={[5, 5, 0, 0]}
@@ -664,19 +668,19 @@ export function AnalyticsPage() {
                       contentStyle={tooltipStyle}
                     />
                     <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-                  <Line
-                    type="monotone"
-                    dataKey="customerDebt"
-                    isAnimationActive={false}
+                    <Line
+                      type="monotone"
+                      dataKey="customerDebt"
+                      isAnimationActive={false}
                       name={ar ? "ديون الزبائن" : "Créances clients"}
                       stroke={colors.gold}
                       strokeWidth={2.6}
                       dot={{ r: 2.5, strokeWidth: 0 }}
                     />
-                  <Line
-                    type="monotone"
-                    dataKey="supplierDebt"
-                    isAnimationActive={false}
+                    <Line
+                      type="monotone"
+                      dataKey="supplierDebt"
+                      isAnimationActive={false}
                       name={ar ? "ديون الموردين" : "Dettes fournisseurs"}
                       stroke={colors.red}
                       strokeWidth={2.6}
@@ -951,7 +955,7 @@ export function AnalyticsPage() {
             className="mt-5 rounded-2xl border px-4 py-3"
             style={{
               borderColor: palette.border,
-              backgroundColor: "rgba(255,255,255,0.72)",
+              backgroundColor: "var(--app-translucent-surface)",
               color: palette.muted,
               fontSize: 11.5,
             }}
@@ -1307,6 +1311,8 @@ function compactMoney(value: number) {
 const tooltipStyle = {
   border: `1px solid ${palette.border}`,
   borderRadius: 12,
+  backgroundColor: palette.surfaceElevated,
+  color: palette.text,
   boxShadow: "0 12px 30px rgba(18,60,74,0.12)",
   fontSize: 11.5,
 };

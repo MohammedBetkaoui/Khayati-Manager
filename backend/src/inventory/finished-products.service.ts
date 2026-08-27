@@ -56,7 +56,9 @@ export class FinishedProductsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedFinishedProductsIfEmpty();
+    if (process.env.KHAYATI_ENABLE_DEMO_SEED === 'true') {
+      await this.seedFinishedProductsIfEmpty();
+    }
   }
 
   async create(dto: CreateFinishedProductDto) {

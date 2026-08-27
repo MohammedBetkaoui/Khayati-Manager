@@ -871,7 +871,7 @@ export function NewSalePage() {
                     type="checkbox"
                     checked={taxEnabled}
                     onChange={(event) => setTaxEnabled(event.target.checked)}
-                    className="h-4 w-4 accent-[#123c4a]"
+                    className="h-4 w-4 accent-[var(--app-primary)]"
                   />
                   {text.tax}
                 </label>

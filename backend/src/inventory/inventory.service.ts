@@ -69,8 +69,10 @@ export class InventoryService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedInventoryIfEmpty();
-    await this.seedSupplierPurchasesIfEmpty();
+    if (process.env.KHAYATI_ENABLE_DEMO_SEED === 'true') {
+      await this.seedInventoryIfEmpty();
+      await this.seedSupplierPurchasesIfEmpty();
+    }
     await this.syncExistingInventoryState();
     await this.recalculateAllSuppliers();
   }

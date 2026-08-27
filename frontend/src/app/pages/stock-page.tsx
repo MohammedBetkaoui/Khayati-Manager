@@ -289,7 +289,7 @@ export function StockPage() {
         className="mt-6 flex flex-wrap gap-2 rounded-2xl border p-2"
         style={{
           borderColor: palette.border,
-          backgroundColor: "rgba(255,255,255,0.72)",
+          backgroundColor: "var(--app-translucent-surface)",
         }}
       >
         {[
@@ -317,7 +317,11 @@ export function StockPage() {
       <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {tab === "finished" ? (
           <>
-            <StatCard icon={Shirt} label={text.models} value={productStats.totalProducts} />
+            <StatCard
+              icon={Shirt}
+              label={text.models}
+              value={productStats.totalProducts}
+            />
             <StatCard
               icon={PackageCheck}
               label={text.available}
@@ -325,7 +329,11 @@ export function StockPage() {
               color="#4d8a6a"
               tint="rgba(77,138,106,0.12)"
             />
-            <StatCard icon={ReceiptText} label={text.sold} value={productStats.soldPieces} />
+            <StatCard
+              icon={ReceiptText}
+              label={text.sold}
+              value={productStats.soldPieces}
+            />
             <StatCard
               icon={Factory}
               label={text.productions}
@@ -343,7 +351,11 @@ export function StockPage() {
               color="#a87d3c"
               tint="rgba(195,154,91,0.15)"
             />
-            <StatCard icon={Boxes} label={text.purchaseCount} value={rawStats.monthlyPurchases} />
+            <StatCard
+              icon={Boxes}
+              label={text.purchaseCount}
+              value={rawStats.monthlyPurchases}
+            />
             <StatCard
               icon={Truck}
               label={text.activeSuppliers}
@@ -381,7 +393,9 @@ export function StockPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder={tab === "finished" ? text.searchFinished : text.searchRaw}
+              placeholder={
+                tab === "finished" ? text.searchFinished : text.searchRaw
+              }
               className="h-10 w-full rounded-xl border outline-none"
               style={{
                 borderColor: palette.border,
@@ -403,7 +417,9 @@ export function StockPage() {
               ? filteredProducts.length === 0
               : filteredPurchases.length === 0)
           }
-          emptyTitle={tab === "finished" ? text.emptyProducts : text.emptyPurchases}
+          emptyTitle={
+            tab === "finished" ? text.emptyProducts : text.emptyPurchases
+          }
           onRetry={() => reload()}
         />
 
@@ -644,7 +660,10 @@ function FinishedProductsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" style={{ minWidth: 860, borderCollapse: "collapse" }}>
+      <table
+        className="w-full"
+        style={{ minWidth: 860, borderCollapse: "collapse" }}
+      >
         <thead>
           <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
             {headers.map((header) => (
@@ -656,16 +675,31 @@ function FinishedProductsTable({
         </thead>
         <tbody>
           {products.map((product) => (
-            <tr key={product.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
+            <tr
+              key={product.id}
+              style={{ borderBottom: `1px solid ${palette.border}` }}
+            >
               <td style={cellStyle}>
-                <div style={{ fontWeight: 900, color: palette.primary }}>{product.name}</div>
+                <div style={{ fontWeight: 900, color: palette.primary }}>
+                  {product.name}
+                </div>
                 {product.notes ? (
-                  <div className="mt-1 text-xs" style={{ color: palette.muted }}>
+                  <div
+                    className="mt-1 text-xs"
+                    style={{ color: palette.muted }}
+                  >
                     {product.notes}
                   </div>
                 ) : null}
               </td>
-              <td style={{ ...cellStyle, fontSize: 16, fontWeight: 900, color: "#4d8a6a" }}>
+              <td
+                style={{
+                  ...cellStyle,
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: "#4d8a6a",
+                }}
+              >
                 {product.quantityAvailable}
               </td>
               <td style={cellStyle}>{product.quantitySold}</td>
@@ -730,11 +764,34 @@ function MaterialPurchasesTable({
 }) {
   const headers =
     lang === "ar"
-      ? ["التاريخ", "المادة", "اللون", "الكمية المشتراة", "المورد", "المبلغ", "المدفوع", "الباقي", "الحالة"]
-      : ["Date", "Matière", "Couleur", "Quantité achetée", "Fournisseur", "Total", "Payé", "Reste", "État"];
+      ? [
+          "التاريخ",
+          "المادة",
+          "اللون",
+          "الكمية المشتراة",
+          "المورد",
+          "المبلغ",
+          "المدفوع",
+          "الباقي",
+          "الحالة",
+        ]
+      : [
+          "Date",
+          "Matière",
+          "Couleur",
+          "Quantité achetée",
+          "Fournisseur",
+          "Total",
+          "Payé",
+          "Reste",
+          "État",
+        ];
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" style={{ minWidth: 980, borderCollapse: "collapse" }}>
+      <table
+        className="w-full"
+        style={{ minWidth: 980, borderCollapse: "collapse" }}
+      >
         <thead>
           <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
             {headers.map((header) => (
@@ -746,9 +803,14 @@ function MaterialPurchasesTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
+            <tr
+              key={row.id}
+              style={{ borderBottom: `1px solid ${palette.border}` }}
+            >
               <td style={cellStyle}>{formatDate(row.purchaseDate, lang)}</td>
-              <td style={{ ...cellStyle, fontWeight: 900 }}>{row.materialName}</td>
+              <td style={{ ...cellStyle, fontWeight: 900 }}>
+                {row.materialName}
+              </td>
               <td style={cellStyle}>{row.color || "-"}</td>
               <td style={cellStyle}>
                 {row.quantityPurchased} {row.unit}
@@ -756,7 +818,13 @@ function MaterialPurchasesTable({
               <td style={cellStyle}>{row.supplier}</td>
               <td style={cellStyle}>{formatMoney(row.totalAmount, lang)}</td>
               <td style={cellStyle}>{formatMoney(row.paidAmount, lang)}</td>
-              <td style={{ ...cellStyle, fontWeight: 900, color: row.remainingAmount > 0 ? "#b46a66" : "#4d8a6a" }}>
+              <td
+                style={{
+                  ...cellStyle,
+                  fontWeight: 900,
+                  color: row.remainingAmount > 0 ? "#b46a66" : "#4d8a6a",
+                }}
+              >
                 {formatMoney(row.remainingAmount, lang)}
               </td>
               <td style={cellStyle}>
@@ -768,7 +836,13 @@ function MaterialPurchasesTable({
                         ? "rgba(195,154,91,0.15)"
                         : "rgba(201,138,134,0.13)"
                   }
-                  fg={row.remainingAmount <= 0 ? "#4d8a6a" : row.paidAmount > 0 ? "#a87d3c" : "#b46a66"}
+                  fg={
+                    row.remainingAmount <= 0
+                      ? "#4d8a6a"
+                      : row.paidAmount > 0
+                        ? "#a87d3c"
+                        : "#b46a66"
+                  }
                 >
                   {row.paymentStatus}
                 </Badge>
@@ -814,7 +888,9 @@ function RecentProductions({
                 {row.batchNumber} · {formatDate(row.date, lang)}
               </div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: palette.primary }}>
+            <div
+              style={{ fontSize: 18, fontWeight: 900, color: palette.primary }}
+            >
               +{row.quantityProduced}
             </div>
           </div>

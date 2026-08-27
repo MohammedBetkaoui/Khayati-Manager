@@ -273,9 +273,11 @@ export function ClientsPage() {
                 setPage(1);
               }}
               placeholder={text.search}
-              className="h-10 w-full rounded-xl border bg-white outline-none"
+              className="h-10 w-full rounded-xl border outline-none"
               style={{
                 borderColor: palette.border,
+                backgroundColor: palette.surface,
+                color: palette.text,
                 paddingInlineStart: 42,
                 paddingInlineEnd: 14,
                 fontSize: 13.5,

@@ -37,11 +37,9 @@ function WindowButton({
         backgroundColor:
           variant === "danger"
             ? "rgba(201, 138, 134, 0.08)"
-            : "rgba(255, 255, 255, 0.7)",
+            : "var(--app-window-button)",
         borderColor:
-          variant === "danger"
-            ? "rgba(201, 138, 134, 0.24)"
-            : "rgba(18, 60, 74, 0.12)",
+          variant === "danger" ? "rgba(201, 138, 134, 0.24)" : palette.border,
         color: variant === "danger" ? palette.rose : palette.primary,
       }}
     >
@@ -59,18 +57,16 @@ export function AppHeader() {
     <header
       className="overflow-hidden rounded-[28px] border shadow-[0_22px_50px_rgba(18,60,74,0.08)]"
       style={{
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(250,244,233,0.96) 100%)",
-        borderColor: "rgba(18, 60, 74, 0.10)",
+        background: "var(--app-header-surface)",
+        borderColor: palette.border,
       }}
     >
       <div
         className="flex items-center justify-between gap-4 border-b px-4 py-3"
         style={{
           ...dragStyle,
-          borderColor: "rgba(207, 202, 188, 0.8)",
-          background:
-            "linear-gradient(90deg, rgba(18,60,74,0.05) 0%, rgba(255,255,255,0.55) 55%, rgba(195,154,91,0.08) 100%)",
+          borderColor: palette.borderStrong,
+          background: "var(--app-header-strip)",
         }}
       >
         <button
@@ -113,10 +109,11 @@ export function AppHeader() {
             <LanguageSwitcher lang={lang} onChange={setLang} />
           </div>
           <div
-            className="hidden items-center gap-3 rounded-full border bg-white/75 px-3 py-1.5 lg:flex"
+            className="hidden items-center gap-3 rounded-full border px-3 py-1.5 lg:flex"
             style={{
               ...noDragStyle,
-              borderColor: "rgba(18, 60, 74, 0.10)",
+              borderColor: palette.border,
+              backgroundColor: "var(--app-translucent-surface)",
             }}
           >
             <div

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Shared page frame: off-white background, subtle diagonal stitch texture,
@@ -25,10 +26,12 @@ export function PageBackground({ children }: { children: ReactNode }) {
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
-            backgroundImage:
-              "repeating-linear-gradient(135deg, rgba(18,60,74,0.035) 0px, rgba(18,60,74,0.035) 2px, transparent 2px, transparent 22px)",
+            backgroundImage: "var(--app-page-pattern)",
           }}
         />
+        <div className="fixed bottom-5 z-40" style={{ insetInlineEnd: 20 }}>
+          <ThemeToggle />
+        </div>
         <div className="relative mx-auto flex min-h-full w-full max-w-[1320px] flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
           {children}
         </div>

@@ -501,8 +501,7 @@ export function CustomerProfilePage() {
               {profile.statistics.totalDebt > 0 ? (
                 <section
                   style={{
-                    background:
-                      "linear-gradient(145deg, rgba(201,138,134,0.14), rgba(255,255,255,0.95))",
+                    background: "var(--app-danger-surface)",
                     border: "1px solid rgba(201,138,134,0.28)",
                     borderRadius: 22,
                     padding: 20,
@@ -973,7 +972,8 @@ function CustomerAnalytics({
                   className="w-full max-w-12 rounded-t-lg"
                   style={{
                     height: `${Math.max(8, (item.amount / maxAmount) * 135)}px`,
-                    background: "linear-gradient(180deg, #c39a5b, #123c4a)",
+                    background:
+                      "linear-gradient(180deg, var(--app-accent), var(--app-primary))",
                   }}
                 />
                 <span style={{ fontSize: 11, color: palette.muted }}>
