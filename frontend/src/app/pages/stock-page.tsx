@@ -523,22 +523,24 @@ function ArchiveProductModal({
             className="flex items-start gap-3 rounded-2xl p-4"
             style={{
               backgroundColor: hasRemainingStock
-                ? "rgba(201,138,134,0.14)"
-                : "rgba(195,154,91,0.13)",
+                ? "var(--app-danger-surface)"
+                : "var(--app-warning-panel)",
               border: `1px solid ${
                 hasRemainingStock
-                  ? "rgba(201,138,134,0.32)"
-                  : "rgba(195,154,91,0.3)"
+                  ? "rgba(239,153,146,0.34)"
+                  : "var(--app-warning-border)"
               }`,
-              color: hasRemainingStock ? "#9f4f4b" : "#9a7335",
+              color: hasRemainingStock
+                ? "var(--app-negative)"
+                : "var(--app-warning)",
             }}
           >
             <div
               className="flex size-10 shrink-0 items-center justify-center rounded-xl"
               style={{
                 backgroundColor: hasRemainingStock
-                  ? "rgba(201,138,134,0.18)"
-                  : "rgba(195,154,91,0.18)",
+                  ? "rgba(239,153,146,0.14)"
+                  : "rgba(214,173,109,0.14)",
               }}
             >
               <AlertTriangle size={20} />
@@ -583,7 +585,8 @@ function ArchiveProductModal({
           <div
             className="mt-4 rounded-2xl p-4 text-sm"
             style={{
-              backgroundColor: palette.bg,
+              backgroundColor: "var(--app-table-row-alt)",
+              border: `1px solid ${palette.border}`,
               color: palette.muted,
               lineHeight: 1.75,
             }}
@@ -623,7 +626,7 @@ function ArchiveInfo({ label, value }: { label: string; value: string }) {
     <div
       className="rounded-2xl p-3"
       style={{
-        backgroundColor: "#fbfaf7",
+        backgroundColor: "var(--app-surface-elevated)",
         border: `1px solid ${palette.border}`,
       }}
     >
