@@ -53,6 +53,42 @@ export function prepareLegacyDebtsDatabase(databasePath: string) {
         CREATE INDEX IF NOT EXISTS "IDX_legacy_debts_customer" ON "legacy_debts" ("customerId", "status");
         CREATE INDEX IF NOT EXISTS "IDX_legacy_debts_supplier" ON "legacy_debts" ("supplierId", "status");
         CREATE INDEX IF NOT EXISTS "IDX_legacy_debt_payments_debt" ON "legacy_debt_payments" ("legacyDebtId", "paymentDate");
+
+        INSERT INTO "legacy_debt_payments" (
+          "amount",
+          "amountMinor",
+          "paymentDate",
+          "paymentMethod",
+          "reference",
+          "notes",
+          "createdAt",
+          "legacyDebtId"
+        )
+        SELECT
+          (
+            debt."paidAmountMinor" - COALESCE((
+              SELECT SUM(payment."amountMinor")
+              FROM "legacy_debt_payments" payment
+              WHERE payment."legacyDebtId" = debt."id"
+            ), 0)
+          ) / 100.0,
+          debt."paidAmountMinor" - COALESCE((
+            SELECT SUM(payment."amountMinor")
+            FROM "legacy_debt_payments" payment
+            WHERE payment."legacyDebtId" = debt."id"
+          ), 0),
+          COALESCE(NULLIF(substr(debt."updatedAt", 1, 10), ''), CURRENT_DATE),
+          'أخرى',
+          'SYSTEM-RECOVERY',
+          'Recovered from the previously stored paid balance.',
+          debt."updatedAt",
+          debt."id"
+        FROM "legacy_debts" debt
+        WHERE debt."paidAmountMinor" > COALESCE((
+          SELECT SUM(payment."amountMinor")
+          FROM "legacy_debt_payments" payment
+          WHERE payment."legacyDebtId" = debt."id"
+        ), 0);
       `);
     })();
   } finally {

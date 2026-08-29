@@ -319,8 +319,7 @@ export class LegacyDebtsService {
     debtId: number,
     dto: CreateLegacyDebtPaymentDto,
   ) {
-    let paymentId = 0;
-    await this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) => {
       const debt = await this.findDebtOrFail(type, ownerId, debtId, manager);
       if (debt.status === LegacyDebtStatus.CANCELLED) {
         throw new BadRequestException(
@@ -328,7 +327,10 @@ export class LegacyDebtsService {
         );
       }
 
-      const paidAmountMinor = await this.sumPaymentsMinor(manager, debt.id);
+      const paidAmountMinor = Math.max(
+        await this.sumPaymentsMinor(manager, debt.id),
+        debt.paidAmountMinor,
+      );
       this.applyCalculatedAmounts(debt, paidAmountMinor);
       const paymentAmountMinor = toMinorUnits(dto.amount);
       if (paymentAmountMinor <= 0) {
@@ -353,21 +355,25 @@ export class LegacyDebtsService {
           notes: this.optionalText(dto.notes),
         }),
       );
-      paymentId = payment.id;
 
       this.applyCalculatedAmounts(debt, paidAmountMinor + paymentAmountMinor);
-      await manager.getRepository(LegacyDebt).save(debt);
-    });
+      await manager.getRepository(LegacyDebt).update(debt.id, {
+        paidAmount: debt.paidAmount,
+        remainingAmount: debt.remainingAmount,
+        paidAmountMinor: debt.paidAmountMinor,
+        remainingAmountMinor: debt.remainingAmountMinor,
+        status: debt.status,
+      });
+      debt.payments = [
+        ...(debt.payments ?? []).filter((entry) => entry.id !== payment.id),
+        payment,
+      ];
 
-    const payment = await this.paymentsRepository.findOne({
-      where: { id: paymentId },
-      relations: { legacyDebt: { customer: true, supplier: true } },
+      return {
+        payment: this.serializePayment(payment),
+        debt: this.serializeDebt(debt),
+      };
     });
-    if (!payment) throw new NotFoundException('Paiement introuvable.');
-    return {
-      payment: this.serializePayment(payment),
-      debt: await this.findOne(type, ownerId, debtId),
-    };
   }
 
   private async cancel(
@@ -504,12 +510,16 @@ export class LegacyDebtsService {
     debt.paidAmount = fromMinorUnits(debt.paidAmountMinor);
     debt.remainingAmount = fromMinorUnits(debt.remainingAmountMinor);
     debt.originalAmount = fromMinorUnits(debt.originalAmountMinor);
-    debt.status =
-      debt.remainingAmountMinor === 0
-        ? LegacyDebtStatus.PAID
-        : debt.paidAmountMinor > 0
-          ? LegacyDebtStatus.PARTIALLY_PAID
-          : LegacyDebtStatus.OPEN;
+    debt.status = this.paymentStatus(
+      debt.paidAmountMinor,
+      debt.remainingAmountMinor,
+    );
+  }
+
+  private paymentStatus(paidAmountMinor: number, remainingAmountMinor: number) {
+    if (remainingAmountMinor <= 0) return LegacyDebtStatus.PAID;
+    if (paidAmountMinor > 0) return LegacyDebtStatus.PARTIALLY_PAID;
+    return LegacyDebtStatus.OPEN;
   }
 
   private summarize(debts: LegacyDebt[]): LegacyDebtSummary {
@@ -558,22 +568,34 @@ export class LegacyDebtsService {
       unit: debt.unit ?? null,
       paperReference: debt.paperReference ?? null,
       notes: debt.notes ?? null,
-      status: debt.status,
+      status:
+        debt.status === LegacyDebtStatus.CANCELLED
+          ? LegacyDebtStatus.CANCELLED
+          : this.paymentStatus(
+              debt.paidAmountMinor,
+              debt.remainingAmountMinor,
+            ),
       cancelledAt: debt.cancelledAt ?? null,
       cancellationReason: debt.cancellationReason ?? null,
-      payments: payments.map((payment) => this.serializePayment(payment)),
+      payments: payments.map((payment) =>
+        this.serializePayment(payment, debt),
+      ),
       createdAt: debt.createdAt,
       updatedAt: debt.updatedAt,
     };
   }
 
-  private serializePayment(payment: LegacyDebtPayment) {
+  private serializePayment(
+    payment: LegacyDebtPayment,
+    parentDebt?: LegacyDebt,
+  ) {
+    const debt = payment.legacyDebt ?? parentDebt;
     return {
       id: payment.id,
-      legacyDebtId: payment.legacyDebt.id,
-      type: payment.legacyDebt.type,
-      customerId: payment.legacyDebt.customer?.id ?? null,
-      supplierId: payment.legacyDebt.supplier?.id ?? null,
+      legacyDebtId: debt?.id ?? null,
+      type: debt?.type ?? null,
+      customerId: debt?.customer?.id ?? null,
+      supplierId: debt?.supplier?.id ?? null,
       amount: fromMinorUnits(payment.amountMinor),
       paymentDate: payment.paymentDate,
       date: payment.paymentDate,

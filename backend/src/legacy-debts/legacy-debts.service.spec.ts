@@ -46,6 +46,10 @@ function createHarness(initialDebt?: Partial<LegacyDebt>) {
       debt = Object.assign(value, { id: value.id ?? 10 });
       return debt;
     }),
+    update: jest.fn(async (_id: number, values: Partial<LegacyDebt>) => {
+      if (debt) Object.assign(debt, values);
+      return { affected: debt ? 1 : 0 };
+    }),
     findOne: jest.fn(async () => debt),
     find: jest.fn(async () => (debt ? [debt] : [])),
   };
@@ -112,6 +116,7 @@ function createHarness(initialDebt?: Partial<LegacyDebt>) {
     service,
     getDebt: () => debt,
     payments,
+    paymentRepository,
   };
 }
 
@@ -207,6 +212,59 @@ describe('LegacyDebtsService', () => {
       status: LegacyDebtStatus.PAID,
     });
     expect(harness.payments).toHaveLength(2);
+  });
+
+  it('returns the committed payment without a fragile post-transaction lookup', async () => {
+    const harness = createHarness({ payments: [] });
+
+    const result = await harness.service.addCustomerPayment(1, 10, {
+      amount: 10_000,
+      paymentMethod: PaymentMethod.CASH,
+      paymentDate: '2026-09-05',
+    });
+
+    expect(result).toMatchObject({
+      payment: { amount: 10_000, paymentDate: '2026-09-05' },
+      debt: {
+        paidAmount: 10_000,
+        remainingAmount: 25_000,
+        status: LegacyDebtStatus.PARTIALLY_PAID,
+      },
+    });
+    expect(harness.paymentRepository.findOne).not.toHaveBeenCalled();
+    expect(harness.paymentRepository.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes payments loaded from the parent debt without the inverse relation', async () => {
+    const payment = {
+      id: 7,
+      amount: 20_000,
+      amountMinor: 2_000_000,
+      paymentDate: '2026-08-29',
+      paymentMethod: PaymentMethod.OTHER,
+      reference: 'SYSTEM-RECOVERY',
+      notes: null,
+      createdAt: new Date('2026-08-29T00:00:00Z'),
+    } as LegacyDebtPayment;
+    const harness = createHarness({
+      paidAmount: 20_000,
+      remainingAmount: 15_000,
+      paidAmountMinor: 2_000_000,
+      remainingAmountMinor: 1_500_000,
+      status: LegacyDebtStatus.PARTIALLY_PAID,
+      payments: [payment],
+    });
+
+    const result = await harness.service.findForCustomer(1);
+
+    expect(result.data[0].payments[0]).toMatchObject({
+      id: 7,
+      legacyDebtId: 10,
+      type: LegacyDebtType.CUSTOMER_RECEIVABLE,
+      customerId: 1,
+      supplierId: null,
+      amount: 20_000,
+    });
   });
 
   it('rejects a payment greater than the remaining amount', async () => {
