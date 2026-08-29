@@ -23,6 +23,7 @@ import { ProductVariant } from '../inventory/entities/product-variant.entity';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceNumberService } from '../invoices/invoice-number.service';
 import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
+import { LegacyDebtsService } from '../legacy-debts/legacy-debts.service';
 import { CreateCustomerNoteDto } from './dto/create-customer-note.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import {
@@ -87,6 +88,7 @@ export class SalesService implements OnModuleInit {
     private readonly dataSource: DataSource,
     private readonly invoiceNumberService: InvoiceNumberService,
     private readonly invoicePaymentsService: InvoicesService,
+    private readonly legacyDebtsService: LegacyDebtsService,
   ) {}
 
   async onModuleInit() {
@@ -170,16 +172,23 @@ export class SalesService implements OnModuleInit {
     const counts = await this.getCustomerInvoiceCounts(
       customers.map((customer) => customer.id),
     );
+    const legacyOutstanding = await this.legacyDebtsService.getCustomerOutstandingMap(
+      customers.map((customer) => customer.id),
+    );
     return {
       data: customers.map((customer) =>
-        this.serializeCustomer(customer, counts.get(customer.id) ?? 0),
+        this.serializeCustomer(
+          customer,
+          counts.get(customer.id) ?? 0,
+          legacyOutstanding.get(customer.id) ?? 0,
+        ),
       ),
       pagination: this.pagination(page, limit, total),
     };
   }
 
   async getCustomerStats() {
-    const [totalCustomers, activeCustomers, importantCustomers, debt] =
+    const [totalCustomers, activeCustomers, importantCustomers, customers] =
       await Promise.all([
         this.customersRepository.count({
           where: { status: Not(CustomerStatus.ARCHIVED) },
@@ -193,29 +202,34 @@ export class SalesService implements OnModuleInit {
             status: Not(CustomerStatus.ARCHIVED),
           },
         }),
-        this.customersRepository
-          .createQueryBuilder('customer')
-          .select('COUNT(customer.id)', 'customersWithDebt')
-          .addSelect('COALESCE(SUM(customer.totalDebt), 0)', 'totalDebt')
-          .where('customer.totalDebt > 0')
-          .andWhere('customer.status != :archivedStatus', {
-            archivedStatus: CustomerStatus.ARCHIVED,
-          })
-          .getRawOne<Record<string, number | string>>(),
+        this.customersRepository.find(),
       ]);
+    const legacyOutstanding = await this.legacyDebtsService.getCustomerOutstandingMap(
+      customers.map((customer) => customer.id),
+    );
+    const totalDebt = customers.reduce(
+      (sum, customer) =>
+        sum + customer.totalDebt + (legacyOutstanding.get(customer.id) ?? 0),
+      0,
+    );
+    const customersWithDebt = customers.filter(
+      (customer) =>
+        customer.totalDebt + (legacyOutstanding.get(customer.id) ?? 0) > 0,
+    ).length;
     return {
       totalCustomers,
       activeCustomers,
       importantCustomers,
-      customersWithDebt: Number(debt?.customersWithDebt ?? 0),
-      totalDebt: this.roundMoney(Number(debt?.totalDebt ?? 0)),
+      customersWithDebt,
+      totalDebt: this.roundMoney(totalDebt),
     };
   }
 
   async findCustomerById(id: number) {
     const customer = await this.findCustomerOrFail(id);
     const counts = await this.getCustomerInvoiceCounts([id]);
-    return this.serializeCustomer(customer, counts.get(id) ?? 0);
+    const legacy = await this.legacyDebtsService.getCustomerSummary(id);
+    return this.serializeCustomer(customer, counts.get(id) ?? 0, legacy.remaining);
   }
 
   async updateCustomer(id: number, dto: UpdateCustomerDto) {
@@ -642,7 +656,7 @@ export class SalesService implements OnModuleInit {
 
   async getCustomerProfile(id: number) {
     const customer = await this.findCustomerOrFail(id);
-    const [invoices, payments, measurements, notes] = await Promise.all([
+    const [invoices, payments, measurements, notes, legacy] = await Promise.all([
       this.invoicesRepository.find({
         where: { customer: { id } },
         relations: {
@@ -665,6 +679,7 @@ export class SalesService implements OnModuleInit {
         where: { customer: { id } },
         order: { date: 'DESC', id: 'DESC' },
       }),
+      this.legacyDebtsService.findForCustomer(id),
     ]);
 
     const totalInvoices = invoices.length;
@@ -680,15 +695,39 @@ export class SalesService implements OnModuleInit {
     const debtInvoices = invoices.filter(
       (invoice) => invoice.remainingAmount > 0,
     );
+    const legacyActivityDates = legacy.data.flatMap((debt) => [
+      debt.debtDate ?? String(debt.createdAt).slice(0, 10),
+      ...debt.payments.map((payment) => payment.paymentDate),
+    ]);
+    const lastActivity = [
+      payments[0]?.date,
+      invoices[0]?.date,
+      ...legacyActivityDates,
+      customer.lastVisitDate,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => right.localeCompare(left))[0];
 
+    const totalReceivable = this.roundMoney(
+      customer.totalDebt + legacy.summary.remaining,
+    );
     return {
-      customer: this.serializeCustomer(customer, totalInvoices),
+      customer: this.serializeCustomer(
+        customer,
+        totalInvoices,
+        legacy.summary.remaining,
+      ),
       statistics: {
         totalInvoices,
         totalSales: totalInvoices,
         totalPurchases: customer.totalPurchases,
         totalPaid: customer.totalPaid,
-        totalDebt: customer.totalDebt,
+        totalDebt: totalReceivable,
+        salesDebt: customer.totalDebt,
+        legacyDebtOriginal: legacy.summary.original,
+        legacyDebtPaid: legacy.summary.paid,
+        legacyDebtRemaining: legacy.summary.remaining,
+        totalReceivable,
         averageSale,
         lastPurchase: invoices[0]?.date ?? null,
         purchaseFrequencyDays: frequency,
@@ -705,12 +744,12 @@ export class SalesService implements OnModuleInit {
         remainingAmount: invoice.remainingAmount,
         paymentStatusCode: this.paymentStatusCode(invoice.paymentStatus),
       })),
+      legacyDebts: legacy.data,
       analytics: {
         purchaseTrend,
         topProducts,
         purchaseFrequencyDays: frequency,
-        lastActivity:
-          payments[0]?.date ?? invoices[0]?.date ?? customer.lastVisitDate,
+        lastActivity,
       },
       measurements: measurements.map((item) => this.serializeMeasurement(item)),
       notes: notes.map((note) => this.serializeNote(note)),
@@ -738,6 +777,26 @@ export class SalesService implements OnModuleInit {
         invoiceId: payment.invoiceId,
         invoiceNumber: payment.invoiceNumber,
       })),
+      ...profile.legacyDebts.map((debt) => ({
+        id: `legacy-debt-${debt.id}`,
+        type: 'LEGACY_CUSTOMER_RECEIVABLE',
+        date: debt.debtDate ?? String(debt.createdAt).slice(0, 10),
+        title: 'Ajout d\'une ancienne creance',
+        amount: debt.originalAmount,
+        legacyDebtId: debt.id,
+        badge: 'Solde anterieur',
+      })),
+      ...profile.legacyDebts.flatMap((debt) =>
+        debt.payments.map((payment) => ({
+          id: `legacy-payment-${payment.id}`,
+          type: 'PAYMENT_LEGACY_CUSTOMER_RECEIVABLE',
+          date: payment.paymentDate,
+          title: 'Paiement ancienne creance',
+          amount: payment.amount,
+          legacyDebtId: debt.id,
+          badge: 'Solde anterieur',
+        })),
+      ),
       ...profile.measurements.map((measurement) => ({
         id: `measurement-${measurement.id}`,
         type: 'MEASUREMENT',
@@ -760,7 +819,7 @@ export class SalesService implements OnModuleInit {
     const monthEnd = this.toDateKey(
       new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0),
     );
-    const [todayRaw, monthRaw, unpaidInvoices, totalInvoices, debtRaw, avgRaw] =
+    const [todayRaw, monthRaw, unpaidInvoices, totalInvoices, debtRaw, avgRaw, legacy] =
       await Promise.all([
         this.sumInvoiceFieldForRange('totalAmount', today, today),
         this.sumInvoiceFieldForRange('totalAmount', monthStart, monthEnd),
@@ -777,13 +836,17 @@ export class SalesService implements OnModuleInit {
           .createQueryBuilder('invoice')
           .select('COALESCE(AVG(invoice.totalAmount), 0)', 'average')
           .getRawOne<{ average: number | string }>(),
+        this.legacyDebtsService.getGlobalSummary(),
       ]);
+    const salesDebt = this.roundMoney(Number(debtRaw?.total ?? 0));
     return {
       todaySales: this.roundMoney(Number(todayRaw?.total ?? 0)),
       monthSales: this.roundMoney(Number(monthRaw?.total ?? 0)),
       unpaidInvoices,
       totalInvoices,
-      totalDebt: this.roundMoney(Number(debtRaw?.total ?? 0)),
+      totalDebt: this.roundMoney(salesDebt + legacy.customers.remaining),
+      salesDebt,
+      legacyDebtRemaining: legacy.customers.remaining,
       averageSale: this.roundMoney(Number(avgRaw?.average ?? 0)),
     };
   }
@@ -1158,7 +1221,13 @@ export class SalesService implements OnModuleInit {
     return Math.round(totalDays / (dates.length - 1));
   }
 
-  private serializeCustomer(customer: Customer, salesCount: number) {
+  private serializeCustomer(
+    customer: Customer,
+    salesCount: number,
+    legacyDebtRemaining = 0,
+  ) {
+    const salesDebt = customer.totalDebt;
+    const totalDebt = this.roundMoney(salesDebt + legacyDebtRemaining);
     return {
       id: customer.id,
       fullName: customer.fullName,
@@ -1177,7 +1246,9 @@ export class SalesService implements OnModuleInit {
       lastVisit: customer.lastVisitDate,
       totalPurchases: customer.totalPurchases,
       totalPaid: customer.totalPaid,
-      totalDebt: customer.totalDebt,
+      salesDebt,
+      legacyDebtRemaining,
+      totalDebt,
       salesCount,
       totalSales: salesCount,
       notes: customer.notes ?? null,

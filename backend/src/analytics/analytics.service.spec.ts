@@ -3,6 +3,8 @@ import {
   ExpenseStatus,
   FinishedProductStatus,
   InvoiceStatus,
+  LegacyDebtStatus,
+  LegacyDebtType,
   PayrollStatus,
   SalaryType,
 } from '../common/enums';
@@ -91,6 +93,24 @@ describe('AnalyticsService', () => {
       status: ExpenseStatus.PAID,
       archivedAt: null,
     };
+    const customerLegacyDebt = {
+      id: 1,
+      type: LegacyDebtType.CUSTOMER_RECEIVABLE,
+      status: LegacyDebtStatus.PARTIALLY_PAID,
+      customer,
+      supplier: null,
+      remainingAmount: 300,
+      payments: [],
+    };
+    const supplierLegacyDebt = {
+      id: 2,
+      type: LegacyDebtType.SUPPLIER_PAYABLE,
+      status: LegacyDebtStatus.PARTIALLY_PAID,
+      customer: null,
+      supplier,
+      remainingAmount: 400,
+      payments: [],
+    };
 
     const service = new AnalyticsService(
       repository([invoice]) as never,
@@ -106,6 +126,19 @@ describe('AnalyticsService', () => {
       repository([{ date: today, amount: 50 }]) as never,
       repository([product]) as never,
       repository([{ date: today, quantityProduced: 10 }]) as never,
+      repository([customerLegacyDebt, supplierLegacyDebt]) as never,
+      repository([
+        {
+          paymentDate: today,
+          amount: 100,
+          legacyDebt: customerLegacyDebt,
+        },
+        {
+          paymentDate: today,
+          amount: 150,
+          legacyDebt: supplierLegacyDebt,
+        },
+      ]) as never,
     );
 
     const result = await service.getDashboard(12);
@@ -116,8 +149,8 @@ describe('AnalyticsService', () => {
 
     expect(currentFinancial).toMatchObject({
       sales: 1000,
-      receipts: 600,
-      outflows: 600,
+      receipts: 700,
+      outflows: 750,
     });
     expect(currentExpenses).toMatchObject({
       salaries: 300,
@@ -126,16 +159,20 @@ describe('AnalyticsService', () => {
     });
     expect(currentProduction).toMatchObject({ produced: 10, sold: 2 });
     expect(currentDebt).toMatchObject({
-      customerDebt: 400,
-      supplierDebt: 250,
+      customerDebt: 700,
+      supplierDebt: 650,
     });
     expect(result.summary).toMatchObject({
       sales: 1000,
-      receipts: 600,
-      outflows: 600,
-      estimatedCashFlow: 0,
-      customerDebt: 400,
-      supplierDebt: 250,
+      receipts: 700,
+      outflows: 750,
+      estimatedCashFlow: -50,
+      customerDebt: 700,
+      currentCustomerDebt: 400,
+      legacyCustomerDebt: 300,
+      supplierDebt: 650,
+      currentSupplierDebt: 250,
+      legacySupplierDebt: 400,
       payrollPaid: 200,
       payrollRemaining: 100,
     });

@@ -54,7 +54,11 @@ type AnalyticsDashboard = {
     outflows: number;
     estimatedCashFlow: number;
     customerDebt: number;
+    currentCustomerDebt: number;
+    legacyCustomerDebt: number;
     supplierDebt: number;
+    currentSupplierDebt: number;
+    legacySupplierDebt: number;
     payrollPaid: number;
     payrollRemaining: number;
   };
@@ -98,12 +102,16 @@ type AnalyticsDashboard = {
       fullName: string;
       phone: string;
       debt: number;
+      currentDebt: number;
+      legacyDebt: number;
     }>;
     supplierDebts: Array<{
       id: number;
       name: string;
       phone: string | null;
       debt: number;
+      currentDebt: number;
+      legacyDebt: number;
     }>;
     overdueInvoices: Array<{
       id: number;
@@ -161,7 +169,11 @@ const emptyDashboard: AnalyticsDashboard = {
     outflows: 0,
     estimatedCashFlow: 0,
     customerDebt: 0,
+    currentCustomerDebt: 0,
+    legacyCustomerDebt: 0,
     supplierDebt: 0,
+    currentSupplierDebt: 0,
+    legacySupplierDebt: 0,
     payrollPaid: 0,
     payrollRemaining: 0,
   },
@@ -245,6 +257,10 @@ export function AnalyticsPage() {
         cashFlow: "صافي التدفق النقدي",
         customerDebt: "ديون الزبائن",
         supplierDebt: "ديون الموردين",
+        currentCustomerDebt: "مستحقات الزبائن الحالية",
+        legacyCustomerDebt: "مستحقات الزبائن السابقة",
+        currentSupplierDebt: "ديون الموردين الحالية",
+        legacySupplierDebt: "ديون الموردين السابقة",
         financial: "التطور المالي",
         financialHelp: "المبيعات، التحصيلات والمدفوعات خلال الفترة",
         expenses: "توزيع المصاريف",
@@ -280,6 +296,10 @@ export function AnalyticsPage() {
         cashFlow: "Flux de trésorerie net",
         customerDebt: "Créances clients",
         supplierDebt: "Dettes fournisseurs",
+        currentCustomerDebt: "Créances clients actuelles",
+        legacyCustomerDebt: "Créances clients antérieures",
+        currentSupplierDebt: "Dettes fournisseurs actuelles",
+        legacySupplierDebt: "Dettes fournisseurs antérieures",
         financial: "Évolution financière",
         financialHelp: "Ventes, encaissements et décaissements sur la période",
         expenses: "Répartition des charges",
@@ -409,6 +429,33 @@ export function AnalyticsPage() {
               value={formatMoney(dashboard.summary.supplierDebt, lang)}
               color={colors.red}
               tint="rgba(196,111,103,0.12)"
+            />
+          </section>
+
+          <section className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DebtOriginCard
+              label={text.currentCustomerDebt}
+              value={dashboard.summary.currentCustomerDebt}
+              lang={lang}
+              tone="current"
+            />
+            <DebtOriginCard
+              label={text.legacyCustomerDebt}
+              value={dashboard.summary.legacyCustomerDebt}
+              lang={lang}
+              tone="legacy"
+            />
+            <DebtOriginCard
+              label={text.currentSupplierDebt}
+              value={dashboard.summary.currentSupplierDebt}
+              lang={lang}
+              tone="current"
+            />
+            <DebtOriginCard
+              label={text.legacySupplierDebt}
+              value={dashboard.summary.legacySupplierDebt}
+              lang={lang}
+              tone="legacy"
             />
           </section>
 
@@ -1068,7 +1115,7 @@ function HorizontalProductBars({
   emptyText,
 }: {
   data: AnalyticsDashboard["topProducts"];
-  lang: string;
+  lang: "ar" | "fr";
   emptyText: string;
 }) {
   if (!data.length) return <EmptyState text={emptyText} fill />;
@@ -1121,7 +1168,7 @@ function StockBars({
   emptyText,
 }: {
   data: AnalyticsDashboard["finishedStock"];
-  lang: string;
+  lang: "ar" | "fr";
   emptyText: string;
 }) {
   if (!data.length) return <EmptyState text={emptyText} fill />;
@@ -1231,7 +1278,7 @@ function Money({
   danger = false,
 }: {
   value: number;
-  lang: string;
+  lang: "ar" | "fr";
   danger?: boolean;
 }) {
   return (
@@ -1273,6 +1320,51 @@ function SummaryBox({
       <div style={{ fontSize: 10.5, color: palette.muted }}>{label}</div>
       <div className="mt-1" style={{ fontSize: 13, fontWeight: 900, color }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function DebtOriginCard({
+  label,
+  value,
+  lang,
+  tone,
+}: {
+  label: string;
+  value: number;
+  lang: "ar" | "fr";
+  tone: "current" | "legacy";
+}) {
+  const legacy = tone === "legacy";
+  return (
+    <div
+      className="rounded-2xl border px-4 py-3"
+      style={{
+        borderColor: legacy ? "rgba(195,154,91,0.28)" : palette.border,
+        backgroundColor: legacy ? "rgba(195,154,91,0.09)" : palette.surface,
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span style={{ color: palette.muted, fontSize: 11.5 }}>{label}</span>
+        <Badge
+          variant="outline"
+          style={{
+            borderColor: legacy ? "rgba(195,154,91,0.35)" : palette.border,
+            color: legacy ? colors.gold : palette.primary,
+          }}
+        >
+          {legacy
+            ? lang === "ar"
+              ? "رصيد سابق"
+              : "Solde antérieur"
+            : lang === "ar"
+              ? "حالي"
+              : "Actuel"}
+        </Badge>
+      </div>
+      <div className="mt-1" style={{ color: legacy ? colors.gold : palette.text, fontSize: 18, fontWeight: 900 }}>
+        {formatMoney(value, lang)}
       </div>
     </div>
   );

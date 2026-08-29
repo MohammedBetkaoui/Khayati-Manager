@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LegacyDebtsModule } from '../legacy-debts/legacy-debts.module';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { FinishedProductsService } from './finished-products.service';
@@ -18,6 +19,7 @@ import { SupplierPurchase } from './entities/supplier-purchase.entity';
 
 @Module({
   imports: [
+    LegacyDebtsModule,
     TypeOrmModule.forFeature([
       InventoryItem,
       StockMovement,

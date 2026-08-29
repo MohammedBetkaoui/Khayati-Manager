@@ -7,6 +7,7 @@ export * from './expense-type.enum';
 export * from './finished-product.enum';
 export * from './inventory.enum';
 export * from './invoice-status.enum';
+export * from './legacy-debt.enum';
 export * from './payment-method.enum';
 export * from './payment-status.enum';
 export * from './payroll.enum';

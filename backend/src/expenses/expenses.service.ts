@@ -6,6 +6,8 @@ import {
   ExpenseSourceType,
   ExpenseStatus,
   ExpenseType,
+  LegacyDebtStatus,
+  LegacyDebtType,
   PaymentMethod,
 } from '../common/enums';
 import { SupplierAdvance } from '../inventory/entities/supplier-advance.entity';
@@ -14,6 +16,9 @@ import { SupplierPurchase } from '../inventory/entities/supplier-purchase.entity
 import { Payroll } from '../payroll/entities/payroll.entity';
 import { SalaryPayment } from '../payroll/entities/salary-payment.entity';
 import { Invoice } from '../sales/entities/invoice.entity';
+import { LegacyDebtsService } from '../legacy-debts/legacy-debts.service';
+import { LegacyDebtPayment } from '../legacy-debts/entities/legacy-debt-payment.entity';
+import { LegacyDebt } from '../legacy-debts/entities/legacy-debt.entity';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import {
   ExpenseFilterDto,
@@ -48,6 +53,7 @@ type UnifiedExpenseRow = {
   canEdit: boolean;
   isRecurring?: boolean;
   nextDueDate?: string | null;
+  affectsCharges: boolean;
 };
 
 @Injectable()
@@ -67,6 +73,7 @@ export class ExpensesService {
     private readonly salaryPaymentRepository: Repository<SalaryPayment>,
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
+    private readonly legacyDebtsService: LegacyDebtsService,
   ) {}
 
   async create(dto: CreateExpenseDto) {
@@ -104,7 +111,7 @@ export class ExpensesService {
 
   async findAll(filters: ExpenseFilterDto = {}) {
     const language = filters.lang ?? ExpenseLanguage.FR;
-    const [manualExpenses, purchases, payrolls, supplierPayments, supplierAdvances, salaryPayments, invoices] =
+    const [manualExpenses, purchases, payrolls, supplierPayments, supplierAdvances, salaryPayments, invoices, legacyPayments, legacyDebts] =
       await Promise.all([
         this.expenseRepository.find({ where: { archivedAt: IsNull() }, order: { date: 'DESC', id: 'DESC' } }),
         this.purchaseRepository.find({
@@ -119,6 +126,8 @@ export class ExpensesService {
         this.supplierAdvanceRepository.find({ relations: { supplier: true } }),
         this.salaryPaymentRepository.find({ relations: { payroll: true, worker: true } }),
         this.invoiceRepository.find(),
+        this.legacyDebtsService.getAllPayments(),
+        this.legacyDebtsService.getAllDebts(),
       ]);
 
     const rows = [
@@ -127,6 +136,14 @@ export class ExpensesService {
         .filter((payroll) => payroll.status !== 'CANCELLED')
         .map((payroll) => this.serializePayrollExpense(payroll, language)),
       ...manualExpenses.map((expense) => this.serializeManualExpense(expense, language)),
+      ...legacyPayments
+        .filter(
+          (payment) =>
+            payment.legacyDebt.type === LegacyDebtType.SUPPLIER_PAYABLE,
+        )
+        .map((payment) =>
+          this.serializeLegacySupplierPayment(payment, language),
+        ),
     ].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
     const range = this.resolveRange(filters);
@@ -141,8 +158,10 @@ export class ExpensesService {
         salaryPayments,
         manualExpenses,
         invoices,
+        legacyPayments,
+        legacyDebts,
       }),
-      alerts: this.buildAlerts(rows, language),
+      alerts: this.buildAlerts(rows, language, legacyDebts),
       reports: this.buildReports(periodRows, rows),
       filters: {
         period: filters.period ?? ExpensePeriodFilter.MONTH,
@@ -242,6 +261,7 @@ export class ExpensesService {
       supplierId: supplier?.id ?? null,
       route: supplier?.id ? `/suppliers/${supplier.id}` : null,
       canEdit: false,
+      affectsCharges: true,
     };
   }
 
@@ -276,6 +296,7 @@ export class ExpensesService {
       payrollId: payroll.id,
       route: worker?.id ? `/worker-profile?workerId=${worker.id}` : null,
       canEdit: false,
+      affectsCharges: true,
     };
   }
 
@@ -313,6 +334,39 @@ export class ExpensesService {
       canEdit: true,
       isRecurring: expense.isRecurring,
       nextDueDate: expense.nextDueDate ?? null,
+      affectsCharges: true,
+    };
+  }
+
+  private serializeLegacySupplierPayment(
+    payment: LegacyDebtPayment,
+    language = ExpenseLanguage.FR,
+  ): UnifiedExpenseRow {
+    const supplier = payment.legacyDebt.supplier;
+    const amount = this.money(payment.amount);
+    return {
+      id: `legacy-supplier-payment-${payment.id}`,
+      sourceId: payment.id,
+      sourceType: ExpenseSourceType.SUPPLIER_LEGACY_PAYMENT,
+      date: this.dateKey(payment.paymentDate),
+      description:
+        language === ExpenseLanguage.AR
+          ? `تسديد دين سابق للمورد ${supplier?.name ?? ''}`.trim()
+          : `Règlement d'une dette fournisseur antérieure${supplier?.name ? ` - ${supplier.name}` : ''}`,
+      category: ExpenseCategory.OTHER,
+      originLabel:
+        language === ExpenseLanguage.AR ? 'دين سابق' : 'Solde antérieur',
+      relatedName: supplier?.name ?? null,
+      totalAmount: amount,
+      paidAmount: amount,
+      remainingAmount: 0,
+      status: ExpenseStatus.PAID,
+      paymentMethod: payment.paymentMethod,
+      notes: payment.notes ?? null,
+      supplierId: supplier?.id ?? null,
+      route: supplier?.id ? `/suppliers/${supplier.id}` : null,
+      canEdit: false,
+      affectsCharges: false,
     };
   }
 
@@ -354,6 +408,8 @@ export class ExpensesService {
       salaryPayments: SalaryPayment[];
       manualExpenses: Expense[];
       invoices: Invoice[];
+      legacyPayments: LegacyDebtPayment[];
+      legacyDebts: LegacyDebt[];
     },
   ) {
     const today = this.todayKey();
@@ -363,9 +419,26 @@ export class ExpensesService {
 
     const paidToday = this.money(this.sumPaidOut(sources, { start: today, end: today }));
     const periodPaid = this.money(this.sumPaidOut(sources, range));
-    const periodCharges = this.sumRows(periodRows, 'totalAmount');
-    const monthCharges = this.sumRows(monthRows, 'totalAmount');
-    const remaining = this.sumRows(periodRows, 'remainingAmount');
+    const periodCharges = this.sumRows(
+      periodRows.filter((row) => row.affectsCharges),
+      'totalAmount',
+    );
+    const monthCharges = this.sumRows(
+      monthRows.filter((row) => row.affectsCharges),
+      'totalAmount',
+    );
+    const legacySupplierRemaining = this.money(
+      sources.legacyDebts
+        .filter(
+          (debt) =>
+            debt.type === LegacyDebtType.SUPPLIER_PAYABLE &&
+            debt.status !== LegacyDebtStatus.CANCELLED,
+        )
+        .reduce((sum, debt) => sum + Number(debt.remainingAmount ?? 0), 0),
+    );
+    const remaining = this.money(
+      this.sumRows(periodRows, 'remainingAmount') + legacySupplierRemaining,
+    );
     const payrollMonth = this.sumRows(
       monthRows.filter((row) => row.sourceType === ExpenseSourceType.PAYROLL),
       'totalAmount',
@@ -382,6 +455,7 @@ export class ExpensesService {
       periodCharges,
       periodPaid,
       remainingToPay: remaining,
+      legacySupplierDebtRemaining: legacySupplierRemaining,
       payrollMonth,
       estimatedSales: sales,
       estimatedResult: this.money(sales - periodCharges),
@@ -399,6 +473,7 @@ export class ExpensesService {
   private buildAlerts(
     rows: UnifiedExpenseRow[],
     language = ExpenseLanguage.FR,
+    legacyDebts: LegacyDebt[] = [],
   ) {
     const today = this.todayKey();
     const inSevenDays = this.addDays(today, 7);
@@ -450,13 +525,38 @@ export class ExpensesService {
         };
       });
 
-    return [...recurringAlerts, ...debtAlerts].slice(0, 6);
+    const legacyDebtAlerts = legacyDebts
+      .filter(
+        (debt) =>
+          debt.type === LegacyDebtType.SUPPLIER_PAYABLE &&
+          debt.status !== LegacyDebtStatus.CANCELLED &&
+          debt.remainingAmount > 0,
+      )
+      .sort((left, right) => right.remainingAmount - left.remainingAmount)
+      .slice(0, 3)
+      .map((debt) => ({
+        id: `legacy-supplier-debt-${debt.id}-alert`,
+        type: ExpenseSourceType.SUPPLIER_LEGACY_PAYMENT,
+        severity: 'medium',
+        title:
+          debt.supplier?.name ??
+          (language === ExpenseLanguage.AR ? 'مورد' : 'Fournisseur'),
+        message:
+          language === ExpenseLanguage.AR
+            ? `${debt.remainingAmount.toLocaleString('ar-DZ')} دج مستحقة للمورد على الورشة من دين سابق`
+            : `${debt.remainingAmount.toLocaleString('fr-FR')} DZD restant sur une dette fournisseur antérieure`,
+        amount: debt.remainingAmount,
+        route: debt.supplier?.id ? `/suppliers/${debt.supplier.id}` : null,
+      }));
+
+    return [...recurringAlerts, ...legacyDebtAlerts, ...debtAlerts].slice(0, 6);
   }
 
   private buildReports(rows: UnifiedExpenseRow[], allRows: UnifiedExpenseRow[]) {
-    const total = this.sumRows(rows, 'totalAmount') || 1;
+    const chargeRows = rows.filter((row) => row.affectsCharges);
+    const total = this.sumRows(chargeRows, 'totalAmount') || 1;
     const categoryMap = new Map<ExpenseCategory, number>();
-    for (const row of rows) {
+    for (const row of chargeRows) {
       categoryMap.set(row.category, (categoryMap.get(row.category) ?? 0) + row.totalAmount);
     }
 
@@ -472,8 +572,18 @@ export class ExpensesService {
       const monthRows = allRows.filter((row) => row.date.startsWith(month));
       return {
         month,
-        charges: this.sumRows(monthRows, 'totalAmount'),
-        paid: this.sumRows(monthRows, 'paidAmount'),
+        charges: this.sumRows(
+          monthRows.filter((row) => row.affectsCharges),
+          'totalAmount',
+        ),
+        paid: this.sumRows(
+          monthRows.filter(
+            (row) =>
+              row.affectsCharges ||
+              row.sourceType === ExpenseSourceType.SUPPLIER_LEGACY_PAYMENT,
+          ),
+          'paidAmount',
+        ),
         remaining: this.sumRows(monthRows, 'remainingAmount'),
       };
     });
@@ -490,6 +600,7 @@ export class ExpensesService {
       supplierAdvances: SupplierAdvance[];
       salaryPayments: SalaryPayment[];
       manualExpenses: Expense[];
+      legacyPayments: LegacyDebtPayment[];
     },
     range: DateRange,
   ) {
@@ -506,7 +617,21 @@ export class ExpensesService {
       .filter((expense) => this.isInRange(expense.date, range))
       .reduce((sum, expense) => sum + Number(expense.paidAmount ?? expense.amount ?? 0), 0);
 
-    return supplierPayments + supplierAdvances + salaryPayments + manualPayments;
+    const legacySupplierPayments = sources.legacyPayments
+      .filter(
+        (payment) =>
+          payment.legacyDebt.type === LegacyDebtType.SUPPLIER_PAYABLE &&
+          this.isInRange(payment.paymentDate, range),
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
+
+    return (
+      supplierPayments +
+      supplierAdvances +
+      salaryPayments +
+      manualPayments +
+      legacySupplierPayments
+    );
   }
 
   private resolveRange(filters: ExpenseFilterDto): DateRange {

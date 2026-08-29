@@ -2,13 +2,17 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { CalendarDays, CircleDollarSign, Eye, Plus, ReceiptText, Truck, Wallet } from "lucide-react";
 import { PageHeading, StatePanel, StatCard, formatDate, formatMoney } from "../components/commerce-ui";
+import {
+  LegacyDebtBalanceSummary,
+  LegacyDebtSection,
+} from "../components/legacy-debt-section";
 import { Badge, Button, Field, TextInput } from "../components/kit";
 import { ModalShell, Textarea } from "../components/modal-shell";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
 import { fetchJson } from "../lib/api";
-import type { MaterialPurchase, Supplier } from "../lib/commerce";
+import type { LegacyDebt, MaterialPurchase, Supplier } from "../lib/commerce";
 
 type SupplierPayment = {
   id: number;
@@ -38,6 +42,11 @@ type SupplierProfile = {
     totalPurchases: number;
     totalPaid: number;
     totalDebt: number;
+    purchasesDebt: number;
+    legacyDebtOriginal: number;
+    legacyDebtPaid: number;
+    legacyDebtRemaining: number;
+    totalPayable: number;
     totalAdvances: number;
     purchaseCount: number;
     lastPurchase: string | null;
@@ -47,6 +56,7 @@ type SupplierProfile = {
   purchases: MaterialPurchase[];
   payments: SupplierPayment[];
   advances: SupplierAdvance[];
+  legacyDebts: LegacyDebt[];
 };
 
 export function SupplierProfilePage() {
@@ -92,7 +102,7 @@ export function SupplierProfilePage() {
           advances: "الدفعات المسبقة",
           totalPurchases: "إجمالي المشتريات",
           totalPaid: "إجمالي المدفوع",
-          debt: "الدين الحالي",
+          debt: "إجمالي المستحق للمورد",
           average: "متوسط الشراء",
         }
       : {
@@ -103,7 +113,7 @@ export function SupplierProfilePage() {
           advances: "Avances",
           totalPurchases: "Total achats",
           totalPaid: "Total payé",
-          debt: "Dette actuelle",
+          debt: "Total dû au fournisseur",
           average: "Achat moyen",
         };
   const archived = profile?.supplier.statusCode === "ARCHIVED";
@@ -119,7 +129,7 @@ export function SupplierProfilePage() {
             <Button
               variant="primary"
               onClick={() => setAdvanceModalOpen(true)}
-              disabled={profile.statistics.totalDebt <= 0}
+              disabled={profile.statistics.purchasesDebt <= 0}
             >
               <Plus size={16} />{" "}
               {lang === "ar" ? "تسجيل دفعة مسبقة" : "Nouvelle avance"}
@@ -156,6 +166,13 @@ export function SupplierProfilePage() {
             <StatCard icon={CircleDollarSign} label={text.debt} value={formatMoney(profile.statistics.totalDebt, lang)} color="#b46a66" tint="rgba(201,138,134,0.13)" />
             <StatCard icon={CalendarDays} label={text.average} value={formatMoney(profile.statistics.averagePurchase, lang)} color="#a87d3c" tint="rgba(195,154,91,0.15)" />
           </section>
+
+          <LegacyDebtBalanceSummary
+            ownerType="supplier"
+            currentDebt={profile.statistics.purchasesDebt}
+            legacyDebt={profile.statistics.legacyDebtRemaining}
+            totalDebt={profile.statistics.totalPayable}
+          />
 
           <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[0.8fr_1.2fr]">
             <div className="rounded-3xl border p-5" style={{ borderColor: palette.border, backgroundColor: palette.surface }}>
@@ -206,7 +223,7 @@ export function SupplierProfilePage() {
               actions={
                 <Button
                   onClick={() => setAdvanceModalOpen(true)}
-                  disabled={profile.statistics.totalDebt <= 0}
+                  disabled={profile.statistics.purchasesDebt <= 0}
                 >
                   <Plus size={15} />{" "}
                   {lang === "ar" ? "تسجيل دفعة" : "Nouvelle avance"}
@@ -216,10 +233,16 @@ export function SupplierProfilePage() {
               <AdvancesDebtTable rows={profile.advances} lang={lang} />
             </DataCard>
           </section>
+          <LegacyDebtSection
+            ownerType="supplier"
+            ownerId={profile.supplier.id}
+            debts={profile.legacyDebts}
+            onChanged={() => setRefreshKey((value) => value + 1)}
+          />
           <SupplierAdvanceModal
             open={advanceModalOpen}
             supplierId={profile.supplier.id}
-            currentDebt={profile.statistics.totalDebt}
+            currentDebt={profile.statistics.purchasesDebt}
             onClose={() => setAdvanceModalOpen(false)}
             onSaved={() => {
               setAdvanceModalOpen(false);

@@ -25,7 +25,8 @@ type ExpenseSourceType =
   | "MANUAL"
   | "RECURRING"
   | "SUPPLIER_PURCHASE"
-  | "PAYROLL";
+  | "PAYROLL"
+  | "SUPPLIER_LEGACY_PAYMENT";
 type ExpenseStatus =
   | "PAID"
   | "PARTIALLY_PAID"
@@ -66,6 +67,7 @@ type ExpenseStats = {
   estimatedResult: number;
   supplierPurchases: number;
   manualCharges: number;
+  legacySupplierDebtRemaining?: number;
 };
 
 type ExpenseAlert = {
@@ -124,6 +126,7 @@ const emptyStats: ExpenseStats = {
   estimatedResult: 0,
   supplierPurchases: 0,
   manualCharges: 0,
+  legacySupplierDebtRemaining: 0,
 };
 
 const categoryOptions = [
@@ -178,6 +181,10 @@ const sourceLabels: Record<ExpenseSourceType, { ar: string; fr: string }> = {
   PAYROLL: { ar: "راتب", fr: "Salaire" },
   MANUAL: { ar: "يدوي", fr: "Manuel" },
   RECURRING: { ar: "متكرر", fr: "Récurrent" },
+  SUPPLIER_LEGACY_PAYMENT: {
+    ar: "تسديد دين سابق",
+    fr: "Règlement dette antérieure",
+  },
 };
 
 const statusLabels: Record<ExpenseStatus, { ar: string; fr: string; color: string; bg: string }> = {

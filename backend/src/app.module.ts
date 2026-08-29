@@ -9,6 +9,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { LegacyDebtsModule } from './legacy-debts/legacy-debts.module';
 import { OrdersModule } from './orders/orders.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { ReportsModule } from './reports/reports.module';
@@ -18,6 +19,7 @@ import { WorkersModule } from './workers/workers.module';
 import { preparePayrollDatabase } from './database/prepare-payroll-database';
 import { prepareInvoiceDatabase } from './database/prepare-invoice-database';
 import { prepareInvoicePaymentsDatabase } from './database/prepare-invoice-payments-database';
+import { prepareLegacyDebtsDatabase } from './database/prepare-legacy-debts-database';
 
 const defaultDatabasePath = join(__dirname, '..', 'database', 'khayati.sqlite');
 const configuredDatabasePath = process.env.KHAYATI_DATABASE_PATH;
@@ -35,6 +37,7 @@ if (!existsSync(databaseDir)) {
 preparePayrollDatabase(databasePath);
 prepareInvoiceDatabase(databasePath);
 prepareInvoicePaymentsDatabase(databasePath);
+prepareLegacyDebtsDatabase(databasePath);
 
 @Module({
   imports: [
@@ -49,6 +52,7 @@ prepareInvoicePaymentsDatabase(databasePath);
     }),
     WorkersModule,
     InventoryModule,
+    LegacyDebtsModule,
     OrdersModule,
     SalesModule,
     InvoicesModule,

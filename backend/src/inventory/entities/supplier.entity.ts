@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { SupplierStatus } from '../../common/enums';
 import { InventoryItem } from './inventory-item.entity';
+import { LegacyDebt } from '../../legacy-debts/entities/legacy-debt.entity';
 import { SupplierAdvance } from './supplier-advance.entity';
 import { SupplierPayment } from './supplier-payment.entity';
 import { SupplierPurchase } from './supplier-purchase.entity';
@@ -65,6 +66,9 @@ export class Supplier {
 
   @OneToMany(() => SupplierAdvance, (advance) => advance.supplier)
   advances!: SupplierAdvance[];
+
+  @OneToMany(() => LegacyDebt, (debt) => debt.supplier)
+  legacyDebts!: LegacyDebt[];
 
   @CreateDateColumn()
   createdAt!: Date;

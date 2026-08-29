@@ -12,6 +12,7 @@ export enum ExpenseSourceType {
   RECURRING = 'RECURRING',
   SUPPLIER_PURCHASE = 'SUPPLIER_PURCHASE',
   PAYROLL = 'PAYROLL',
+  SUPPLIER_LEGACY_PAYMENT = 'SUPPLIER_LEGACY_PAYMENT',
 }
 
 export enum RecurringFrequency {

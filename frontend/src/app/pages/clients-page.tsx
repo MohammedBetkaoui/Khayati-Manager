@@ -630,7 +630,7 @@ function ArchiveCustomerModal({
               value={formatMoney(customer.totalPurchases, lang)}
             />
             <ArchiveCustomerInfo
-              label={lang === "ar" ? "الدين الحالي" : "Dette actuelle"}
+              label={lang === "ar" ? "إجمالي المستحق للورشة" : "Total à recevoir"}
               value={formatMoney(customer.totalDebt, lang)}
               danger={hasDebt}
             />

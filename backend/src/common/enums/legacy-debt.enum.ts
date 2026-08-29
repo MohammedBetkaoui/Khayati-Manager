@@ -1,0 +1,11 @@
+export enum LegacyDebtType {
+  CUSTOMER_RECEIVABLE = 'CUSTOMER_RECEIVABLE',
+  SUPPLIER_PAYABLE = 'SUPPLIER_PAYABLE',
+}
+
+export enum LegacyDebtStatus {
+  OPEN = 'OPEN',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  PAID = 'PAID',
+  CANCELLED = 'CANCELLED',
+}

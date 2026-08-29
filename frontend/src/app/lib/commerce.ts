@@ -24,6 +24,8 @@ export type ApiCustomer = {
   totalPurchases: number;
   totalPaid: number;
   totalDebt: number;
+  salesDebt?: number;
+  legacyDebtRemaining?: number;
   salesCount: number;
   totalSales: number;
   notes: string | null;
@@ -183,11 +185,54 @@ export type Supplier = {
   totalPurchases: number;
   totalPaid: number;
   totalDebt: number;
+  purchasesDebt?: number;
+  legacyDebtRemaining?: number;
   debt: number;
   lastPurchaseDate: string | null;
   lastPurchase: string | null;
   notes: string | null;
   archivedAt: string | null;
+};
+
+export type LegacyDebtPayment = {
+  id: number;
+  legacyDebtId: number;
+  type: "CUSTOMER_RECEIVABLE" | "SUPPLIER_PAYABLE";
+  customerId: number | null;
+  supplierId: number | null;
+  amount: number;
+  paymentDate: string;
+  date: string;
+  paymentMethod: string;
+  paymentMethodCode: "CASH" | "TRANSFER" | "OTHER" | string;
+  reference: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type LegacyDebt = {
+  id: number;
+  type: "CUSTOMER_RECEIVABLE" | "SUPPLIER_PAYABLE";
+  customerId: number | null;
+  customerName: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+  originalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  debtDate: string | null;
+  dateIsUnknown: boolean;
+  description: string | null;
+  quantity: number | null;
+  unit: string | null;
+  paperReference: string | null;
+  notes: string | null;
+  status: "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  payments: LegacyDebtPayment[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type MaterialPurchase = {

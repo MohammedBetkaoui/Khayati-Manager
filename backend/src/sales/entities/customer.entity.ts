@@ -8,6 +8,7 @@
 } from 'typeorm';
 import { CustomerStatus, CustomerType } from '../../common/enums';
 import { Order } from '../../orders/entities/order.entity';
+import { LegacyDebt } from '../../legacy-debts/entities/legacy-debt.entity';
 import { CustomerMeasurement } from './customer-measurement.entity';
 import { CustomerNote } from './customer-note.entity';
 import { Invoice } from './invoice.entity';
@@ -88,6 +89,9 @@ export class Customer {
 
   @OneToMany(() => CustomerNote, (note) => note.customer)
   customerNotes!: CustomerNote[];
+
+  @OneToMany(() => LegacyDebt, (debt) => debt.customer)
+  legacyDebts!: LegacyDebt[];
 
   @CreateDateColumn()
   createdAt!: Date;

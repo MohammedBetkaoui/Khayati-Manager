@@ -52,7 +52,7 @@ export function SuppliersPage() {
           total: "إجمالي الموردين",
           active: "موردون نشطون",
           purchases: "إجمالي المشتريات",
-          debt: "الدين الحالي",
+          debt: "إجمالي المستحق للموردين",
           empty: "لا يوجد موردون",
         }
       : {
@@ -63,7 +63,7 @@ export function SuppliersPage() {
           total: "Fournisseurs",
           active: "Actifs",
           purchases: "Total achats",
-          debt: "Dette actuelle",
+          debt: "Total dû aux fournisseurs",
           empty: "Aucun fournisseur",
         };
 
@@ -278,7 +278,7 @@ function ArchiveSupplierModal({
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <ArchiveSupplierInfo label={lang === "ar" ? "إجمالي المشتريات" : "Total achats"} value={formatMoney(supplier.totalPurchases, lang)} />
             <ArchiveSupplierInfo label={lang === "ar" ? "إجمالي المدفوع" : "Total payé"} value={formatMoney(supplier.totalPaid, lang)} />
-            <ArchiveSupplierInfo label={lang === "ar" ? "الدين الحالي" : "Dette actuelle"} value={formatMoney(supplier.totalDebt, lang)} danger={hasDebt} />
+            <ArchiveSupplierInfo label={lang === "ar" ? "إجمالي المستحق" : "Total dû"} value={formatMoney(supplier.totalDebt, lang)} danger={hasDebt} />
           </div>
 
           {hasDebt ? (

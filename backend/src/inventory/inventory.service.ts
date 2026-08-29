@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import { LegacyDebtsService } from '../legacy-debts/legacy-debts.service';
 import {
   InventoryCategory,
   MovementType,
@@ -67,6 +68,7 @@ export class InventoryService implements OnModuleInit {
     @InjectRepository(MaterialConsumption)
     private readonly consumptionsRepository: Repository<MaterialConsumption>,
     private readonly dataSource: DataSource,
+    private readonly legacyDebtsService: LegacyDebtsService,
   ) {}
 
   async onModuleInit() {
@@ -457,8 +459,16 @@ export class InventoryService implements OnModuleInit {
       .take(limit);
 
     const [suppliers, total] = await qb.getManyAndCount();
+    const legacyOutstanding = await this.legacyDebtsService.getSupplierOutstandingMap(
+      suppliers.map((supplier) => supplier.id),
+    );
     return {
-      data: suppliers.map((supplier) => this.serializeSupplierDetail(supplier)),
+      data: suppliers.map((supplier) =>
+        this.serializeSupplierDetail(
+          supplier,
+          legacyOutstanding.get(supplier.id) ?? 0,
+        ),
+      ),
       pagination: this.buildPagination(page, limit, total),
     };
   }
@@ -480,12 +490,16 @@ export class InventoryService implements OnModuleInit {
       .setParameter('active', SupplierStatus.ACTIVE)
       .getRawOne<Record<string, string | number | null>>();
 
+    const legacy = await this.legacyDebtsService.getGlobalSummary();
+    const purchasesDebt = this.roundMoney(Number(raw?.totalDebt ?? 0));
     return {
       totalSuppliers: Number(raw?.totalSuppliers ?? 0),
       activeSuppliers: Number(raw?.activeSuppliers ?? 0),
       totalPurchases: this.roundMoney(Number(raw?.totalPurchases ?? 0)),
       totalPaid: this.roundMoney(Number(raw?.totalPaid ?? 0)),
-      totalDebt: this.roundMoney(Number(raw?.totalDebt ?? 0)),
+      totalDebt: this.roundMoney(purchasesDebt + legacy.suppliers.remaining),
+      purchasesDebt,
+      legacyDebtRemaining: legacy.suppliers.remaining,
     };
   }
 
@@ -561,6 +575,7 @@ export class InventoryService implements OnModuleInit {
     supplier.payments.sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
     supplier.advances.sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
 
+    const legacy = await this.legacyDebtsService.findForSupplier(id);
     const purchases = supplier.purchases.map((purchase) =>
       this.serializePurchase(purchase, supplier),
     );
@@ -573,22 +588,62 @@ export class InventoryService implements OnModuleInit {
     const averagePurchase = purchases.length
       ? this.roundMoney(supplier.totalPurchases / purchases.length)
       : 0;
+    const totalPayable = this.roundMoney(
+      supplier.totalDebt + legacy.summary.remaining,
+    );
+    const legacyPaymentDates = legacy.data.flatMap((debt) =>
+      debt.payments.map((payment) => payment.paymentDate),
+    );
+    const lastPayment = [payments[0]?.date, ...legacyPaymentDates]
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => right.localeCompare(left))[0] ?? null;
+    const legacyHistory = [
+      ...legacy.data.map((debt) => ({
+        type: 'LEGACY_SUPPLIER_PAYABLE',
+        date: debt.debtDate ?? String(debt.createdAt).slice(0, 10),
+        title: 'Ajout d\'une dette anterieure',
+        amount: debt.originalAmount,
+        reference: debt.paperReference,
+        legacyDebtId: debt.id,
+        badge: 'Solde anterieur',
+      })),
+      ...legacy.data.flatMap((debt) =>
+        debt.payments.map((payment) => ({
+          type: 'PAYMENT_LEGACY_SUPPLIER_PAYABLE',
+          date: payment.paymentDate,
+          title: 'Paiement dette fournisseur anterieure',
+          amount: payment.amount,
+          reference: payment.reference,
+          legacyDebtId: debt.id,
+          badge: 'Solde anterieur',
+        })),
+      ),
+    ];
     return {
-      supplier: this.serializeSupplierDetail(supplier),
+      supplier: this.serializeSupplierDetail(supplier, legacy.summary.remaining),
       statistics: {
         totalPurchases: supplier.totalPurchases,
         totalPaid: supplier.totalPaid,
-        totalDebt: supplier.totalDebt,
+        totalDebt: totalPayable,
+        purchasesDebt: supplier.totalDebt,
+        legacyDebtOriginal: legacy.summary.original,
+        legacyDebtPaid: legacy.summary.paid,
+        legacyDebtRemaining: legacy.summary.remaining,
+        totalPayable,
         totalAdvances: this.roundMoney(advances.reduce((sum, advance) => sum + advance.amount, 0)),
         purchaseCount: purchases.length,
         lastPurchase: supplier.lastPurchaseDate ?? null,
-        lastPayment: payments[0]?.date ?? null,
+        lastPayment,
         averagePurchase,
       },
       purchases,
       payments,
       advances,
-      history: this.buildSupplierHistory(purchases, payments, advances),
+      legacyDebts: legacy.data,
+      history: [
+        ...this.buildSupplierHistory(purchases, payments, advances),
+        ...legacyHistory,
+      ].sort((left, right) => right.date.localeCompare(left.date)),
     };
   }
 
@@ -1393,7 +1448,9 @@ export class InventoryService implements OnModuleInit {
     };
   }
 
-  private serializeSupplierDetail(supplier: Supplier) {
+  private serializeSupplierDetail(supplier: Supplier, legacyDebtRemaining = 0) {
+    const purchasesDebt = supplier.totalDebt ?? 0;
+    const totalDebt = this.roundMoney(purchasesDebt + legacyDebtRemaining);
     return {
       id: supplier.id,
       name: supplier.name,
@@ -1405,8 +1462,10 @@ export class InventoryService implements OnModuleInit {
       statusCode: this.enumKey(SupplierStatus, supplier.status),
       totalPurchases: supplier.totalPurchases ?? 0,
       totalPaid: supplier.totalPaid ?? 0,
-      totalDebt: supplier.totalDebt ?? 0,
-      debt: supplier.totalDebt ?? 0,
+      purchasesDebt,
+      legacyDebtRemaining,
+      totalDebt,
+      debt: totalDebt,
       lastPurchaseDate: supplier.lastPurchaseDate ?? null,
       lastPurchase: supplier.lastPurchaseDate ?? null,
       notes: supplier.notes,

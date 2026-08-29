@@ -6,6 +6,8 @@ import {
   ExpenseStatus,
   FinishedProductStatus,
   InvoiceStatus,
+  LegacyDebtStatus,
+  LegacyDebtType,
   PayrollStatus,
   SalaryType,
 } from '../common/enums';
@@ -22,6 +24,8 @@ import { SalaryPayment } from '../payroll/entities/salary-payment.entity';
 import { Customer } from '../sales/entities/customer.entity';
 import { Invoice } from '../sales/entities/invoice.entity';
 import { Payment } from '../sales/entities/payment.entity';
+import { LegacyDebt } from '../legacy-debts/entities/legacy-debt.entity';
+import { LegacyDebtPayment } from '../legacy-debts/entities/legacy-debt-payment.entity';
 
 type MonthRow = {
   month: string;
@@ -65,6 +69,10 @@ export class AnalyticsService {
     private readonly productRepository: Repository<FinishedProduct>,
     @InjectRepository(ProductionBatch)
     private readonly productionRepository: Repository<ProductionBatch>,
+    @InjectRepository(LegacyDebt)
+    private readonly legacyDebtRepository: Repository<LegacyDebt>,
+    @InjectRepository(LegacyDebtPayment)
+    private readonly legacyDebtPaymentRepository: Repository<LegacyDebtPayment>,
   ) {}
 
   async getDashboard(monthCount = 12) {
@@ -87,6 +95,8 @@ export class AnalyticsService {
       supplierAdvances,
       products,
       productions,
+      legacyDebts,
+      legacyPayments,
     ] = await Promise.all([
       this.invoiceRepository.find({
         relations: { customer: true, items: { product: true } },
@@ -116,6 +126,14 @@ export class AnalyticsService {
         order: { quantityAvailable: 'DESC', id: 'ASC' },
       }),
       this.productionRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
+      this.legacyDebtRepository.find({
+        relations: { customer: true, supplier: true, payments: true },
+        order: { id: 'ASC' },
+      }),
+      this.legacyDebtPaymentRepository.find({
+        relations: { legacyDebt: true },
+        order: { paymentDate: 'ASC', id: 'ASC' },
+      }),
     ]);
 
     const issuedInvoices = invoices.filter(
@@ -140,6 +158,25 @@ export class AnalyticsService {
     const periodExpenses = activeExpenses.filter((expense) =>
       this.inRange(expense.date, startDate, endDate),
     );
+    const activeLegacyDebts = legacyDebts.filter(
+      (debt) => debt.status !== LegacyDebtStatus.CANCELLED,
+    );
+    const customerLegacyPayments = legacyPayments.filter(
+      (payment) =>
+        payment.legacyDebt.type === LegacyDebtType.CUSTOMER_RECEIVABLE,
+    );
+    const supplierLegacyPayments = legacyPayments.filter(
+      (payment) =>
+        payment.legacyDebt.type === LegacyDebtType.SUPPLIER_PAYABLE,
+    );
+    const customerLegacyMap = this.legacyOutstandingByOwner(
+      activeLegacyDebts,
+      LegacyDebtType.CUSTOMER_RECEIVABLE,
+    );
+    const supplierLegacyMap = this.legacyOutstandingByOwner(
+      activeLegacyDebts,
+      LegacyDebtType.SUPPLIER_PAYABLE,
+    );
 
     const financialTrend = months.map((month) => ({
       month: month.month,
@@ -152,7 +189,13 @@ export class AnalyticsService {
       receipts: this.sum(
         payments.filter((payment) => payment.date.startsWith(month.month)),
         (payment) => payment.amount,
-      ),
+      ) +
+        this.sum(
+          customerLegacyPayments.filter((payment) =>
+            payment.paymentDate.startsWith(month.month),
+          ),
+          (payment) => payment.amount,
+        ),
       outflows: this.money(
         this.sum(
           salaryPayments.filter((payment) =>
@@ -183,6 +226,12 @@ export class AnalyticsService {
               expense.date.startsWith(month.month),
             ),
             (expense) => expense.paidAmount,
+          ) +
+          this.sum(
+            supplierLegacyPayments.filter((payment) =>
+              payment.paymentDate.startsWith(month.month),
+            ),
+            (payment) => payment.amount,
           ),
       ),
     }));
@@ -260,7 +309,10 @@ export class AnalyticsService {
       month: month.month,
       customerDebt:
         index === months.length - 1
-          ? this.sum(customers, (customer) => customer.totalDebt)
+          ? this.money(
+              this.sum(customers, (customer) => customer.totalDebt) +
+                this.sumMap(customerLegacyMap),
+            )
           : this.money(
               Math.max(
                 0,
@@ -278,7 +330,10 @@ export class AnalyticsService {
             ),
       supplierDebt:
         index === months.length - 1
-          ? this.sum(suppliers, (supplier) => supplier.totalDebt)
+          ? this.money(
+              this.sum(suppliers, (supplier) => supplier.totalDebt) +
+                this.sumMap(supplierLegacyMap),
+            )
           : this.money(
               Math.max(
                 0,
@@ -348,7 +403,13 @@ export class AnalyticsService {
         this.inRange(payment.date, startDate, endDate),
       ),
       (payment) => payment.amount,
-    );
+    ) +
+      this.sum(
+        customerLegacyPayments.filter((payment) =>
+          this.inRange(payment.paymentDate, startDate, endDate),
+        ),
+        (payment) => payment.amount,
+      );
     const periodOutflows = this.sum(financialTrend, (row) => row.outflows);
 
     return {
@@ -358,8 +419,24 @@ export class AnalyticsService {
         receipts: periodReceipts,
         outflows: periodOutflows,
         estimatedCashFlow: this.money(periodReceipts - periodOutflows),
-        customerDebt: this.sum(customers, (customer) => customer.totalDebt),
-        supplierDebt: this.sum(suppliers, (supplier) => supplier.totalDebt),
+        customerDebt: this.money(
+          this.sum(customers, (customer) => customer.totalDebt) +
+            this.sumMap(customerLegacyMap),
+        ),
+        currentCustomerDebt: this.sum(
+          customers,
+          (customer) => customer.totalDebt,
+        ),
+        legacyCustomerDebt: this.money(this.sumMap(customerLegacyMap)),
+        supplierDebt: this.money(
+          this.sum(suppliers, (supplier) => supplier.totalDebt) +
+            this.sumMap(supplierLegacyMap),
+        ),
+        currentSupplierDebt: this.sum(
+          suppliers,
+          (supplier) => supplier.totalDebt,
+        ),
+        legacySupplierDebt: this.money(this.sumMap(supplierLegacyMap)),
         payrollPaid,
         payrollRemaining,
       },
@@ -375,24 +452,40 @@ export class AnalyticsService {
           .sort((left, right) => right.revenue - left.revenue)
           .slice(0, 5),
         customerDebts: customers
-          .filter((customer) => customer.totalDebt > 0)
-          .sort((left, right) => right.totalDebt - left.totalDebt)
-          .slice(0, 5)
           .map((customer) => ({
+            customer,
+            debt: this.money(
+              customer.totalDebt + (customerLegacyMap.get(customer.id) ?? 0),
+            ),
+          }))
+          .filter((item) => item.debt > 0)
+          .sort((left, right) => right.debt - left.debt)
+          .slice(0, 5)
+          .map(({ customer, debt }) => ({
             id: customer.id,
             fullName: customer.fullName,
             phone: customer.phone,
-            debt: this.money(customer.totalDebt),
+            debt,
+            currentDebt: this.money(customer.totalDebt),
+            legacyDebt: this.money(customerLegacyMap.get(customer.id) ?? 0),
           })),
         supplierDebts: suppliers
-          .filter((supplier) => supplier.totalDebt > 0)
-          .sort((left, right) => right.totalDebt - left.totalDebt)
-          .slice(0, 5)
           .map((supplier) => ({
+            supplier,
+            debt: this.money(
+              supplier.totalDebt + (supplierLegacyMap.get(supplier.id) ?? 0),
+            ),
+          }))
+          .filter((item) => item.debt > 0)
+          .sort((left, right) => right.debt - left.debt)
+          .slice(0, 5)
+          .map(({ supplier, debt }) => ({
             id: supplier.id,
             name: supplier.name,
             phone: supplier.phone ?? null,
-            debt: this.money(supplier.totalDebt),
+            debt,
+            currentDebt: this.money(supplier.totalDebt),
+            legacyDebt: this.money(supplierLegacyMap.get(supplier.id) ?? 0),
           })),
         overdueInvoices: issuedInvoices
           .filter(
@@ -464,6 +557,12 @@ export class AnalyticsService {
         purchases: periodPurchases.length,
         payrolls: periodPayrolls.length,
         manualExpenses: periodExpenses.length,
+        legacyCustomerPayments: customerLegacyPayments.filter((payment) =>
+          this.inRange(payment.paymentDate, startDate, endDate),
+        ).length,
+        legacySupplierPayments: supplierLegacyPayments.filter((payment) =>
+          this.inRange(payment.paymentDate, startDate, endDate),
+        ).length,
       },
     };
   }
@@ -493,6 +592,28 @@ export class AnalyticsService {
           right.quantity - left.quantity || right.revenue - left.revenue,
       )
       .slice(0, limit);
+  }
+
+  private legacyOutstandingByOwner(
+    debts: LegacyDebt[],
+    type: LegacyDebtType,
+  ) {
+    const result = new Map<number, number>();
+    for (const debt of debts.filter((item) => item.type === type)) {
+      const ownerId = debt.customer?.id ?? debt.supplier?.id;
+      if (!ownerId) continue;
+      result.set(
+        ownerId,
+        this.money((result.get(ownerId) ?? 0) + debt.remainingAmount),
+      );
+    }
+    return result;
+  }
+
+  private sumMap(values: Map<number, number>) {
+    let total = 0;
+    for (const value of values.values()) total += value;
+    return this.money(total);
   }
 
   private pieceWorkerStats(payrolls: Payroll[]) {

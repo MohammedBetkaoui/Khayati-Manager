@@ -20,6 +20,10 @@ import {
 import { useNavigate, useParams } from "react-router";
 import { CustomerFormModal } from "../components/customer-form-modal";
 import {
+  LegacyDebtBalanceSummary,
+  LegacyDebtSection,
+} from "../components/legacy-debt-section";
+import {
   PageHeading,
   StatePanel,
   StatCard,
@@ -32,7 +36,12 @@ import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
 import { fetchJson } from "../lib/api";
-import type { ApiCustomer, ApiInvoice, ApiPayment } from "../lib/commerce";
+import type {
+  ApiCustomer,
+  ApiInvoice,
+  ApiPayment,
+  LegacyDebt,
+} from "../lib/commerce";
 
 type CustomerProfile = {
   customer: ApiCustomer;
@@ -42,6 +51,11 @@ type CustomerProfile = {
     totalPurchases: number;
     totalPaid: number;
     totalDebt: number;
+    salesDebt: number;
+    legacyDebtOriginal: number;
+    legacyDebtPaid: number;
+    legacyDebtRemaining: number;
+    totalReceivable: number;
     averageSale: number;
     lastPurchase: string | null;
     purchaseFrequencyDays: number | null;
@@ -58,6 +72,7 @@ type CustomerProfile = {
     remainingAmount: number;
     paymentStatusCode: string;
   }>;
+  legacyDebts: LegacyDebt[];
   analytics: {
     purchaseTrend: Array<{ month: string; amount: number; sales: number }>;
     topProducts: Array<{ name: string; quantity: number; amount: number }>;
@@ -311,7 +326,7 @@ export function CustomerProfilePage() {
           revenue: "إجمالي المشتريات",
           sales: "عدد المبيعات",
           paid: "إجمالي المدفوع",
-          debt: "المتبقي للدفع",
+          debt: "إجمالي المستحق للورشة",
           average: "متوسط البيع",
           last: "آخر شراء",
           info: "المعلومات العامة",
@@ -330,7 +345,7 @@ export function CustomerProfilePage() {
           revenue: "Total des achats",
           sales: "Nombre de ventes",
           paid: "Total payé",
-          debt: "Reste à payer",
+          debt: "Total à recevoir",
           average: "Panier moyen",
           last: "Dernier achat",
           info: "Informations générales",
@@ -446,6 +461,13 @@ export function CustomerProfilePage() {
             />
           </section>
 
+          <LegacyDebtBalanceSummary
+            ownerType="customer"
+            currentDebt={profile.statistics.salesDebt}
+            legacyDebt={profile.statistics.legacyDebtRemaining}
+            totalDebt={profile.statistics.totalReceivable}
+          />
+
           <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="flex flex-col gap-4">
               <section
@@ -517,7 +539,7 @@ export function CustomerProfilePage() {
                   </div>
                 ) : null}
               </section>
-              {profile.statistics.totalDebt > 0 ? (
+              {profile.statistics.salesDebt > 0 ? (
                 <section
                   style={{
                     background: "var(--app-danger-surface)",
@@ -537,7 +559,7 @@ export function CustomerProfilePage() {
                       color: palette.text,
                     }}
                   >
-                    {formatMoney(profile.statistics.totalDebt, lang)}
+                    {formatMoney(profile.statistics.salesDebt, lang)}
                   </div>
                   <Button
                     full
@@ -624,6 +646,20 @@ export function CustomerProfilePage() {
               </div>
             </main>
           </div>
+
+          <LegacyDebtSection
+            ownerType="customer"
+            ownerId={profile.customer.id}
+            debts={profile.legacyDebts}
+            onChanged={() => {
+              setNotice(
+                lang === "ar"
+                  ? "تم تحديث المستحقات السابقة وسجل الدفعات."
+                  : "Créances antérieures et historique mis à jour.",
+              );
+              reload();
+            }}
+          />
         </>
       ) : null}
 

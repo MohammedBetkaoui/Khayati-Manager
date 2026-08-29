@@ -7,12 +7,14 @@ import { Supplier } from '../inventory/entities/supplier.entity';
 import { Payroll } from '../payroll/entities/payroll.entity';
 import { SalaryPayment } from '../payroll/entities/salary-payment.entity';
 import { Invoice } from '../sales/entities/invoice.entity';
+import { LegacyDebtsModule } from '../legacy-debts/legacy-debts.module';
 import { Expense } from './entities/expense.entity';
 import { ExpensesController } from './expenses.controller';
 import { ExpensesService } from './expenses.service';
 
 @Module({
   imports: [
+    LegacyDebtsModule,
     TypeOrmModule.forFeature([
       Expense,
       Supplier,
