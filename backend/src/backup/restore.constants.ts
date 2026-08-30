@@ -1,0 +1,18 @@
+export const CRITICAL_RESTORE_TABLES = [
+  'customers',
+  'suppliers',
+  'workers',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'supplier_purchases',
+  'supplier_payments',
+  'payrolls',
+  'salary_payments',
+  'legacy_debts',
+  'legacy_debt_payments',
+  'customer_credit_transactions',
+  'finished_products',
+  'workshop_settings',
+  'typeorm_migrations',
+] as const;

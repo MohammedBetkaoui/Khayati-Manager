@@ -1,15 +1,17 @@
 const path = require("node:path");
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   startBackendProcess,
   stopBackendProcess,
   waitForBackend,
   getBackendBaseUrl,
+  getDesktopToken,
   resolveFrontendEntry,
   resolveSplashEntry,
   resolveAppIcon,
 } = require("./launcher");
 const { configureUpdater, isUpdaterConfigured } = require("./updater");
+const { registerBackupIpc } = require("./backup/backup-ipc");
 
 const userDataPathOverride = process.env.KHAYATI_USER_DATA_PATH?.trim();
 if (userDataPathOverride) {
@@ -20,6 +22,7 @@ let mainWindow = null;
 let splashWindow = null;
 let backendProcess = null;
 let ownsBackendProcess = false;
+let backupManager = null;
 
 function createSplashWindow() {
   return new BrowserWindow({
@@ -120,6 +123,11 @@ async function bootstrap() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+  mainWindow.on("close", (event) => {
+    if (backupManager?.isRestoreActive()) {
+      event.preventDefault();
+    }
+  });
 
   if (app.isPackaged) {
     await mainWindow.loadFile(resolveFrontendEntry());
@@ -178,8 +186,6 @@ if (!app.requestSingleInstanceLock()) {
     return true;
   };
 
-  const { ipcMain } = require("electron");
-
   ipcMain.on("backend:get-base-url", (event) => {
     event.returnValue = getBackendBaseUrl();
   });
@@ -187,6 +193,16 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle("window:minimize", () => minimizeMainWindow());
   ipcMain.handle("window:toggle-maximize", () => toggleMainWindowMaximize());
   ipcMain.handle("window:close", () => closeMainWindow());
+
+  backupManager = registerBackupIpc({
+    app,
+    dialog,
+    shell,
+    ipcMain,
+    getMainWindow,
+    getBackendBaseUrl,
+    getDesktopToken,
+  });
 
   app.on("second-instance", () => {
     if (mainWindow) {

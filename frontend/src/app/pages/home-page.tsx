@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { CheckCircle2 } from "lucide-react";
 import { palette, sections } from "../content";
 import { useLanguage } from "../language-context";
 import { PageBackground } from "../components/page-background";
@@ -13,11 +15,30 @@ const routeFor: Record<string, string> = {
   salary: "/salary",
   expenses: "/expenses",
   analytics: "/analytics",
+  settings: "/settings",
 };
 
 export function HomePage() {
   const { lang, t } = useLanguage();
   const navigate = useNavigate();
+  const [restoreNotice, setRestoreNotice] = useState(false);
+
+  useEffect(() => {
+    const backupApi = window.khayatiBackup;
+    if (!backupApi) return;
+    let active = true;
+    void backupApi
+      .getStatus()
+      .then((status) => {
+        if (!active || !status.restoreNoticePending) return;
+        setRestoreNotice(true);
+        void backupApi.acknowledgeRestoreNotice();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <PageBackground>
@@ -29,6 +50,23 @@ export function HomePage() {
           {t.welcome}
         </p>
       </section>
+
+      {restoreNotice ? (
+        <div
+          role="status"
+          className="mt-5 flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold"
+          style={{
+            backgroundColor: "rgba(77,138,106,0.12)",
+            borderColor: "rgba(77,138,106,0.3)",
+            color: palette.text,
+          }}
+        >
+          <CheckCircle2 size={20} style={{ color: "var(--app-positive)" }} />
+          {lang === "ar"
+            ? "تمت استعادة النسخة الاحتياطية بنجاح."
+            : "La sauvegarde a été restaurée avec succès."}
+        </div>
+      ) : null}
 
       <main className="mt-8 grid flex-1 grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {sections.map((section) => (

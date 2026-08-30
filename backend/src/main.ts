@@ -1,6 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { prepareDatabaseForStartup } from './database/database-bootstrap';
 
 const allowedOrigins = new Set([
   'http://localhost:5173',
@@ -12,6 +12,8 @@ const viteDevelopmentOrigin =
   /^http:\/\/(?:localhost|127\.0\.0\.1):51(?:7|8|9)\d$/;
 
 export async function bootstrap() {
+  await prepareDatabaseForStartup();
+  const { AppModule } = await import('./app.module.js');
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({

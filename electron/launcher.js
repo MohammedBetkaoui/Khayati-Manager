@@ -1,16 +1,17 @@
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
 const { app } = require("electron");
 const {
   backendUrl,
   findAvailablePort,
-  isKhayatiBackendRunning,
   waitForKhayatiBackend,
 } = require("./backend-runtime");
 
 const FRONTEND_DEV_URL = "http://localhost:5173";
 const PREFERRED_BACKEND_PORT = 3000;
 let backendBaseUrl = backendUrl(PREFERRED_BACKEND_PORT);
+const desktopToken = randomUUID();
 
 function resolveWorkspaceRoot() {
   return app.getAppPath();
@@ -40,17 +41,15 @@ function getBackendBaseUrl() {
   return backendBaseUrl;
 }
 
+function getDesktopToken() {
+  return desktopToken;
+}
+
 async function waitForBackend(timeoutMs = 60_000) {
   return waitForKhayatiBackend(backendBaseUrl, timeoutMs);
 }
 
 async function startDevelopmentBackend() {
-  const preferredUrl = backendUrl(PREFERRED_BACKEND_PORT);
-  if (await isKhayatiBackendRunning(preferredUrl)) {
-    backendBaseUrl = preferredUrl;
-    return { process: null, owned: false, baseUrl: backendBaseUrl };
-  }
-
   const backendPort = await findAvailablePort(PREFERRED_BACKEND_PORT);
   backendBaseUrl = backendUrl(backendPort);
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -62,6 +61,9 @@ async function startDevelopmentBackend() {
         ...process.env,
         PORT: String(backendPort),
         NODE_ENV: "development",
+        KHAYATI_PACKAGED: "false",
+        KHAYATI_APP_VERSION: app.getVersion(),
+        KHAYATI_DESKTOP_TOKEN: desktopToken,
       },
       cwd: resolveWorkspaceRoot(),
       stdio: "inherit",
@@ -84,6 +86,10 @@ async function startPackagedBackend() {
 
   process.env.PORT = String(backendPort);
   process.env.NODE_ENV = "production";
+  process.env.KHAYATI_PACKAGED = "true";
+  process.env.TYPEORM_SYNCHRONIZE = "false";
+  process.env.KHAYATI_APP_VERSION = app.getVersion();
+  process.env.KHAYATI_DESKTOP_TOKEN = desktopToken;
   process.env.KHAYATI_DATABASE_PATH = path.join(
     app.getPath("userData"),
     "database",
@@ -122,6 +128,7 @@ function stopBackendProcess(backendProcess, owned) {
 module.exports = {
   FRONTEND_DEV_URL,
   getBackendBaseUrl,
+  getDesktopToken,
   resolveAppIcon,
   resolveBackendEntry,
   resolveBackendRoot,

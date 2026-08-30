@@ -41,3 +41,33 @@ contextBridge.exposeInMainWorld("electron", {
     },
   },
 });
+
+contextBridge.exposeInMainWorld("khayatiBackup", {
+  createBackup(options) {
+    return ipcRenderer.invoke("backup:create", options);
+  },
+  createExternalBackup(options) {
+    return ipcRenderer.invoke("backup:create-external", options);
+  },
+  getStatus() {
+    return ipcRenderer.invoke("backup:get-status");
+  },
+  openBackupLocation(locationId) {
+    return ipcRenderer.invoke("backup:open-location", locationId);
+  },
+  selectRestoreFile(options) {
+    return ipcRenderer.invoke("backup:select-restore-file", options);
+  },
+  restoreBackup(options) {
+    return ipcRenderer.invoke("backup:restore", options);
+  },
+  acknowledgeRestoreNotice() {
+    return ipcRenderer.invoke("backup:acknowledge-restore-notice");
+  },
+  onRestoreProgress(callback) {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("backup:restore-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("backup:restore-progress", listener);
+  },
+});

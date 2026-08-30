@@ -5,6 +5,7 @@ import {
   Calculator,
   ContactRound,
   Receipt,
+  Settings2,
   Truck,
   Users,
   Wallet,
@@ -187,5 +188,21 @@ export const sections: Section[] = [
     },
     tint: "rgba(195, 154, 91, 0.14)",
     iconColor: "#a87d3c",
+  },
+  {
+    id: "settings",
+    icon: Settings2,
+    ar: {
+      title: "الإعدادات",
+      sub: "Paramètres",
+      desc: "حماية بيانات الورشة وإنشاء النسخ الاحتياطية",
+    },
+    fr: {
+      title: "Paramètres",
+      sub: "الإعدادات",
+      desc: "Protection des données et sauvegardes de l’atelier",
+    },
+    tint: "rgba(77, 138, 106, 0.13)",
+    iconColor: "#4d8a6a",
   },
 ];

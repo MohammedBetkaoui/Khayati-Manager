@@ -88,6 +88,11 @@ const WorkerProfilePage = lazy(() =>
     default: module.WorkerProfilePage,
   })),
 );
+const SettingsPage = lazy(() =>
+  import("./pages/settings-page").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
 
 function RootLayout() {
   return (
@@ -147,6 +152,7 @@ const router = createHashRouter([
       { path: "worker-profile", element: <WorkerProfilePage /> },
       { path: "expenses", element: <ExpensesPage /> },
       { path: "analytics", element: <AnalyticsPage /> },
+      { path: "settings", element: <SettingsPage /> },
       { path: "*", element: <HomePage /> },
     ],
   },

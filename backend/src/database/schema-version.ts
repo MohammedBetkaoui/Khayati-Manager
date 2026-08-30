@@ -1,0 +1,2 @@
+export const CURRENT_SCHEMA_VERSION = 1;
+export const INITIAL_BASELINE_MIGRATION = 'InitialSchemaBaseline1788102000000';
