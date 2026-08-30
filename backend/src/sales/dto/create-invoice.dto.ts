@@ -96,6 +96,16 @@ export class CreateInvoiceDto {
   paidAmount?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  customerCreditAmount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  confirmOverpayment?: boolean;
+
+  @IsOptional()
   @IsDateString()
   date?: string;
 

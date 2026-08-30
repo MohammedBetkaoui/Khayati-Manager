@@ -16,9 +16,11 @@ import {
   ShoppingBag,
   StickyNote,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { CustomerFormModal } from "../components/customer-form-modal";
+import { CustomerCreditSection } from "../components/customer-credit-section";
 import {
   LegacyDebtBalanceSummary,
   LegacyDebtSection,
@@ -29,6 +31,7 @@ import {
   StatCard,
   formatDate,
   formatMoney,
+  formatPaymentMethod,
 } from "../components/commerce-ui";
 import { Badge, Button, Field, Select, TextInput } from "../components/kit";
 import { ModalShell, Textarea } from "../components/modal-shell";
@@ -40,6 +43,7 @@ import type {
   ApiCustomer,
   ApiInvoice,
   ApiPayment,
+  CustomerCreditSummary,
   LegacyDebt,
 } from "../lib/commerce";
 
@@ -59,6 +63,7 @@ type CustomerProfile = {
     averageSale: number;
     lastPurchase: string | null;
     purchaseFrequencyDays: number | null;
+    availableCredit: number;
   };
   invoices: ApiInvoice[];
   payments: ApiPayment[];
@@ -73,6 +78,7 @@ type CustomerProfile = {
     paymentStatusCode: string;
   }>;
   legacyDebts: LegacyDebt[];
+  credit: CustomerCreditSummary;
   analytics: {
     purchaseTrend: Array<{ month: string; amount: number; sales: number }>;
     topProducts: Array<{ name: string; quantity: number; amount: number }>;
@@ -82,7 +88,7 @@ type CustomerProfile = {
   notes: Array<{ id: number; content: string; date: string }>;
 };
 
-type ProfileTab = "sales" | "payments" | "debts" | "analytics";
+type ProfileTab = "sales" | "payments" | "debts" | "credit" | "analytics";
 
 const paymentStatusColors = {
   PAID: { bg: "rgba(77,138,106,0.12)", fg: "#4d8a6a" },
@@ -114,6 +120,7 @@ function PaymentModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOverpayment, setConfirmOverpayment] = useState(false);
   const selectedDebt = profile.debts.find(
     (debt) => debt.invoiceId === Number(invoiceId),
   );
@@ -127,6 +134,7 @@ function PaymentModal({
     setReference("");
     setNotes("");
     setError(null);
+    setConfirmOverpayment(false);
   }, [open, profile.debts]);
 
   async function submit(event: FormEvent) {
@@ -134,14 +142,18 @@ function PaymentModal({
     const numericAmount = Number(amount);
     if (
       !selectedDebt ||
-      numericAmount <= 0 ||
-      numericAmount > selectedDebt.remainingAmount
+      numericAmount <= 0
     ) {
       setError(
         lang === "ar"
-          ? "يجب أن يكون المبلغ أكبر من صفر ولا يتجاوز الدين المتبقي."
-          : "Le montant doit être positif et ne pas dépasser le reste dû.",
+          ? "يجب أن يكون المبلغ أكبر من صفر."
+          : "Le montant doit être supérieur à zéro.",
       );
+      return;
+    }
+    if (numericAmount > selectedDebt.remainingAmount && !confirmOverpayment) {
+      setConfirmOverpayment(true);
+      setError(null);
       return;
     }
 
@@ -157,6 +169,7 @@ function PaymentModal({
           paymentMethod: method,
           reference: reference || undefined,
           notes: notes || undefined,
+          confirmOverpayment,
         }),
       });
       onSaved();
@@ -184,6 +197,7 @@ function PaymentModal({
               value={invoiceId}
               onChange={(event) => {
                 setInvoiceId(event.target.value);
+                setConfirmOverpayment(false);
                 const debt = profile.debts.find(
                   (item) => item.invoiceId === Number(event.target.value),
                 );
@@ -203,10 +217,12 @@ function PaymentModal({
               required
               min="0.01"
               step="0.01"
-              max={selectedDebt?.remainingAmount}
               type="number"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value);
+                setConfirmOverpayment(false);
+              }}
             />
           </Field>
           <Field label={lang === "ar" ? "طريقة الدفع" : "Mode de paiement"}>
@@ -228,6 +244,37 @@ function PaymentModal({
             />
           </Field>
         </div>
+        {confirmOverpayment && selectedDebt ? (
+          <div
+            className="mt-4 rounded-xl border p-4"
+            style={{
+              borderColor: "rgba(195,154,91,0.35)",
+              backgroundColor: "rgba(195,154,91,0.1)",
+            }}
+          >
+            <div style={{ fontWeight: 800 }}>
+              {lang === "ar"
+                ? "المبلغ المدخل أكبر من المبلغ المتبقي."
+                : "Le montant saisi dépasse le reste de la facture."}
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+              <div>
+                <span style={{ color: palette.muted }}>{lang === "ar" ? "المتبقي" : "Reste"}</span>
+                <strong className="block">{formatMoney(selectedDebt.remainingAmount, lang)}</strong>
+              </div>
+              <div>
+                <span style={{ color: palette.muted }}>{lang === "ar" ? "المدفوع" : "Remis"}</span>
+                <strong className="block">{formatMoney(Number(amount) || 0, lang)}</strong>
+              </div>
+              <div>
+                <span style={{ color: palette.muted }}>{lang === "ar" ? "الرصيد الجديد" : "Crédit créé"}</span>
+                <strong className="block" style={{ color: "#4d8a6a" }}>
+                  {formatMoney(Math.max(0, (Number(amount) || 0) - selectedDebt.remainingAmount), lang)}
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4">
           <Field label={lang === "ar" ? "ملاحظة" : "Note"}>
             <Textarea
@@ -262,8 +309,12 @@ function PaymentModal({
                 ? "جاري التسجيل..."
                 : "Enregistrement..."
               : lang === "ar"
-                ? "تسجيل الدفعة"
-                : "Enregistrer"}
+                ? confirmOverpayment
+                  ? "تسجيل الرصيد"
+                  : "تسجيل الدفعة"
+                : confirmOverpayment
+                  ? "Enregistrer le crédit"
+                  : "Enregistrer"}
           </Button>
         </div>
       </form>
@@ -333,6 +384,7 @@ export function CustomerProfilePage() {
           salesTab: "المبيعات",
           paymentsTab: "المدفوعات",
           debtsTab: "الديون",
+          creditTab: "الرصيد المسبق",
           analyticsTab: "الإحصائيات",
           empty: "لا توجد بيانات في هذا القسم",
         }
@@ -352,9 +404,18 @@ export function CustomerProfilePage() {
           salesTab: "Ventes",
           paymentsTab: "Paiements",
           debtsTab: "Créances",
+          creditTab: "Crédit client",
           analyticsTab: "Statistiques",
           empty: "Aucune donnée dans cette section",
         };
+  const handleLegacyDebtChanged = () => {
+    setNotice(
+      lang === "ar"
+        ? "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0645\u0633\u062a\u062d\u0642\u0627\u062a \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0633\u062c\u0644 \u0627\u0644\u062f\u0641\u0639\u0627\u062a."
+        : "Creances anterieures et historique mis a jour.",
+    );
+    reload();
+  };
 
   return (
     <PageBackground>
@@ -466,6 +527,7 @@ export function CustomerProfilePage() {
             currentDebt={profile.statistics.salesDebt}
             legacyDebt={profile.statistics.legacyDebtRemaining}
             totalDebt={profile.statistics.totalReceivable}
+            availableCredit={profile.statistics.availableCredit}
           />
 
           <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -588,6 +650,7 @@ export function CustomerProfilePage() {
                     ["sales", text.salesTab, FileText],
                     ["payments", text.paymentsTab, CreditCard],
                     ["debts", text.debtsTab, CircleDollarSign],
+                    ["credit", text.creditTab, WalletCards],
                     [
                       "analytics",
                       text.analyticsTab,
@@ -629,11 +692,33 @@ export function CustomerProfilePage() {
                   />
                 ) : null}
                 {tab === "debts" ? (
-                  <DebtsTable
-                    debts={profile.debts}
-                    lang={lang}
-                    empty={text.empty}
-                    onPay={() => setPaymentOpen(true)}
+                  <div className="space-y-5">
+                    <DebtsTable
+                      debts={profile.debts}
+                      lang={lang}
+                      empty={text.empty}
+                      onPay={() => setPaymentOpen(true)}
+                    />
+                    <LegacyDebtSection
+                      ownerType="customer"
+                      ownerId={profile.customer.id}
+                      debts={profile.legacyDebts}
+                      onChanged={handleLegacyDebtChanged}
+                    />
+                  </div>
+                ) : null}
+                {tab === "credit" ? (
+                  <CustomerCreditSection
+                    customerId={profile.customer.id}
+                    credit={profile.credit}
+                    onChanged={() => {
+                      setNotice(
+                        lang === "ar"
+                          ? "تم تحديث رصيد الزبون وسجله المالي."
+                          : "Crédit client et historique mis à jour.",
+                      );
+                      reload();
+                    }}
                   />
                 ) : null}
                 {tab === "analytics" ? (
@@ -647,19 +732,6 @@ export function CustomerProfilePage() {
             </main>
           </div>
 
-          <LegacyDebtSection
-            ownerType="customer"
-            ownerId={profile.customer.id}
-            debts={profile.legacyDebts}
-            onChanged={() => {
-              setNotice(
-                lang === "ar"
-                  ? "تم تحديث المستحقات السابقة وسجل الدفعات."
-                  : "Créances antérieures et historique mis à jour.",
-              );
-              reload();
-            }}
-          />
         </>
       ) : null}
 
@@ -884,7 +956,13 @@ function PaymentsTable({
                 {formatMoney(payment.amount, lang)}
               </td>
               <td style={cellStyle}>{payment.invoiceNumber || "-"}</td>
-              <td style={cellStyle}>{payment.paymentMethod}</td>
+              <td style={cellStyle}>
+                {formatPaymentMethod(
+                  payment.paymentMethodCode,
+                  payment.paymentMethod,
+                  lang,
+                )}
+              </td>
               <td style={cellStyle}>{payment.reference || "-"}</td>
               <td style={{ ...cellStyle, color: palette.muted }}>
                 {payment.notes || "-"}

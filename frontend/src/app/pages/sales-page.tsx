@@ -20,6 +20,7 @@ import {
   StatCard,
   formatDate,
   formatMoney,
+  formatPaymentMethod,
 } from "../components/commerce-ui";
 import { InvoicePdfModal } from "../components/invoices/invoice-preview-modal";
 import { Badge, Button, Field, Select, TextInput } from "../components/kit";
@@ -91,6 +92,7 @@ function InvoicePaymentModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOverpayment, setConfirmOverpayment] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -99,18 +101,24 @@ function InvoicePaymentModal({
     setReference("");
     setNotes("");
     setError(null);
+    setConfirmOverpayment(false);
   }, [invoice, open]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!invoice) return;
     const numericAmount = Number(amount);
-    if (numericAmount <= 0 || numericAmount > invoice.remainingAmount) {
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       setError(
         lang === "ar"
-          ? "المبلغ غير صالح أو يتجاوز المتبقي."
-          : "Le montant est invalide ou dépasse le reste dû.",
+          ? "يجب أن يكون مبلغ الدفع أكبر من صفر."
+          : "Le montant doit être supérieur à zéro.",
       );
+      return;
+    }
+    if (numericAmount > invoice.remainingAmount && !confirmOverpayment) {
+      setConfirmOverpayment(true);
+      setError(null);
       return;
     }
     setSaving(true);
@@ -125,6 +133,7 @@ function InvoicePaymentModal({
           paymentMethod: method,
           reference: reference || undefined,
           notes: notes || undefined,
+          confirmOverpayment,
         }),
       });
       onSaved();
@@ -171,11 +180,13 @@ function InvoicePaymentModal({
             <TextInput
               required
               min="0.01"
-              max={invoice?.remainingAmount}
               step="0.01"
               type="number"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value);
+                setConfirmOverpayment(false);
+              }}
             />
           </Field>
           <Field label={lang === "ar" ? "طريقة الدفع" : "Mode de paiement"}>
@@ -197,6 +208,50 @@ function InvoicePaymentModal({
             />
           </Field>
         </div>
+        {confirmOverpayment && invoice ? (
+          <div
+            className="mt-4 rounded-xl border p-4"
+            style={{
+              borderColor: "rgba(195,154,91,0.35)",
+              backgroundColor: "rgba(195,154,91,0.1)",
+            }}
+          >
+            <div style={{ fontWeight: 800 }}>
+              {lang === "ar"
+                ? "المبلغ المدخل أكبر من المبلغ المتبقي. سيُسجّل الفرق كرصيد مسبق للزبون."
+                : "Le montant saisi dépasse le reste. La différence sera enregistrée comme crédit client."}
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+              <div>
+                <span style={{ color: palette.muted }}>
+                  {lang === "ar" ? "المتبقي" : "Reste"}
+                </span>
+                <strong className="block">
+                  {formatMoney(invoice.remainingAmount, lang)}
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: palette.muted }}>
+                  {lang === "ar" ? "المبلغ المدفوع" : "Montant remis"}
+                </span>
+                <strong className="block">
+                  {formatMoney(numericAmount, lang)}
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: palette.muted }}>
+                  {lang === "ar" ? "الرصيد الجديد" : "Crédit créé"}
+                </span>
+                <strong className="block" style={{ color: "#4d8a6a" }}>
+                  {formatMoney(
+                    Math.max(0, numericAmount - invoice.remainingAmount),
+                    lang,
+                  )}
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4">
           <Field label={lang === "ar" ? "ملاحظات" : "Notes"}>
             <Textarea
@@ -227,8 +282,12 @@ function InvoicePaymentModal({
                 ? "جاري التسجيل..."
                 : "Enregistrement..."
               : lang === "ar"
-                ? "تسجيل الدفعة"
-                : "Enregistrer"}
+                ? confirmOverpayment
+                  ? "تسجيل الرصيد"
+                  : "تسجيل الدفعة"
+                : confirmOverpayment
+                  ? "Enregistrer le crédit"
+                  : "Enregistrer"}
           </Button>
         </div>
       </form>
@@ -1033,7 +1092,12 @@ function InvoiceDetails({
                     {formatMoney(payment.amount, lang)}
                   </div>
                   <div style={{ fontSize: 11.5, color: palette.muted }}>
-                    {formatDate(payment.date, lang)} · {payment.paymentMethod}
+                    {formatDate(payment.date, lang)} ·{" "}
+                    {formatPaymentMethod(
+                      payment.paymentMethodCode,
+                      payment.paymentMethod,
+                      lang,
+                    )}
                   </div>
                 </div>
               ))}

@@ -1,6 +1,7 @@
 export * from './attendance-status.enum';
 export * from './customer-status.enum';
 export * from './customer-type.enum';
+export * from './customer-credit.enum';
 export * from './expense-category.enum';
 export * from './expense-status.enum';
 export * from './expense-type.enum';

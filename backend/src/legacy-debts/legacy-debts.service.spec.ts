@@ -79,8 +79,13 @@ function createHarness(initialDebt?: Partial<LegacyDebt>) {
       where() {
         return this;
       },
+      andWhere() {
+        return this;
+      },
       getRawOne: async () => ({
-        total: payments.reduce((sum, payment) => sum + payment.amountMinor, 0),
+        total: payments
+          .filter((payment) => !payment.cancelledAt)
+          .reduce((sum, payment) => sum + payment.amountMinor, 0),
       }),
     })),
   };

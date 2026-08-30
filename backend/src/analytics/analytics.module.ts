@@ -15,6 +15,7 @@ import { Invoice } from '../sales/entities/invoice.entity';
 import { Payment } from '../sales/entities/payment.entity';
 import { LegacyDebt } from '../legacy-debts/entities/legacy-debt.entity';
 import { LegacyDebtPayment } from '../legacy-debts/entities/legacy-debt-payment.entity';
+import { CustomerCreditTransaction } from '../customer-credits/entities/customer-credit-transaction.entity';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
@@ -36,6 +37,7 @@ import { AnalyticsService } from './analytics.service';
       ProductionBatch,
       LegacyDebt,
       LegacyDebtPayment,
+      CustomerCreditTransaction,
     ]),
   ],
   controllers: [AnalyticsController],

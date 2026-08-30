@@ -44,6 +44,12 @@ export class LegacyDebtPayment {
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 
+  @Column({ type: 'datetime', nullable: true })
+  cancelledAt?: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  cancellationReason?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

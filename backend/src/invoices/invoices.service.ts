@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, EntityManager, Repository } from 'typeorm';
+import { Brackets, DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import {
   CustomerStatus,
   DiscountType,
@@ -14,6 +14,7 @@ import {
   PaymentStatus,
   SalesOrderStatus,
 } from '../common/enums';
+import { CustomerCreditsService } from '../customer-credits/customer-credits.service';
 import { fromMinorUnits, toMinorUnits } from '../common/money';
 import { FinishedProduct } from '../inventory/entities/finished-product.entity';
 import { ProductVariant } from '../inventory/entities/product-variant.entity';
@@ -83,6 +84,7 @@ export class InvoicesService {
     private readonly invoiceRepository: Repository<Invoice>,
     private readonly dataSource: DataSource,
     private readonly invoiceNumberService: InvoiceNumberService,
+    private readonly customerCreditsService: CustomerCreditsService,
   ) {}
 
   async create(dto: CreateInvoiceDto) {
@@ -246,10 +248,20 @@ export class InvoicesService {
           'customerId does not match the invoice customer',
         );
       }
-      const payment = await this.recordInvoicePayment(manager, invoice, dto);
+      const paymentResult = await this.recordInvoicePayment(manager, invoice, dto);
       await this.recalculateCustomerTotals(manager, invoice.customer);
       return {
-        payment,
+        payment: paymentResult.payment,
+        overpaymentCredit: paymentResult.overpaymentCredit
+          ? {
+              id: paymentResult.overpaymentCredit.id,
+              amount: paymentResult.overpaymentCredit.amount,
+              balanceAfter: paymentResult.overpaymentCredit.balanceAfter,
+              transactionDate:
+                paymentResult.overpaymentCredit.transactionDate,
+              type: paymentResult.overpaymentCredit.type,
+            }
+          : null,
         invoice: await this.loadInvoice(manager, invoice.id),
       };
     });
@@ -258,7 +270,7 @@ export class InvoicesService {
   async getPayments(invoiceId: number) {
     await this.findOne(invoiceId);
     const data = await this.dataSource.getRepository(Payment).find({
-      where: { invoice: { id: invoiceId } },
+      where: { invoice: { id: invoiceId }, cancelledAt: IsNull() },
       relations: { customer: true, invoice: true },
       order: { date: 'DESC', createdAt: 'DESC', id: 'DESC' },
     });
@@ -351,10 +363,17 @@ export class InvoicesService {
 
   async cancel(id: number, dto: CancelInvoiceDto) {
     return this.dataSource.transaction(async (manager) => {
-      const invoice = await this.loadInvoice(manager, id);
+      let invoice = await this.loadInvoice(manager, id);
       if (invoice.invoiceStatus === InvoiceStatus.CANCELLED) {
         throw new ConflictException('Invoice is already cancelled');
       }
+      await this.customerCreditsService.reverseInvoiceUsagesForCancellation(
+        manager,
+        invoice.customer.id,
+        invoice.id,
+        `Invoice cancellation: ${dto.reason.trim()}`,
+      );
+      invoice = await this.loadInvoice(manager, id);
       if (this.invoiceAmountMinor(invoice, 'paid') > 0) {
         throw new ConflictException(
           'A paid invoice requires payment reversal before cancellation',
@@ -568,7 +587,7 @@ export class InvoicesService {
 
     const paymentRepository = manager.getRepository(Payment);
     const existingPayments = await paymentRepository.find({
-      where: { invoice: { id: invoice.id } },
+      where: { invoice: { id: invoice.id }, cancelledAt: IsNull() },
     });
     const linkedPaymentsMinor = existingPayments.reduce(
       (sum, payment) =>
@@ -590,30 +609,56 @@ export class InvoicesService {
     }
 
     const remainingAmountMinor = totalAmountMinor - recordedPaidMinor;
-    if (amountMinor > remainingAmountMinor) {
-      throw new BadRequestException(
-        `Payment exceeds remaining amount (${fromMinorUnits(remainingAmountMinor)})`,
+    const overpaymentMinor = Math.max(0, amountMinor - remainingAmountMinor);
+    if (overpaymentMinor > 0 && !dto.confirmOverpayment) {
+      throw new ConflictException({
+        code: 'OVERPAYMENT_CONFIRMATION_REQUIRED',
+        message: 'Payment exceeds the invoice remaining amount',
+        invoiceRemainingAmount: fromMinorUnits(remainingAmountMinor),
+        paymentAmount: fromMinorUnits(amountMinor),
+        overpaymentAmount: fromMinorUnits(overpaymentMinor),
+      });
+    }
+
+    const allocatedMinor = Math.min(amountMinor, remainingAmountMinor);
+    let payment: Payment | null = null;
+    if (allocatedMinor > 0) {
+      this.applyPaymentState(
+        invoice,
+        totalAmountMinor,
+        recordedPaidMinor + allocatedMinor,
+      );
+      await manager.getRepository(Invoice).save(invoice);
+      payment = await paymentRepository.save(
+        paymentRepository.create({
+          customer: invoice.customer,
+          invoice,
+          amount: fromMinorUnits(allocatedMinor),
+          amountMinor: allocatedMinor,
+          paymentMethod: dto.paymentMethod,
+          date: dto.paymentDate ?? this.today(),
+          reference: this.optionalText(dto.reference),
+          notes: this.optionalText(dto.notes),
+          cancelledAt: null,
+          cancellationReason: null,
+        }),
       );
     }
 
-    this.applyPaymentState(
-      invoice,
-      totalAmountMinor,
-      recordedPaidMinor + amountMinor,
-    );
-    await manager.getRepository(Invoice).save(invoice);
-    return paymentRepository.save(
-      paymentRepository.create({
-        customer: invoice.customer,
-        invoice,
-        amount: fromMinorUnits(amountMinor),
-        amountMinor,
-        paymentMethod: dto.paymentMethod,
-        date: dto.paymentDate ?? this.today(),
-        reference: this.optionalText(dto.reference),
-        notes: this.optionalText(dto.notes),
-      }),
-    );
+    const overpaymentCredit =
+      overpaymentMinor > 0
+        ? await this.customerCreditsService.recordOverpayment(manager, {
+          customer: invoice.customer,
+          invoice,
+          paymentMethod: dto.paymentMethod,
+          amountMinor: overpaymentMinor,
+          transactionDate: dto.paymentDate ?? this.today(),
+          payment,
+          reference: this.optionalText(dto.reference),
+          notes: this.optionalText(dto.notes) ?? 'Invoice overpayment',
+        })
+        : null;
+    return { payment, overpaymentCredit };
   }
 
   private applyPaymentState(
@@ -833,6 +878,9 @@ export class InvoicesService {
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
+    invoice.payments = (invoice.payments ?? []).filter(
+      (payment) => !payment.cancelledAt,
+    );
     return invoice;
   }
 

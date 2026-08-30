@@ -5,6 +5,7 @@ import { ProductStockMovement } from '../inventory/entities/product-stock-moveme
 import { ProductVariant } from '../inventory/entities/product-variant.entity';
 import { InvoicesModule } from '../invoices/invoices.module';
 import { LegacyDebtsModule } from '../legacy-debts/legacy-debts.module';
+import { CustomerCreditsModule } from '../customer-credits/customer-credits.module';
 import { CustomerMeasurement } from './entities/customer-measurement.entity';
 import { CustomerNote } from './entities/customer-note.entity';
 import { Customer } from './entities/customer.entity';
@@ -18,6 +19,7 @@ import { SalesService } from './sales.service';
   imports: [
     InvoicesModule,
     LegacyDebtsModule,
+    CustomerCreditsModule,
     TypeOrmModule.forFeature([
       Customer,
       Invoice,

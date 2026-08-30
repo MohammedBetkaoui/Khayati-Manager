@@ -7,6 +7,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import {
   CustomerStatus,
+  CustomerCreditTargetType,
   DiscountType,
   FinishedProductCategory,
   FinishedProductStatus,
@@ -14,7 +15,12 @@ import {
   PaymentMethod,
   PaymentStatus,
   SalesOrderStatus,
+  LegacyDebtStatus,
+  LegacyDebtType,
 } from '../common/enums';
+import { CustomerCreditsService } from '../customer-credits/customer-credits.service';
+import { LegacyDebt } from '../legacy-debts/entities/legacy-debt.entity';
+import { LegacyDebtPayment } from '../legacy-debts/entities/legacy-debt-payment.entity';
 import { FinishedProduct } from '../inventory/entities/finished-product.entity';
 import { Order } from '../orders/entities/order.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
@@ -36,6 +42,7 @@ describe('InvoicesService integration', () => {
   let dataSource: DataSource;
   let service: InvoicesService;
   let salesService: SalesService;
+  let customerCreditsService: CustomerCreditsService;
   let customer: Customer;
   let product: FinishedProduct;
   let order: Order;
@@ -63,6 +70,7 @@ describe('InvoicesService integration', () => {
     dataSource = moduleRef.get(DataSource);
     service = moduleRef.get(InvoicesService);
     salesService = moduleRef.get(SalesService);
+    customerCreditsService = moduleRef.get(CustomerCreditsService);
 
     await dataSource.getRepository(WorkshopSettings).save({
       workshopName: 'Atelier test',
@@ -201,7 +209,11 @@ describe('InvoicesService integration', () => {
           paymentMethod: PaymentMethod.CASH,
         },
       }),
-    ).rejects.toThrow('Payment exceeds remaining amount');
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'OVERPAYMENT_CONFIRMATION_REQUIRED',
+      }),
+    });
 
     const invoice = await service.create({
       customerId: customer.id,
@@ -236,23 +248,45 @@ describe('InvoicesService integration', () => {
     expect(refreshedCustomer.totalDebt).toBe(7900);
   });
 
-  it('completes a partial invoice and rejects overpayment atomically', async () => {
+  it('splits an explicitly confirmed overpayment from the invoice atomically', async () => {
     const invoice = await dataSource.getRepository(Invoice).findOneOrFail({
       where: { invoiceNumber: 'INV-2026-0002' },
     });
+    await expect(
+      salesService.createPayment({
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        amount: 9000,
+        paymentMethod: PaymentMethod.TRANSFER,
+        date: '2026-08-26',
+        reference: 'TRX-TEST-1',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'OVERPAYMENT_CONFIRMATION_REQUIRED',
+        overpaymentAmount: 1100,
+      }),
+    });
+
     const result = await salesService.createPayment({
       customerId: customer.id,
       invoiceId: invoice.id,
-      amount: 7900,
+      amount: 9000,
       paymentMethod: PaymentMethod.TRANSFER,
       date: '2026-08-26',
       reference: 'TRX-TEST-1',
+      confirmOverpayment: true,
     });
 
     expect(result.invoice.paidAmount).toBe(11900);
     expect(result.invoice.remainingAmount).toBe(0);
     expect(result.invoice.paymentStatus).toBe(PaymentStatus.PAID);
-    expect(result.payment.reference).toBe('TRX-TEST-1');
+    expect(result.payment?.reference).toBe('TRX-TEST-1');
+    expect(result.payment?.amount).toBe(7900);
+    expect(result.overpaymentCredit).toMatchObject({
+      amount: 1100,
+      type: 'OVERPAYMENT',
+    });
 
     const history = await service.getPayments(invoice.id);
     expect(history.data).toHaveLength(2);
@@ -265,7 +299,11 @@ describe('InvoicesService integration', () => {
         amount: 1,
         paymentMethod: PaymentMethod.CASH,
       }),
-    ).rejects.toThrow('Payment exceeds remaining amount');
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'OVERPAYMENT_CONFIRMATION_REQUIRED',
+      }),
+    });
     expect((await service.getPayments(invoice.id)).data).toHaveLength(2);
 
     const refreshedCustomer = await dataSource
@@ -273,6 +311,137 @@ describe('InvoicesService integration', () => {
       .findOneByOrFail({ id: customer.id });
     expect(refreshedCustomer.totalPaid).toBe(11900);
     expect(refreshedCustomer.totalDebt).toBe(0);
+  });
+
+  it('tracks advance, allocations, refund and reversal without netting debts', async () => {
+    const creditCustomer = await dataSource.getRepository(Customer).save({
+      fullName: 'Client credit integration',
+      phone: `066${process.pid}`,
+      status: CustomerStatus.ACTIVE,
+      firstVisitDate: '2026-08-01',
+      lastVisitDate: '2026-08-01',
+      totalPurchases: 0,
+      totalPaid: 0,
+      totalDebt: 0,
+    });
+    const creditInvoice = await dataSource.getRepository(Invoice).save({
+      invoiceNumber: `INV-CREDIT-${process.pid}`,
+      customer: creditCustomer,
+      date: '2026-08-27',
+      subtotal: 80000,
+      discount: 0,
+      discountType: DiscountType.NONE,
+      discountValue: 0,
+      discountAmount: 0,
+      taxEnabled: false,
+      taxRate: 0,
+      taxAmount: 0,
+      totalAmount: 80000,
+      paidAmount: 0,
+      remainingAmount: 80000,
+      paymentStatus: PaymentStatus.UNPAID,
+      invoiceStatus: InvoiceStatus.ISSUED,
+    });
+    const legacyDebt = await dataSource.getRepository(LegacyDebt).save({
+      type: LegacyDebtType.CUSTOMER_RECEIVABLE,
+      customer: creditCustomer,
+      supplier: null,
+      originalAmount: 70000,
+      paidAmount: 0,
+      remainingAmount: 70000,
+      originalAmountMinor: 7_000_000,
+      paidAmountMinor: 0,
+      remainingAmountMinor: 7_000_000,
+      debtDate: null,
+      dateIsUnknown: true,
+      status: LegacyDebtStatus.OPEN,
+    });
+
+    await customerCreditsService.addAdvance(creditCustomer.id, {
+      amount: 50000,
+      date: '2026-08-27',
+      paymentMethod: PaymentMethod.CASH,
+    });
+    await customerCreditsService.apply(
+      creditCustomer.id,
+      {
+        targetType: CustomerCreditTargetType.INVOICE,
+        targetId: creditInvoice.id,
+        amount: 30000,
+      },
+    );
+    await customerCreditsService.addAdvance(creditCustomer.id, {
+      amount: 20000,
+      date: '2026-08-28',
+      paymentMethod: PaymentMethod.TRANSFER,
+    });
+    const legacyUsage = await customerCreditsService.apply(creditCustomer.id, {
+      targetType: CustomerCreditTargetType.LEGACY_DEBT,
+      targetId: legacyDebt.id,
+      amount: 15000,
+    });
+    await customerCreditsService.refund(creditCustomer.id, {
+      amount: 5000,
+      date: '2026-08-29',
+      paymentMethod: PaymentMethod.CASH,
+    });
+
+    expect(
+      (await customerCreditsService.getSummary(creditCustomer.id))
+        .availableCredit,
+    ).toBe(20000);
+    expect(
+      (
+        await dataSource
+          .getRepository(Invoice)
+          .findOneByOrFail({ id: creditInvoice.id })
+      ).remainingAmount,
+    ).toBe(50000);
+    expect(
+      (
+        await dataSource
+          .getRepository(LegacyDebt)
+          .findOneByOrFail({ id: legacyDebt.id })
+      ).remainingAmount,
+    ).toBe(55000);
+
+    await service.cancel(creditInvoice.id, {
+      reason: 'Cancellation restores allocated customer credit',
+    });
+    expect(
+      (await customerCreditsService.getSummary(creditCustomer.id))
+        .availableCredit,
+    ).toBe(50000);
+    expect(
+      (
+        await dataSource
+          .getRepository(Invoice)
+          .findOneByOrFail({ id: creditInvoice.id })
+      ).invoiceStatus,
+    ).toBe(InvoiceStatus.CANCELLED);
+
+    await customerCreditsService.reverse(
+      creditCustomer.id,
+      legacyUsage.transaction.id,
+      'Correction integration test',
+    );
+    expect(
+      (await customerCreditsService.getSummary(creditCustomer.id))
+        .availableCredit,
+    ).toBe(65000);
+    expect(
+      (
+        await dataSource
+          .getRepository(LegacyDebt)
+          .findOneByOrFail({ id: legacyDebt.id })
+      ).remainingAmount,
+    ).toBe(70000);
+    const reversedLegacyPayment = await dataSource
+      .getRepository(LegacyDebtPayment)
+      .findOneByOrFail({
+        id: Number(legacyUsage.transaction.legacyDebtPaymentId),
+      });
+    expect(reversedLegacyPayment.cancelledAt).toBeInstanceOf(Date);
   });
 
   it('exposes the draft, issue, payment, history and preview REST workflow', async () => {

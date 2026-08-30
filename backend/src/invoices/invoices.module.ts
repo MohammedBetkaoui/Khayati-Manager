@@ -9,6 +9,7 @@ import { InvoiceItem } from '../sales/entities/invoice-item.entity';
 import { Invoice } from '../sales/entities/invoice.entity';
 import { Payment } from '../sales/entities/payment.entity';
 import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
+import { CustomerCreditsModule } from '../customer-credits/customer-credits.module';
 import { DocumentSequence } from './entities/document-sequence.entity';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceNumberService } from './invoice-number.service';
@@ -17,6 +18,7 @@ import { InvoicesService } from './invoices.service';
 
 @Module({
   imports: [
+    CustomerCreditsModule,
     TypeOrmModule.forFeature([
       Invoice,
       InvoiceItem,

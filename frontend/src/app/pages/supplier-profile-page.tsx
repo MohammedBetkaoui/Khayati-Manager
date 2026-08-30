@@ -1,6 +1,24 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type ComponentType,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useParams } from "react-router";
-import { CalendarDays, CircleDollarSign, Eye, Plus, ReceiptText, Truck, Wallet } from "lucide-react";
+import {
+  CalendarDays,
+  CircleDollarSign,
+  Eye,
+  MapPin,
+  Phone,
+  Plus,
+  ReceiptText,
+  StickyNote,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import { PageHeading, StatePanel, StatCard, formatDate, formatMoney } from "../components/commerce-ui";
 import {
   LegacyDebtBalanceSummary,
@@ -174,31 +192,28 @@ export function SupplierProfilePage() {
             totalDebt={profile.statistics.totalPayable}
           />
 
-          <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-            <div className="rounded-3xl border p-5" style={{ borderColor: palette.border, backgroundColor: palette.surface }}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ backgroundColor: palette.accentSoft, color: palette.accent }}>
-                  <Truck size={22} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 18, fontWeight: 900 }}>{profile.supplier.name}</h2>
-                  <Badge
-                    bg={archived ? "rgba(107,106,98,.14)" : "rgba(77,138,106,0.12)"}
-                    fg={archived ? "#6b6a62" : "#4d8a6a"}
-                  >
-                    {profile.supplier.status}
-                  </Badge>
-                </div>
-              </div>
-              <div className="mt-5 grid gap-3 text-sm" style={{ color: palette.text }}>
-                <Info label={lang === "ar" ? "الهاتف" : "Téléphone"} value={profile.supplier.phone} />
-                <Info label={lang === "ar" ? "المدينة" : "Ville"} value={profile.supplier.city} />
-                <Info label={lang === "ar" ? "العنوان" : "Adresse"} value={profile.supplier.address} />
-                <Info label={lang === "ar" ? "آخر شراء" : "Dernier achat"} value={formatDate(profile.supplier.lastPurchaseDate, lang)} />
-                <Info label={lang === "ar" ? "ملاحظات" : "Notes"} value={profile.supplier.notes} />
-              </div>
-            </div>
-            <DataCard title={text.purchases}>
+          <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <SupplierIdentityCard
+              profile={profile}
+              archived={archived}
+              lang={lang}
+            />
+            <SupplierFinanceCard
+              profile={profile}
+              lang={lang}
+              onAdvance={() => setAdvanceModalOpen(true)}
+            />
+          </section>
+
+          <section className="mt-5">
+            <DataCard
+              title={text.purchases}
+              subtitle={
+                lang === "ar"
+                  ? "كل عمليات شراء المواد من هذا المورد مع حالة التسديد."
+                  : "Tous les achats de matières liés à ce fournisseur avec leur règlement."
+              }
+            >
               <PurchasesTable rows={profile.purchases} lang={lang} />
             </DataCard>
           </section>
@@ -206,6 +221,11 @@ export function SupplierProfilePage() {
           <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
             <DataCard
               title={text.payments}
+              subtitle={
+                lang === "ar"
+                  ? "المدفوعات والدفعات المسبقة المرتبطة بوضعية المورد."
+                  : "Paiements et avances liés à la situation du fournisseur."
+              }
               actions={
                 <Button onClick={() => setPaymentHistoryModalOpen(true)}>
                   <Eye size={15} /> {lang === "ar" ? "عرض" : "Voir"}
@@ -220,6 +240,11 @@ export function SupplierProfilePage() {
             </DataCard>
             <DataCard
               title={text.advances}
+              subtitle={
+                lang === "ar"
+                  ? "دفعات تخصم من الدين الحالي وتحافظ على أثر الدين قبل وبعد."
+                  : "Avances déduites de la dette actuelle avec historique avant/après."
+              }
               actions={
                 <Button
                   onClick={() => setAdvanceModalOpen(true)}
@@ -435,11 +460,260 @@ function SupplierAdvanceModal({
   );
 }
 
-function Info({ label, value }: { label: string; value?: string | null }) {
+function SupplierIdentityCard({
+  profile,
+  archived,
+  lang,
+}: {
+  profile: SupplierProfile;
+  archived: boolean;
+  lang: "ar" | "fr";
+}) {
+  const supplier = profile.supplier;
   return (
-    <div className="flex justify-between gap-4 rounded-xl px-3 py-2" style={{ backgroundColor: palette.bg }}>
-      <span style={{ color: palette.muted }}>{label}</span>
-      <span style={{ fontWeight: 800 }}>{value || "-"}</span>
+    <section
+      className="rounded-3xl border p-5"
+      style={{ borderColor: palette.border, backgroundColor: palette.surface }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: palette.accentSoft, color: palette.accent }}
+          >
+            <Truck size={22} />
+          </div>
+          <div>
+            <h2 style={{ color: palette.text, fontSize: 20, fontWeight: 900 }}>
+              {supplier.name}
+            </h2>
+            <div className="mt-2">
+              <Badge
+                bg={archived ? "rgba(107,106,98,.14)" : "rgba(77,138,106,0.12)"}
+                fg={archived ? "#6b6a62" : "#4d8a6a"}
+              >
+                {supplier.status}
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div
+          className="rounded-2xl px-4 py-3 text-end"
+          style={{ backgroundColor: palette.bg }}
+        >
+          <div style={{ color: palette.muted, fontSize: 12, fontWeight: 700 }}>
+            {lang === "ar" ? "عدد المشتريات" : "Achats"}
+          </div>
+          <div style={{ color: palette.text, fontSize: 22, fontWeight: 900 }}>
+            {profile.statistics.purchaseCount}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        <Info
+          icon={Phone}
+          label={lang === "ar" ? "الهاتف" : "Téléphone"}
+          value={supplier.phone}
+        />
+        <Info
+          icon={MapPin}
+          label={lang === "ar" ? "العنوان" : "Adresse"}
+          value={[supplier.address, supplier.city].filter(Boolean).join(" · ")}
+        />
+        <Info
+          icon={CalendarDays}
+          label={lang === "ar" ? "آخر شراء" : "Dernier achat"}
+          value={formatDate(supplier.lastPurchaseDate, lang)}
+        />
+        <Info
+          icon={Wallet}
+          label={lang === "ar" ? "آخر دفع" : "Dernier paiement"}
+          value={formatDate(profile.statistics.lastPayment, lang)}
+        />
+      </div>
+
+      {supplier.notes ? (
+        <div
+          className="mt-5 rounded-2xl border p-4"
+          style={{ borderColor: palette.border, backgroundColor: palette.bg }}
+        >
+          <div
+            className="mb-2 flex items-center gap-2 text-sm font-bold"
+            style={{ color: palette.muted }}
+          >
+            <StickyNote size={15} />
+            {lang === "ar" ? "ملاحظات" : "Notes"}
+          </div>
+          <p style={{ color: palette.text, fontSize: 13.5, lineHeight: 1.8 }}>
+            {supplier.notes}
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SupplierFinanceCard({
+  profile,
+  lang,
+  onAdvance,
+}: {
+  profile: SupplierProfile;
+  lang: "ar" | "fr";
+  onAdvance: () => void;
+}) {
+  const hasDebt = profile.statistics.totalPayable > 0;
+  return (
+    <section
+      className="rounded-3xl border p-5"
+      style={{ borderColor: palette.border, backgroundColor: palette.surface }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div style={{ color: palette.muted, fontSize: 12.5, fontWeight: 800 }}>
+            {lang === "ar" ? "الوضعية المالية" : "Situation financière"}
+          </div>
+          <h2 className="mt-1" style={{ color: palette.text, fontSize: 24, fontWeight: 950 }}>
+            {formatMoney(profile.statistics.totalPayable, lang)}
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: palette.muted }}>
+            {lang === "ar"
+              ? "إجمالي المبلغ المستحق للمورد حالياً."
+              : "Montant total actuellement dû au fournisseur."}
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={onAdvance}
+          disabled={profile.statistics.purchasesDebt <= 0}
+        >
+          <Plus size={15} />
+          {lang === "ar" ? "دفعة" : "Avance"}
+        </Button>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FinanceMiniCard
+          label={lang === "ar" ? "المدفوع" : "Payé"}
+          value={formatMoney(profile.statistics.totalPaid, lang)}
+          tone="paid"
+        />
+        <FinanceMiniCard
+          label={lang === "ar" ? "دفعات مسبقة" : "Avances"}
+          value={formatMoney(profile.statistics.totalAdvances, lang)}
+          tone="advance"
+        />
+      </div>
+
+      <div className="mt-5 overflow-hidden rounded-2xl border" style={{ borderColor: palette.border }}>
+        <MoneyLine
+          label={lang === "ar" ? "ديون المشتريات داخل النظام" : "Dette achats dans le système"}
+          value={profile.statistics.purchasesDebt}
+          lang={lang}
+          danger={profile.statistics.purchasesDebt > 0}
+        />
+        <MoneyLine
+          label={lang === "ar" ? "ديون سابقة" : "Dettes antérieures"}
+          value={profile.statistics.legacyDebtRemaining}
+          lang={lang}
+          danger={profile.statistics.legacyDebtRemaining > 0}
+        />
+        <MoneyLine
+          label={lang === "ar" ? "الإجمالي المستحق للمورد" : "Total dû au fournisseur"}
+          value={profile.statistics.totalPayable}
+          lang={lang}
+          danger={hasDebt}
+          strong
+        />
+      </div>
+    </section>
+  );
+}
+
+function FinanceMiniCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "paid" | "advance";
+}) {
+  const color = tone === "paid" ? "#4d8a6a" : "#a87d3c";
+  const bg = tone === "paid" ? "rgba(77,138,106,0.11)" : "rgba(195,154,91,0.14)";
+  return (
+    <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: bg }}>
+      <div style={{ color, fontSize: 12, fontWeight: 800 }}>{label}</div>
+      <div className="mt-1" style={{ color: palette.text, fontSize: 19, fontWeight: 900 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MoneyLine({
+  label,
+  value,
+  lang,
+  danger = false,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  lang: "ar" | "fr";
+  danger?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-4 py-3"
+      style={{
+        backgroundColor: strong ? palette.bg : palette.surface,
+        borderBottom: strong ? "none" : `1px solid ${palette.border}`,
+      }}
+    >
+      <span style={{ color: palette.muted, fontSize: 13, fontWeight: 700 }}>
+        {label}
+      </span>
+      <span
+        style={{
+          color: danger ? "#b46a66" : "#4d8a6a",
+          fontSize: strong ? 16 : 14,
+          fontWeight: strong ? 950 : 850,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {formatMoney(value, lang)}
+      </span>
+    </div>
+  );
+}
+
+function Info({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon?: ComponentType<{ size?: number; style?: CSSProperties }>;
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div
+      className="flex items-start justify-between gap-4 rounded-2xl px-3 py-3"
+      style={{ backgroundColor: palette.bg }}
+    >
+      <span className="flex items-center gap-2" style={{ color: palette.muted, fontSize: 13 }}>
+        {Icon ? <Icon size={15} /> : null}
+        {label}
+      </span>
+      <span
+        className="text-end"
+        style={{ color: palette.text, fontSize: 13.5, fontWeight: 850 }}
+      >
+        {value || "-"}
+      </span>
     </div>
   );
 }
@@ -448,15 +722,24 @@ function DataCard({
   title,
   children,
   actions,
+  subtitle,
 }: {
   title: string;
-  children: React.ReactNode;
-  actions?: React.ReactNode;
+  children: ReactNode;
+  actions?: ReactNode;
+  subtitle?: string;
 }) {
   return (
     <div className="rounded-3xl border p-5" style={{ borderColor: palette.border, backgroundColor: palette.surface }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 style={{ fontSize: 16, fontWeight: 900 }}>{title}</h2>
+        <div>
+          <h2 style={{ color: palette.text, fontSize: 16, fontWeight: 900 }}>{title}</h2>
+          {subtitle ? (
+            <p className="mt-1 text-sm" style={{ color: palette.muted }}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>
       <div className="mt-4">{children}</div>
@@ -466,17 +749,57 @@ function DataCard({
 
 function PurchasesTable({ rows, lang }: { rows: MaterialPurchase[]; lang: "ar" | "fr" }) {
   if (!rows.length) return <Empty lang={lang} />;
+  const headers =
+    lang === "ar"
+      ? ["التاريخ", "المادة", "اللون", "الكمية", "الإجمالي", "المدفوع", "الباقي", "الحالة"]
+      : ["Date", "Matière", "Couleur", "Quantité", "Total", "Payé", "Reste", "État"];
   return (
-    <SimpleTable
-      headers={lang === "ar" ? ["التاريخ", "المادة", "الكمية", "المبلغ", "الباقي"] : ["Date", "Matière", "Quantité", "Total", "Reste"]}
-      rows={rows.map((row) => [
-        formatDate(row.purchaseDate, lang),
-        row.materialName,
-        `${row.quantityPurchased} ${row.unit}`,
-        formatMoney(row.totalAmount, lang),
-        formatMoney(row.remainingAmount, lang),
-      ])}
-    />
+    <div className="overflow-x-auto">
+      <table className="w-full" style={{ minWidth: 920, borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
+            {headers.map((header) => (
+              <th key={header} style={headStyle}>{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const hasDebt = row.remainingAmount > 0;
+            return (
+              <tr key={row.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
+                <td style={cellStyle}>{formatDate(row.purchaseDate, lang)}</td>
+                <td style={{ ...cellStyle, fontWeight: 900 }}>
+                  <div>{row.materialName}</div>
+                  {row.notes ? (
+                    <div className="mt-1 text-xs" style={{ color: palette.muted }}>
+                      {row.notes}
+                    </div>
+                  ) : null}
+                </td>
+                <td style={cellStyle}>{row.color || "-"}</td>
+                <td style={cellStyle}>{`${row.quantityPurchased} ${row.unit}`}</td>
+                <td style={{ ...cellStyle, fontWeight: 900 }}>{formatMoney(row.totalAmount, lang)}</td>
+                <td style={{ ...cellStyle, color: "#4d8a6a", fontWeight: 800 }}>
+                  {formatMoney(row.paidAmount, lang)}
+                </td>
+                <td style={{ ...cellStyle, color: hasDebt ? "#b46a66" : "#4d8a6a", fontWeight: 900 }}>
+                  {formatMoney(row.remainingAmount, lang)}
+                </td>
+                <td style={cellStyle}>
+                  <Badge
+                    bg={hasDebt ? "rgba(195,154,91,0.16)" : "rgba(77,138,106,0.12)"}
+                    fg={hasDebt ? "#a87d3c" : "#4d8a6a"}
+                  >
+                    {row.paymentStatus || row.status}
+                  </Badge>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -563,50 +886,24 @@ function PaymentHistoryTable({
 
   if (!rows.length) return <Empty lang={lang} />;
 
-  const headers =
-    lang === "ar"
-      ? [
-          "التاريخ",
-          "النوع",
-          "المبلغ",
-          "الطريقة / المصدر",
-          "الشراء",
-          "الدين قبل",
-          "الدين بعد",
-          "المرجع",
-          "ملاحظة",
-        ]
-      : [
-          "Date",
-          "Type",
-          "Montant",
-          "Méthode / source",
-          "Achat",
-          "Dette avant",
-          "Dette après",
-          "Référence",
-          "Note",
-        ];
-
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full" style={{ minWidth: 1120, borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${palette.border}` }}>
-            {headers.map((header) => (
-              <th key={header} style={headStyle}>{header}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const isAdvance = row.kind === "advance";
-            return (
-              <tr key={row.id} style={{ borderBottom: `1px solid ${palette.border}` }}>
-                <td style={cellStyle}>{formatDate(row.date, lang)}</td>
-                <td style={cellStyle}>
+    <div className="grid gap-3">
+      {rows.slice(0, 6).map((row) => {
+        const isAdvance = row.kind === "advance";
+        return (
+          <article
+            key={row.id}
+            className="rounded-2xl border p-4"
+            style={{
+              borderColor: palette.border,
+              backgroundColor: isAdvance ? "rgba(195,154,91,0.08)" : palette.bg,
+            }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge
-                    bg={isAdvance ? "rgba(195,154,91,0.15)" : "rgba(77,138,106,0.12)"}
+                    bg={isAdvance ? "rgba(195,154,91,0.16)" : "rgba(77,138,106,0.12)"}
                     fg={isAdvance ? "#a87d3c" : "#4d8a6a"}
                   >
                     {isAdvance
@@ -617,43 +914,43 @@ function PaymentHistoryTable({
                         ? "دفع"
                         : "Paiement"}
                   </Badge>
-                </td>
-                <td style={{ ...cellStyle, fontWeight: 900 }}>
+                  <span style={{ color: palette.muted, fontSize: 12.5 }}>
+                    {formatDate(row.date, lang)}
+                  </span>
+                </div>
+                <div className="mt-2" style={{ color: palette.text, fontSize: 18, fontWeight: 950 }}>
                   {formatMoney(row.amount, lang)}
-                </td>
-                <td style={cellStyle}>{row.method}</td>
-                <td style={cellStyle}>
+                </div>
+                <div className="mt-1 text-sm" style={{ color: palette.muted }}>
+                  {row.method}
                   {row.purchaseId
                     ? lang === "ar"
-                      ? `شراء #${row.purchaseId}`
-                      : `Achat #${row.purchaseId}`
-                    : "-"}
-                </td>
-                <td style={cellStyle}>
-                  {row.debtBefore === null ? "-" : formatMoney(row.debtBefore, lang)}
-                </td>
-                <td
-                  style={{
-                    ...cellStyle,
-                    fontWeight: isAdvance ? 900 : 700,
-                    color: isAdvance
-                      ? row.debtAfter > 0
-                        ? "#b46a66"
-                        : "#4d8a6a"
-                      : palette.muted,
-                  }}
-                >
-                  {isAdvance ? formatMoney(row.debtAfter, lang) : "-"}
-                </td>
-                <td style={cellStyle}>{row.reference || "-"}</td>
-                <td style={{ ...cellStyle, maxWidth: 220, whiteSpace: "normal", color: palette.muted }}>
-                  {row.notes || row.status || "-"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                      ? ` · شراء #${row.purchaseId}`
+                      : ` · Achat #${row.purchaseId}`
+                    : ""}
+                </div>
+              </div>
+              {isAdvance ? (
+                <div className="rounded-2xl px-3 py-2 text-end" style={{ backgroundColor: palette.surface }}>
+                  <div style={{ color: palette.muted, fontSize: 11.5, fontWeight: 800 }}>
+                    {lang === "ar" ? "الدين بعد" : "Dette après"}
+                  </div>
+                  <div style={{ color: row.debtAfter > 0 ? "#b46a66" : "#4d8a6a", fontWeight: 900 }}>
+                    {formatMoney(row.debtAfter, lang)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+      {rows.length > 6 ? (
+        <div className="text-sm" style={{ color: palette.muted }}>
+          {lang === "ar"
+            ? `+ ${rows.length - 6} عملية أخرى في التفاصيل`
+            : `+ ${rows.length - 6} autre(s) opération(s) dans les détails`}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -881,8 +1178,8 @@ function AdvancesDebtTable({ rows, lang }: { rows: SupplierAdvance[]; lang: "ar"
   if (!rows.length) return <Empty lang={lang} />;
   const headers =
     lang === "ar"
-      ? ["التاريخ", "المبلغ", "باقي الدين", "التاريخ", "الحالة"]
-      : ["Date", "Montant", "Reste dette", "Historique", "État"];
+      ? ["التاريخ", "المبلغ", "باقي الدين", "قبل / بعد", "الحالة"]
+      : ["Date", "Montant", "Reste dette", "Avant / après", "État"];
   return (
     <div className="overflow-x-auto">
       <table className="w-full" style={{ minWidth: 720, borderCollapse: "collapse" }}>
@@ -973,7 +1270,7 @@ function Empty({ lang }: { lang: "ar" | "fr" }) {
   );
 }
 
-const headStyle: React.CSSProperties = {
+const headStyle: CSSProperties = {
   padding: "12px 10px",
   textAlign: "start",
   fontSize: 12,
@@ -982,7 +1279,7 @@ const headStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const cellStyle: React.CSSProperties = {
+const cellStyle: CSSProperties = {
   padding: "13px 10px",
   fontSize: 13,
   color: palette.text,

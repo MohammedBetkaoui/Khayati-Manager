@@ -20,7 +20,7 @@ import {
   formatMoney,
 } from "../components/commerce-ui";
 import { Badge, Button, Field, Select, TextInput } from "../components/kit";
-import { Textarea } from "../components/modal-shell";
+import { ModalShell, Textarea } from "../components/modal-shell";
 import { PageBackground } from "../components/page-background";
 import { palette } from "../content";
 import { useLanguage } from "../language-context";
@@ -142,6 +142,8 @@ export function NewSalePage() {
   const [taxEnabled, setTaxEnabled] = useState(false);
   const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("0");
+  const [useCustomerCredit, setUseCustomerCredit] = useState(false);
+  const [customerCreditAmount, setCustomerCreditAmount] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paymentReference, setPaymentReference] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -151,6 +153,7 @@ export function NewSalePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customerModal, setCustomerModal] = useState(false);
+  const [overpaymentConfirmOpen, setOverpaymentConfirmOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,6 +203,10 @@ export function NewSalePage() {
   const selectedCustomer = customers.find(
     (customer) => customer.id === Number(selectedCustomerId),
   );
+  useEffect(() => {
+    setUseCustomerCredit(false);
+    setCustomerCreditAmount("0");
+  }, [selectedCustomerId]);
   const matchingCustomers = customers.filter(
     (customer) =>
       !deferredCustomerSearch.trim() ||
@@ -232,7 +239,17 @@ export function NewSalePage() {
   );
   const total = roundMoney(amountAfterDiscount + taxAmount);
   const numericPaid = Math.max(0, Number(paidAmount) || 0);
-  const remaining = Math.max(0, total - numericPaid);
+  const availableCredit = Math.max(0, selectedCustomer?.availableCredit ?? 0);
+  const numericCredit = useCustomerCredit
+    ? Math.min(
+        availableCredit,
+        total,
+        Math.max(0, Number(customerCreditAmount) || 0),
+      )
+    : 0;
+  const remainingAfterCredit = Math.max(0, total - numericCredit);
+  const overpaymentAmount = Math.max(0, numericPaid - remainingAfterCredit);
+  const remaining = Math.max(0, remainingAfterCredit - numericPaid);
   function addToCart(product: FinishedProduct, variant: ProductVariant) {
     setError(null);
     setCart((current) => {
@@ -309,14 +326,6 @@ export function NewSalePage() {
       );
       return;
     }
-    if (numericPaid > total) {
-      setError(
-        lang === "ar"
-          ? "المبلغ المدفوع لا يمكن أن يتجاوز إجمالي البيع."
-          : "Le montant payé ne peut pas dépasser le total.",
-      );
-      return;
-    }
     if (taxEnabled && (numericTaxRate < 0 || numericTaxRate > 100)) {
       setError(
         lang === "ar"
@@ -326,6 +335,15 @@ export function NewSalePage() {
       return;
     }
 
+    if (overpaymentAmount > 0) {
+      setOverpaymentConfirmOpen(true);
+      return;
+    }
+    await persistSale(false);
+  }
+
+  async function persistSale(confirmOverpayment: boolean) {
+    if (!selectedCustomer || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -343,6 +361,8 @@ export function NewSalePage() {
           taxEnabled,
           taxRate: taxEnabled ? numericTaxRate : undefined,
           paidAmount: numericPaid,
+          customerCreditAmount: numericCredit,
+          confirmOverpayment,
           paymentMethod: numericPaid > 0 ? paymentMethod : undefined,
           paymentReference:
             numericPaid > 0 && paymentReference.trim()
@@ -352,6 +372,7 @@ export function NewSalePage() {
           notes: notes || undefined,
         }),
       });
+      setOverpaymentConfirmOpen(false);
       navigate("/sales?created=1");
     } catch (caught) {
       setError(
@@ -504,7 +525,7 @@ export function NewSalePage() {
               </div>
               {selectedCustomer ? (
                 <div
-                  className="mt-4 grid grid-cols-1 gap-3 rounded-2xl p-4 sm:grid-cols-3"
+                  className="mt-4 grid grid-cols-1 gap-3 rounded-2xl p-4 sm:grid-cols-2 xl:grid-cols-4"
                   style={{
                     background:
                       "linear-gradient(120deg, rgba(18,60,74,0.07), rgba(195,154,91,0.1))",
@@ -557,6 +578,17 @@ export function NewSalePage() {
                       style={{ fontSize: 14, fontWeight: 800 }}
                     >
                       {formatDate(selectedCustomer.lastVisitDate, lang)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11.5, color: palette.muted }}>
+                      {lang === "ar" ? "الرصيد المتاح" : "Crédit disponible"}
+                    </div>
+                    <div
+                      className="mt-1"
+                      style={{ fontSize: 17, fontWeight: 900, color: "#4d8a6a" }}
+                    >
+                      {formatMoney(availableCredit, lang)}
                     </div>
                   </div>
                 </div>
@@ -850,6 +882,57 @@ export function NewSalePage() {
                 value={formatMoney(total, lang)}
                 strong
               />
+              {availableCredit > 0 ? (
+                <div
+                  className="rounded-xl border p-3"
+                  style={{
+                    borderColor: "rgba(77,138,106,0.25)",
+                    backgroundColor: "rgba(77,138,106,0.08)",
+                  }}
+                >
+                  <label className="flex cursor-pointer items-center justify-between gap-3 text-sm font-bold">
+                    <span>
+                      {lang === "ar"
+                        ? `رصيد متاح: ${formatMoney(availableCredit, lang)}`
+                        : `Crédit disponible : ${formatMoney(availableCredit, lang)}`}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      {lang === "ar" ? "استخدام الرصيد" : "Utiliser le crédit"}
+                      <input
+                        type="checkbox"
+                        checked={useCustomerCredit}
+                        onChange={(event) => {
+                          setUseCustomerCredit(event.target.checked);
+                          if (!event.target.checked) setCustomerCreditAmount("0");
+                        }}
+                      />
+                    </span>
+                  </label>
+                  {useCustomerCredit ? (
+                    <div className="mt-3 grid grid-cols-2 items-center gap-3">
+                      <span style={{ color: palette.muted, fontSize: 12.5 }}>
+                        {lang === "ar" ? "المبلغ المراد استخدامه" : "Montant à utiliser"}
+                      </span>
+                      <TextInput
+                        aria-label={lang === "ar" ? "مبلغ الرصيد المستخدم" : "Crédit utilisé"}
+                        min="0"
+                        max={Math.min(availableCredit, total)}
+                        step="0.01"
+                        type="number"
+                        value={customerCreditAmount}
+                        onChange={(event) => setCustomerCreditAmount(event.target.value)}
+                        style={{ textAlign: "end" }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {numericCredit > 0 ? (
+                <SummaryLine
+                  label={lang === "ar" ? "الرصيد المستخدم" : "Crédit utilisé"}
+                  value={`- ${formatMoney(numericCredit, lang)}`}
+                />
+              ) : null}
               <div className="grid grid-cols-2 items-center gap-3">
                 <label style={{ fontSize: 13, color: palette.muted }}>
                   {text.paid}
@@ -857,7 +940,7 @@ export function NewSalePage() {
                 <TextInput
                   aria-label={text.paid}
                   min="0"
-                  max={total}
+                  step="0.01"
                   type="number"
                   value={paidAmount}
                   onChange={(event) => setPaidAmount(event.target.value)}
@@ -869,6 +952,12 @@ export function NewSalePage() {
                 value={formatMoney(remaining, lang)}
                 danger={remaining > 0}
               />
+              {overpaymentAmount > 0 ? (
+                <SummaryLine
+                  label={lang === "ar" ? "مبلغ زائد سيصبح رصيداً" : "Excédent transformé en crédit"}
+                  value={formatMoney(overpaymentAmount, lang)}
+                />
+              ) : null}
             </div>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <Field label={text.method}>
@@ -959,12 +1048,56 @@ export function NewSalePage() {
           setSelectedCustomerId(String(customer.id));
         }}
       />
+      <ModalShell
+        open={overpaymentConfirmOpen}
+        onClose={() => setOverpaymentConfirmOpen(false)}
+        title={lang === "ar" ? "تأكيد المبلغ الزائد" : "Confirmer le paiement excédentaire"}
+        maxWidth={560}
+      >
+        <div className="p-6">
+          <p style={{ color: palette.muted, lineHeight: 1.8 }}>
+            {lang === "ar"
+              ? "المبلغ المدخل أكبر من المتبقي في البيع. لن يتجاوز المدفوع على الفاتورة إجماليها، وسيُحفظ المبلغ الزائد كرصيد متاح للزبون."
+              : "Le montant saisi dépasse le reste de la vente. La facture sera réglée uniquement à hauteur de son total et l'excédent deviendra un crédit disponible pour le client."}
+          </p>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <CreditConfirmationValue label={lang === "ar" ? "المتبقي" : "Reste facture"} value={remainingAfterCredit} lang={lang} />
+            <CreditConfirmationValue label={lang === "ar" ? "المبلغ المدفوع" : "Montant remis"} value={numericPaid} lang={lang} />
+            <CreditConfirmationValue label={lang === "ar" ? "الرصيد الجديد" : "Nouveau crédit"} value={overpaymentAmount} lang={lang} positive />
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={() => setOverpaymentConfirmOpen(false)}>
+              {lang === "ar" ? "إلغاء" : "Annuler"}
+            </Button>
+            <Button variant="primary" disabled={saving} onClick={() => void persistSale(true)}>
+              {saving
+                ? lang === "ar"
+                  ? "جارٍ التسجيل..."
+                  : "Enregistrement..."
+                : lang === "ar"
+                  ? "تسجيل الرصيد"
+                  : "Enregistrer le crédit"}
+            </Button>
+          </div>
+        </div>
+      </ModalShell>
     </PageBackground>
   );
 }
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function CreditConfirmationValue({ label, value, lang, positive = false }: { label: string; value: number; lang: "ar" | "fr"; positive?: boolean }) {
+  return (
+    <div className="rounded-xl p-3" style={{ backgroundColor: positive ? "rgba(77,138,106,0.12)" : palette.bg }}>
+      <div style={{ color: palette.muted, fontSize: 11.5 }}>{label}</div>
+      <div className="mt-1" style={{ color: positive ? "#4d8a6a" : palette.text, fontSize: 16, fontWeight: 900 }}>
+        {formatMoney(value, lang)}
+      </div>
+    </div>
+  );
 }
 
 function SummaryLine({

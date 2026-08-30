@@ -24,11 +24,13 @@ export function LegacyDebtBalanceSummary({
   currentDebt,
   legacyDebt,
   totalDebt,
+  availableCredit,
 }: {
   ownerType: OwnerType;
   currentDebt: number;
   legacyDebt: number;
   totalDebt: number;
+  availableCredit?: number;
 }) {
   const { lang } = useLanguage();
   const isCustomer = ownerType === "customer";
@@ -41,10 +43,18 @@ export function LegacyDebtBalanceSummary({
         ? ["Créances issues des ventes", "Créances antérieures", "Total à recevoir"]
         : ["Dettes issues des achats", "Dettes antérieures", "Total dû au fournisseur"];
   return (
-    <section className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <section className={`mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 ${availableCredit === undefined ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
       <SummaryValue label={labels[0]} value={currentDebt} lang={lang} />
       <SummaryValue label={labels[1]} value={legacyDebt} lang={lang} warning />
       <SummaryValue label={labels[2]} value={totalDebt} lang={lang} warning />
+      {availableCredit !== undefined ? (
+        <SummaryValue
+          label={lang === "ar" ? "الرصيد المتاح للزبون" : "Crédit disponible du client"}
+          value={availableCredit}
+          lang={lang}
+          positive
+        />
+      ) : null}
     </section>
   );
 }

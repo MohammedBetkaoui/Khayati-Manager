@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import {
+  CustomerCreditDirection,
+  CustomerCreditTransactionType,
   ExpenseCategory,
   ExpenseStatus,
   FinishedProductStatus,
@@ -10,6 +12,7 @@ import {
   LegacyDebtType,
   PayrollStatus,
   SalaryType,
+  PaymentMethod,
 } from '../common/enums';
 import { Expense } from '../expenses/entities/expense.entity';
 import { FinishedProduct } from '../inventory/entities/finished-product.entity';
@@ -26,6 +29,7 @@ import { Invoice } from '../sales/entities/invoice.entity';
 import { Payment } from '../sales/entities/payment.entity';
 import { LegacyDebt } from '../legacy-debts/entities/legacy-debt.entity';
 import { LegacyDebtPayment } from '../legacy-debts/entities/legacy-debt-payment.entity';
+import { CustomerCreditTransaction } from '../customer-credits/entities/customer-credit-transaction.entity';
 
 type MonthRow = {
   month: string;
@@ -73,6 +77,8 @@ export class AnalyticsService {
     private readonly legacyDebtRepository: Repository<LegacyDebt>,
     @InjectRepository(LegacyDebtPayment)
     private readonly legacyDebtPaymentRepository: Repository<LegacyDebtPayment>,
+    @InjectRepository(CustomerCreditTransaction)
+    private readonly customerCreditRepository: Repository<CustomerCreditTransaction>,
   ) {}
 
   async getDashboard(monthCount = 12) {
@@ -97,12 +103,16 @@ export class AnalyticsService {
       productions,
       legacyDebts,
       legacyPayments,
+      customerCreditTransactions,
     ] = await Promise.all([
       this.invoiceRepository.find({
         relations: { customer: true, items: { product: true } },
         order: { date: 'ASC', id: 'ASC' },
       }),
-      this.paymentRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
+      this.paymentRepository.find({
+        where: { cancelledAt: IsNull() },
+        order: { date: 'ASC', id: 'ASC' },
+      }),
       this.customerRepository.find(),
       this.expenseRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
       this.payrollRepository.find({
@@ -131,8 +141,13 @@ export class AnalyticsService {
         order: { id: 'ASC' },
       }),
       this.legacyDebtPaymentRepository.find({
+        where: { cancelledAt: IsNull() },
         relations: { legacyDebt: true },
         order: { paymentDate: 'ASC', id: 'ASC' },
+      }),
+      this.customerCreditRepository.find({
+        relations: { customer: true, reversalOf: true },
+        order: { transactionDate: 'ASC', id: 'ASC' },
       }),
     ]);
 
@@ -163,7 +178,8 @@ export class AnalyticsService {
     );
     const customerLegacyPayments = legacyPayments.filter(
       (payment) =>
-        payment.legacyDebt.type === LegacyDebtType.CUSTOMER_RECEIVABLE,
+        payment.legacyDebt.type === LegacyDebtType.CUSTOMER_RECEIVABLE &&
+        payment.paymentMethod !== PaymentMethod.CUSTOMER_CREDIT,
     );
     const supplierLegacyPayments = legacyPayments.filter(
       (payment) =>
@@ -187,7 +203,11 @@ export class AnalyticsService {
         (invoice) => invoice.totalAmount,
       ),
       receipts: this.sum(
-        payments.filter((payment) => payment.date.startsWith(month.month)),
+        payments.filter(
+          (payment) =>
+            payment.paymentMethod !== PaymentMethod.CUSTOMER_CREDIT &&
+            payment.date.startsWith(month.month),
+        ),
         (payment) => payment.amount,
       ) +
         this.sum(
@@ -195,6 +215,14 @@ export class AnalyticsService {
             payment.paymentDate.startsWith(month.month),
           ),
           (payment) => payment.amount,
+        ) +
+        this.sum(
+          customerCreditTransactions.filter(
+            (transaction) =>
+              this.isCreditCashInflow(transaction) &&
+              transaction.transactionDate.startsWith(month.month),
+          ),
+          (transaction) => transaction.amount,
         ),
       outflows: this.money(
         this.sum(
@@ -232,6 +260,14 @@ export class AnalyticsService {
               payment.paymentDate.startsWith(month.month),
             ),
             (payment) => payment.amount,
+          ) +
+          this.sum(
+            customerCreditTransactions.filter(
+              (transaction) =>
+                this.isCreditCashOutflow(transaction) &&
+                transaction.transactionDate.startsWith(month.month),
+            ),
+            (transaction) => transaction.amount,
           ),
       ),
     }));
@@ -399,8 +435,10 @@ export class AnalyticsService {
       (invoice) => invoice.totalAmount,
     );
     const periodReceipts = this.sum(
-      payments.filter((payment) =>
-        this.inRange(payment.date, startDate, endDate),
+      payments.filter(
+        (payment) =>
+          payment.paymentMethod !== PaymentMethod.CUSTOMER_CREDIT &&
+          this.inRange(payment.date, startDate, endDate),
       ),
       (payment) => payment.amount,
     ) +
@@ -409,8 +447,25 @@ export class AnalyticsService {
           this.inRange(payment.paymentDate, startDate, endDate),
         ),
         (payment) => payment.amount,
+      ) +
+      this.sum(
+        customerCreditTransactions.filter(
+          (transaction) =>
+            this.isCreditCashInflow(transaction) &&
+            this.inRange(transaction.transactionDate, startDate, endDate),
+        ),
+        (transaction) => transaction.amount,
       );
     const periodOutflows = this.sum(financialTrend, (row) => row.outflows);
+    const customerCreditBalance = this.money(
+      this.sum(
+        customerCreditTransactions,
+        (transaction) =>
+          transaction.direction === CustomerCreditDirection.CREDIT
+            ? transaction.amount
+            : -transaction.amount,
+      ),
+    );
 
     return {
       period: { months: months.length, startDate, endDate },
@@ -439,6 +494,7 @@ export class AnalyticsService {
         legacySupplierDebt: this.money(this.sumMap(supplierLegacyMap)),
         payrollPaid,
         payrollRemaining,
+        customerCreditBalance,
       },
       financialTrend,
       expenseBreakdown,
@@ -563,6 +619,10 @@ export class AnalyticsService {
         legacySupplierPayments: supplierLegacyPayments.filter((payment) =>
           this.inRange(payment.paymentDate, startDate, endDate),
         ).length,
+        customerCreditTransactions: customerCreditTransactions.filter(
+          (transaction) =>
+            this.inRange(transaction.transactionDate, startDate, endDate),
+        ).length,
       },
     };
   }
@@ -592,6 +652,32 @@ export class AnalyticsService {
           right.quantity - left.quantity || right.revenue - left.revenue,
       )
       .slice(0, limit);
+  }
+
+  private isCreditCashInflow(transaction: CustomerCreditTransaction) {
+    if (transaction.direction !== CustomerCreditDirection.CREDIT) return false;
+    if (
+      transaction.type === CustomerCreditTransactionType.OVERPAYMENT ||
+      transaction.type === CustomerCreditTransactionType.MANUAL_ADVANCE
+    ) {
+      return true;
+    }
+    return (
+      transaction.type === CustomerCreditTransactionType.REVERSAL &&
+      transaction.reversalOf?.type === CustomerCreditTransactionType.REFUND
+    );
+  }
+
+  private isCreditCashOutflow(transaction: CustomerCreditTransaction) {
+    if (transaction.direction !== CustomerCreditDirection.DEBIT) return false;
+    if (transaction.type === CustomerCreditTransactionType.REFUND) return true;
+    return (
+      transaction.type === CustomerCreditTransactionType.REVERSAL &&
+      (transaction.reversalOf?.type ===
+        CustomerCreditTransactionType.OVERPAYMENT ||
+        transaction.reversalOf?.type ===
+          CustomerCreditTransactionType.MANUAL_ADVANCE)
+    );
   }
 
   private legacyOutstandingByOwner(

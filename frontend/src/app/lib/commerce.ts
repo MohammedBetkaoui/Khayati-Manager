@@ -24,6 +24,7 @@ export type ApiCustomer = {
   totalPurchases: number;
   totalPaid: number;
   totalDebt: number;
+  availableCredit?: number;
   salesDebt?: number;
   legacyDebtRemaining?: number;
   salesCount: number;
@@ -41,7 +42,12 @@ export type ApiPayment = {
   invoiceNumber?: string;
   amount: number;
   paymentMethod: string;
-  paymentMethodCode: "CASH" | "TRANSFER" | "OTHER" | "PARTIAL";
+  paymentMethodCode:
+    | "CASH"
+    | "TRANSFER"
+    | "OTHER"
+    | "PARTIAL"
+    | "CUSTOMER_CREDIT";
   method: string;
   date: string;
   reference: string | null;
@@ -233,6 +239,55 @@ export type LegacyDebt = {
   payments: LegacyDebtPayment[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type CustomerCreditTransaction = {
+  id: number;
+  customerId: number;
+  type:
+    | "OVERPAYMENT"
+    | "MANUAL_ADVANCE"
+    | "SALE_USAGE"
+    | "LEGACY_DEBT_USAGE"
+    | "REFUND"
+    | "ADJUSTMENT"
+    | "REVERSAL";
+  direction: "CREDIT" | "DEBIT";
+  amount: number;
+  transactionDate: string;
+  date: string;
+  paymentMethod: string | null;
+  invoiceId: number | null;
+  invoiceNumber: string | null;
+  saleId: number | null;
+  paymentId: number | null;
+  legacyDebtId: number | null;
+  legacyDebtPaymentId: number | null;
+  reversalOfId: number | null;
+  balanceAfter: number;
+  reference: string | null;
+  notes: string | null;
+  reversedAt: string | null;
+  reversalReason: string | null;
+  createdAt: string;
+};
+
+export type CustomerCreditTarget = {
+  targetType: "INVOICE" | "LEGACY_DEBT";
+  targetId: number;
+  label: string;
+  date: string | null;
+  remainingAmount: number;
+};
+
+export type CustomerCreditSummary = {
+  customerId: number;
+  availableCredit: number;
+  totalCredits: number;
+  totalDebits: number;
+  transactionCount: number;
+  targets: CustomerCreditTarget[];
+  transactions: CustomerCreditTransaction[];
 };
 
 export type MaterialPurchase = {

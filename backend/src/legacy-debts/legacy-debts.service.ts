@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import {
   LegacyDebtStatus,
   LegacyDebtType,
@@ -183,6 +183,7 @@ export class LegacyDebtsService {
 
   getAllPayments() {
     return this.paymentsRepository.find({
+      where: { cancelledAt: IsNull() },
       relations: { legacyDebt: { customer: true, supplier: true } },
       order: { paymentDate: 'DESC', id: 'DESC' },
     });
@@ -497,6 +498,7 @@ export class LegacyDebtsService {
       .createQueryBuilder('payment')
       .select('COALESCE(SUM(payment.amountMinor), 0)', 'total')
       .where('payment.legacyDebtId = :debtId', { debtId })
+      .andWhere('payment.cancelledAt IS NULL')
       .getRawOne<{ total: number | string }>();
     return Number(raw?.total ?? 0);
   }
@@ -547,10 +549,12 @@ export class LegacyDebtsService {
   }
 
   private serializeDebt(debt: LegacyDebt) {
-    const payments = [...(debt.payments ?? [])].sort(
-      (left, right) =>
-        right.paymentDate.localeCompare(left.paymentDate) || right.id - left.id,
-    );
+    const payments = [...(debt.payments ?? [])]
+      .filter((payment) => !payment.cancelledAt)
+      .sort(
+        (left, right) =>
+          right.paymentDate.localeCompare(left.paymentDate) || right.id - left.id,
+      );
     return {
       id: debt.id,
       type: debt.type,

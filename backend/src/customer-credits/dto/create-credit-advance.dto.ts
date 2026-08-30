@@ -1,7 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
-  IsBoolean,
   IsIn,
   IsNumber,
   IsOptional,
@@ -12,26 +11,26 @@ import {
 import { PaymentMethod } from '../../common/enums';
 import { enumValueTransform } from '../../common/transforms/enum-value.transform';
 
-const invoicePaymentMethods = [
+const cashPaymentMethods = [
   PaymentMethod.CASH,
   PaymentMethod.TRANSFER,
   PaymentMethod.CHECK,
   PaymentMethod.OTHER,
 ] as const;
 
-export class CreateInvoicePaymentDto {
+export class CreateCreditAdvanceDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   amount!: number;
 
-  @Transform(enumValueTransform(PaymentMethod))
-  @IsIn(invoicePaymentMethods)
-  paymentMethod!: PaymentMethod;
-
   @IsOptional()
   @IsDateString()
-  paymentDate?: string;
+  date?: string;
+
+  @Transform(enumValueTransform(PaymentMethod))
+  @IsIn(cashPaymentMethods)
+  paymentMethod!: PaymentMethod;
 
   @IsOptional()
   @IsString()
@@ -42,8 +41,4 @@ export class CreateInvoicePaymentDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  confirmOverpayment?: boolean;
 }

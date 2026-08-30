@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
 import {
   CustomerStatus,
   CustomerType,
@@ -24,6 +24,8 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceNumberService } from '../invoices/invoice-number.service';
 import { WorkshopSettings } from '../settings/entities/workshop-settings.entity';
 import { LegacyDebtsService } from '../legacy-debts/legacy-debts.service';
+import { CustomerCreditsService } from '../customer-credits/customer-credits.service';
+import { fromMinorUnits, toMinorUnits } from '../common/money';
 import { CreateCustomerNoteDto } from './dto/create-customer-note.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import {
@@ -89,6 +91,7 @@ export class SalesService implements OnModuleInit {
     private readonly invoiceNumberService: InvoiceNumberService,
     private readonly invoicePaymentsService: InvoicesService,
     private readonly legacyDebtsService: LegacyDebtsService,
+    private readonly customerCreditsService: CustomerCreditsService,
   ) {}
 
   async onModuleInit() {
@@ -172,15 +175,18 @@ export class SalesService implements OnModuleInit {
     const counts = await this.getCustomerInvoiceCounts(
       customers.map((customer) => customer.id),
     );
-    const legacyOutstanding = await this.legacyDebtsService.getCustomerOutstandingMap(
-      customers.map((customer) => customer.id),
-    );
+    const customerIds = customers.map((customer) => customer.id);
+    const [legacyOutstanding, availableCredit] = await Promise.all([
+      this.legacyDebtsService.getCustomerOutstandingMap(customerIds),
+      this.customerCreditsService.getAvailableCreditMap(customerIds),
+    ]);
     return {
       data: customers.map((customer) =>
         this.serializeCustomer(
           customer,
           counts.get(customer.id) ?? 0,
           legacyOutstanding.get(customer.id) ?? 0,
+          availableCredit.get(customer.id) ?? 0,
         ),
       ),
       pagination: this.pagination(page, limit, total),
@@ -204,9 +210,11 @@ export class SalesService implements OnModuleInit {
         }),
         this.customersRepository.find(),
       ]);
-    const legacyOutstanding = await this.legacyDebtsService.getCustomerOutstandingMap(
-      customers.map((customer) => customer.id),
-    );
+    const customerIds = customers.map((customer) => customer.id);
+    const [legacyOutstanding, availableCredit] = await Promise.all([
+      this.legacyDebtsService.getCustomerOutstandingMap(customerIds),
+      this.customerCreditsService.getAvailableCreditMap(customerIds),
+    ]);
     const totalDebt = customers.reduce(
       (sum, customer) =>
         sum + customer.totalDebt + (legacyOutstanding.get(customer.id) ?? 0),
@@ -222,14 +230,28 @@ export class SalesService implements OnModuleInit {
       importantCustomers,
       customersWithDebt,
       totalDebt: this.roundMoney(totalDebt),
+      totalCustomerCredit: this.roundMoney(
+        customers.reduce(
+          (sum, customer) => sum + (availableCredit.get(customer.id) ?? 0),
+          0,
+        ),
+      ),
     };
   }
 
   async findCustomerById(id: number) {
     const customer = await this.findCustomerOrFail(id);
     const counts = await this.getCustomerInvoiceCounts([id]);
-    const legacy = await this.legacyDebtsService.getCustomerSummary(id);
-    return this.serializeCustomer(customer, counts.get(id) ?? 0, legacy.remaining);
+    const [legacy, availableCredit] = await Promise.all([
+      this.legacyDebtsService.getCustomerSummary(id),
+      this.customerCreditsService.getAvailableCredit(id),
+    ]);
+    return this.serializeCustomer(
+      customer,
+      counts.get(id) ?? 0,
+      legacy.remaining,
+      availableCredit,
+    );
   }
 
   async updateCustomer(id: number, dto: UpdateCustomerDto) {
@@ -351,12 +373,42 @@ export class SalesService implements OnModuleInit {
         taxEnabled ? (amountAfterDiscount * taxRate) / 100 : 0,
       );
       const totalAmount = this.roundMoney(amountAfterDiscount + taxAmount);
-      const paidAmount = this.roundMoney(dto.paidAmount ?? 0);
-      this.validateInvoiceAmounts(totalAmount, paidAmount, discount, subtotal);
-      if (paidAmount > 0 && !dto.paymentMethod) {
+      const totalAmountMinor = toMinorUnits(totalAmount);
+      const requestedPaymentMinor = toMinorUnits(dto.paidAmount ?? 0);
+      const requestedCreditMinor = toMinorUnits(dto.customerCreditAmount ?? 0);
+      this.validateInvoiceAmounts(totalAmount, 0, discount, subtotal);
+      if (requestedPaymentMinor > 0 && !dto.paymentMethod) {
         throw new BadRequestException(
           'paymentMethod is required when paidAmount is greater than zero',
         );
+      }
+
+      const availableCreditMinor = await this.customerCreditsService.getAvailableCreditMinor(
+        manager,
+        customer.id,
+      );
+      const creditAppliedMinor = Math.min(
+        requestedCreditMinor,
+        availableCreditMinor,
+        totalAmountMinor,
+      );
+      const remainingAfterCreditMinor = totalAmountMinor - creditAppliedMinor;
+      const invoicePaymentMinor = Math.min(
+        requestedPaymentMinor,
+        remainingAfterCreditMinor,
+      );
+      const overpaymentMinor = Math.max(
+        0,
+        requestedPaymentMinor - invoicePaymentMinor,
+      );
+      if (overpaymentMinor > 0 && !dto.confirmOverpayment) {
+        throw new ConflictException({
+          code: 'OVERPAYMENT_CONFIRMATION_REQUIRED',
+          message: 'Payment exceeds the sale remaining amount',
+          invoiceRemainingAmount: fromMinorUnits(remainingAfterCreditMinor),
+          paymentAmount: fromMinorUnits(requestedPaymentMinor),
+          overpaymentAmount: fromMinorUnits(overpaymentMinor),
+        });
       }
 
       const issueDate = dto.date ?? this.toDateKey(new Date());
@@ -398,9 +450,9 @@ export class SalesService implements OnModuleInit {
           taxRate,
           taxAmount,
           totalAmount,
-          paidAmount,
-          remainingAmount: this.roundMoney(totalAmount - paidAmount),
-          paymentStatus: this.resolvePaymentStatus(totalAmount, paidAmount),
+          paidAmount: 0,
+          remainingAmount: totalAmount,
+          paymentStatus: PaymentStatus.UNPAID,
           invoiceStatus: InvoiceStatus.ISSUED,
           currency: settings?.defaultCurrency ?? 'DZD',
           notes: this.optionalText(dto.notes),
@@ -410,18 +462,56 @@ export class SalesService implements OnModuleInit {
       await this.saveSaleItems(manager, invoice, preparedItems);
       await this.applySaleStock(manager, invoice, preparedItems);
 
-      if (paidAmount > 0 && dto.paymentMethod) {
-        await manager.getRepository(Payment).save(
+      if (creditAppliedMinor > 0) {
+        await this.customerCreditsService.useCreditForNewInvoice(
+          manager,
+          customer,
+          invoice,
+          creditAppliedMinor,
+          'Customer credit selected during sale creation',
+        );
+      }
+
+      let initialPayment: Payment | null = null;
+      if (invoicePaymentMinor > 0 && dto.paymentMethod) {
+        initialPayment = await manager.getRepository(Payment).save(
           manager.getRepository(Payment).create({
             customer,
             invoice,
-            amount: paidAmount,
+            amount: fromMinorUnits(invoicePaymentMinor),
+            amountMinor: invoicePaymentMinor,
             paymentMethod: dto.paymentMethod,
             date: invoice.date,
             reference: this.optionalText(dto.paymentReference),
             notes: 'Initial sale payment',
+            cancelledAt: null,
+            cancellationReason: null,
           }),
         );
+      }
+
+      const allocatedMinor = creditAppliedMinor + invoicePaymentMinor;
+      invoice.paidAmountMinor = allocatedMinor;
+      invoice.paidAmount = fromMinorUnits(allocatedMinor);
+      invoice.remainingAmountMinor = totalAmountMinor - allocatedMinor;
+      invoice.remainingAmount = fromMinorUnits(invoice.remainingAmountMinor);
+      invoice.paymentStatus = this.resolvePaymentStatus(
+        totalAmount,
+        invoice.paidAmount,
+      );
+      await manager.getRepository(Invoice).save(invoice);
+
+      if (overpaymentMinor > 0 && dto.paymentMethod) {
+        await this.customerCreditsService.recordOverpayment(manager, {
+          customer,
+          invoice,
+          payment: initialPayment,
+          amountMinor: overpaymentMinor,
+          transactionDate: invoice.date,
+          paymentMethod: dto.paymentMethod,
+          reference: this.optionalText(dto.paymentReference),
+          notes: 'Overpayment recorded during sale creation',
+        });
       }
       await this.recalculateCustomer(manager, customer.id);
       return invoice.id;
@@ -490,7 +580,9 @@ export class SalesService implements OnModuleInit {
       );
 
       const recordedPayments = this.roundMoney(
-        invoice.payments.reduce((sum, payment) => sum + payment.amount, 0),
+        invoice.payments
+          .filter((payment) => !payment.cancelledAt)
+          .reduce((sum, payment) => sum + payment.amount, 0),
       );
       const currentPaid = Math.max(recordedPayments, invoice.paidAmount);
       const requestedPaid = this.roundMoney(dto.paidAmount ?? currentPaid);
@@ -525,9 +617,12 @@ export class SalesService implements OnModuleInit {
         );
       }
 
-      if (customer.id !== oldCustomerId && invoice.payments.length > 0) {
-        for (const payment of invoice.payments) payment.customer = customer;
-        await manager.getRepository(Payment).save(invoice.payments);
+      const activePayments = invoice.payments.filter(
+        (payment) => !payment.cancelledAt,
+      );
+      if (customer.id !== oldCustomerId && activePayments.length > 0) {
+        for (const payment of activePayments) payment.customer = customer;
+        await manager.getRepository(Payment).save(activePayments);
       }
       invoice.customer = customer;
       invoice.paidAmount = requestedPaid;
@@ -553,7 +648,10 @@ export class SalesService implements OnModuleInit {
   async deleteInvoice(id: number) {
     await this.dataSource.transaction(async (manager) => {
       const invoice = await this.findInvoiceOrFail(id, manager);
-      if (invoice.payments.length > 0 || invoice.paidAmount > 0) {
+      if (
+        invoice.payments.some((payment) => !payment.cancelledAt) ||
+        invoice.paidAmount > 0
+      ) {
         throw new BadRequestException(
           'A paid sale cannot be deleted; preserve its financial history',
         );
@@ -579,11 +677,13 @@ export class SalesService implements OnModuleInit {
         paymentDate: dto.date,
         reference: dto.reference,
         notes: dto.notes,
+        confirmOverpayment: dto.confirmOverpayment,
       },
       dto.customerId,
     );
     return {
-      payment: this.serializePayment(result.payment),
+      payment: result.payment ? this.serializePayment(result.payment) : null,
+      overpaymentCredit: result.overpaymentCredit ?? null,
       invoice: this.serializeInvoice(result.invoice),
     };
   }
@@ -591,7 +691,7 @@ export class SalesService implements OnModuleInit {
   async getCustomerPayments(customerId: number) {
     await this.findCustomerOrFail(customerId);
     const payments = await this.paymentsRepository.find({
-      where: { customer: { id: customerId } },
+      where: { customer: { id: customerId }, cancelledAt: IsNull() },
       relations: { customer: true, invoice: true },
       order: { date: 'DESC', createdAt: 'DESC' },
     });
@@ -656,7 +756,7 @@ export class SalesService implements OnModuleInit {
 
   async getCustomerProfile(id: number) {
     const customer = await this.findCustomerOrFail(id);
-    const [invoices, payments, measurements, notes, legacy] = await Promise.all([
+    const [invoices, payments, measurements, notes, legacy, credit] = await Promise.all([
       this.invoicesRepository.find({
         where: { customer: { id } },
         relations: {
@@ -667,7 +767,7 @@ export class SalesService implements OnModuleInit {
         order: { date: 'DESC', id: 'DESC' },
       }),
       this.paymentsRepository.find({
-        where: { customer: { id } },
+        where: { customer: { id }, cancelledAt: IsNull() },
         relations: { customer: true, invoice: true },
         order: { date: 'DESC', id: 'DESC' },
       }),
@@ -680,6 +780,7 @@ export class SalesService implements OnModuleInit {
         order: { date: 'DESC', id: 'DESC' },
       }),
       this.legacyDebtsService.findForCustomer(id),
+      this.customerCreditsService.getSummary(id),
     ]);
 
     const totalInvoices = invoices.length;
@@ -703,6 +804,7 @@ export class SalesService implements OnModuleInit {
       payments[0]?.date,
       invoices[0]?.date,
       ...legacyActivityDates,
+      ...credit.transactions.map((transaction) => transaction.transactionDate),
       customer.lastVisitDate,
     ]
       .filter((value): value is string => Boolean(value))
@@ -716,6 +818,7 @@ export class SalesService implements OnModuleInit {
         customer,
         totalInvoices,
         legacy.summary.remaining,
+        credit.availableCredit,
       ),
       statistics: {
         totalInvoices,
@@ -728,6 +831,7 @@ export class SalesService implements OnModuleInit {
         legacyDebtPaid: legacy.summary.paid,
         legacyDebtRemaining: legacy.summary.remaining,
         totalReceivable,
+        availableCredit: credit.availableCredit,
         averageSale,
         lastPurchase: invoices[0]?.date ?? null,
         purchaseFrequencyDays: frequency,
@@ -745,6 +849,7 @@ export class SalesService implements OnModuleInit {
         paymentStatusCode: this.paymentStatusCode(invoice.paymentStatus),
       })),
       legacyDebts: legacy.data,
+      credit,
       analytics: {
         purchaseTrend,
         topProducts,
@@ -797,6 +902,20 @@ export class SalesService implements OnModuleInit {
           badge: 'Solde anterieur',
         })),
       ),
+      ...profile.credit.transactions.map((transaction) => ({
+        id: `credit-${transaction.id}`,
+        type: `CUSTOMER_CREDIT_${transaction.type}`,
+        date: transaction.transactionDate,
+        title: this.customerCreditTimelineTitle(transaction.type),
+        amount:
+          transaction.direction === 'CREDIT'
+            ? transaction.amount
+            : -transaction.amount,
+        invoiceId: transaction.invoiceId ?? undefined,
+        invoiceNumber: transaction.invoiceNumber ?? undefined,
+        legacyDebtId: transaction.legacyDebtId ?? undefined,
+        badge: 'Credit client',
+      })),
       ...profile.measurements.map((measurement) => ({
         id: `measurement-${measurement.id}`,
         type: 'MEASUREMENT',
@@ -1225,6 +1344,7 @@ export class SalesService implements OnModuleInit {
     customer: Customer,
     salesCount: number,
     legacyDebtRemaining = 0,
+    availableCredit = 0,
   ) {
     const salesDebt = customer.totalDebt;
     const totalDebt = this.roundMoney(salesDebt + legacyDebtRemaining);
@@ -1249,6 +1369,7 @@ export class SalesService implements OnModuleInit {
       salesDebt,
       legacyDebtRemaining,
       totalDebt,
+      availableCredit: this.roundMoney(availableCredit),
       salesCount,
       totalSales: salesCount,
       notes: customer.notes ?? null,
@@ -1290,14 +1411,16 @@ export class SalesService implements OnModuleInit {
       items: (invoice.items ?? []).map((item) =>
         this.serializeInvoiceItem(item),
       ),
-      payments: (invoice.payments ?? []).map((payment) =>
-        this.serializePayment(
-          payment,
-          invoice.customer.id,
-          invoice.id,
-          invoice.invoiceNumber,
+      payments: (invoice.payments ?? [])
+        .filter((payment) => !payment.cancelledAt)
+        .map((payment) =>
+          this.serializePayment(
+            payment,
+            invoice.customer.id,
+            invoice.id,
+            invoice.invoiceNumber,
+          ),
         ),
-      ),
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
     };
@@ -1393,6 +1516,18 @@ export class SalesService implements OnModuleInit {
     if (status === PaymentStatus.PAID) return 'PAID';
     if (status === PaymentStatus.PARTIALLY_PAID) return 'PARTIAL';
     return 'UNPAID';
+  }
+
+  private customerCreditTimelineTitle(type: string) {
+    if (type === 'OVERPAYMENT') return 'Paiement excedentaire';
+    if (type === 'MANUAL_ADVANCE') return 'Paiement anticipe';
+    if (type === 'SALE_USAGE') return 'Utilisation du credit sur une vente';
+    if (type === 'LEGACY_DEBT_USAGE') {
+      return 'Utilisation du credit sur une creance anterieure';
+    }
+    if (type === 'REFUND') return 'Remboursement du credit client';
+    if (type === 'REVERSAL') return 'Annulation d\'une operation de credit';
+    return 'Ajustement du credit client';
   }
 
   private variantLabel(variant: ProductVariant) {

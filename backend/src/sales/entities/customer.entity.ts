@@ -9,6 +9,7 @@
 import { CustomerStatus, CustomerType } from '../../common/enums';
 import { Order } from '../../orders/entities/order.entity';
 import { LegacyDebt } from '../../legacy-debts/entities/legacy-debt.entity';
+import { CustomerCreditTransaction } from '../../customer-credits/entities/customer-credit-transaction.entity';
 import { CustomerMeasurement } from './customer-measurement.entity';
 import { CustomerNote } from './customer-note.entity';
 import { Invoice } from './invoice.entity';
@@ -92,6 +93,9 @@ export class Customer {
 
   @OneToMany(() => LegacyDebt, (debt) => debt.customer)
   legacyDebts!: LegacyDebt[];
+
+  @OneToMany(() => CustomerCreditTransaction, (transaction) => transaction.customer)
+  creditTransactions!: CustomerCreditTransaction[];
 
   @CreateDateColumn()
   createdAt!: Date;

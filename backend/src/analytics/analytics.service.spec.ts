@@ -1,4 +1,6 @@
 import {
+  CustomerCreditDirection,
+  CustomerCreditTransactionType,
   ExpenseCategory,
   ExpenseStatus,
   FinishedProductStatus,
@@ -6,6 +8,7 @@ import {
   LegacyDebtStatus,
   LegacyDebtType,
   PayrollStatus,
+  PaymentMethod,
   SalaryType,
 } from '../common/enums';
 import { AnalyticsService } from './analytics.service';
@@ -114,7 +117,14 @@ describe('AnalyticsService', () => {
 
     const service = new AnalyticsService(
       repository([invoice]) as never,
-      repository([{ date: today, amount: 600 }]) as never,
+      repository([
+        { date: today, amount: 600, paymentMethod: PaymentMethod.CASH },
+        {
+          date: today,
+          amount: 20,
+          paymentMethod: PaymentMethod.CUSTOMER_CREDIT,
+        },
+      ]) as never,
       repository([customer]) as never,
       repository([expense]) as never,
       repository([payroll]) as never,
@@ -131,12 +141,36 @@ describe('AnalyticsService', () => {
         {
           paymentDate: today,
           amount: 100,
+          paymentMethod: PaymentMethod.CASH,
+          legacyDebt: customerLegacyDebt,
+        },
+        {
+          paymentDate: today,
+          amount: 20,
+          paymentMethod: PaymentMethod.CUSTOMER_CREDIT,
           legacyDebt: customerLegacyDebt,
         },
         {
           paymentDate: today,
           amount: 150,
+          paymentMethod: PaymentMethod.CASH,
           legacyDebt: supplierLegacyDebt,
+        },
+      ]) as never,
+      repository([
+        {
+          transactionDate: today,
+          amount: 50,
+          direction: CustomerCreditDirection.CREDIT,
+          type: CustomerCreditTransactionType.OVERPAYMENT,
+          reversalOf: null,
+        },
+        {
+          transactionDate: today,
+          amount: 20,
+          direction: CustomerCreditDirection.DEBIT,
+          type: CustomerCreditTransactionType.SALE_USAGE,
+          reversalOf: null,
         },
       ]) as never,
     );
@@ -149,7 +183,7 @@ describe('AnalyticsService', () => {
 
     expect(currentFinancial).toMatchObject({
       sales: 1000,
-      receipts: 700,
+      receipts: 750,
       outflows: 750,
     });
     expect(currentExpenses).toMatchObject({
@@ -164,9 +198,9 @@ describe('AnalyticsService', () => {
     });
     expect(result.summary).toMatchObject({
       sales: 1000,
-      receipts: 700,
+      receipts: 750,
       outflows: 750,
-      estimatedCashFlow: -50,
+      estimatedCashFlow: 0,
       customerDebt: 700,
       currentCustomerDebt: 400,
       legacyCustomerDebt: 300,
@@ -175,6 +209,7 @@ describe('AnalyticsService', () => {
       legacySupplierDebt: 400,
       payrollPaid: 200,
       payrollRemaining: 100,
+      customerCreditBalance: 30,
     });
     expect(result.topProducts[0]).toMatchObject({
       productName: 'Model A',

@@ -268,6 +268,33 @@ export function formatMoney(value: number, lang: "ar" | "fr") {
   return `${Number(value || 0).toLocaleString("fr-DZ")} ${lang === "ar" ? "دج" : "DA"}`;
 }
 
+export function formatPaymentMethod(
+  methodCode: string | null | undefined,
+  method: string | null | undefined,
+  lang: "ar" | "fr",
+) {
+  const codeByValue: Record<string, string> = {
+    "نقداً": "CASH",
+    تحويل: "TRANSFER",
+    "دفع جزئي": "PARTIAL",
+    صك: "CHECK",
+    "دفع لاحق": "LATER",
+    أخرى: "OTHER",
+    "رصيد الزبون": "CUSTOMER_CREDIT",
+  };
+  const code = methodCode || (method ? codeByValue[method] : null);
+  const labels: Record<string, { ar: string; fr: string }> = {
+    CASH: { ar: "نقداً", fr: "Espèces" },
+    TRANSFER: { ar: "تحويل", fr: "Virement" },
+    PARTIAL: { ar: "دفع جزئي", fr: "Paiement partiel" },
+    CHECK: { ar: "صك", fr: "Chèque" },
+    LATER: { ar: "دفع لاحق", fr: "Paiement différé" },
+    OTHER: { ar: "أخرى", fr: "Autre" },
+    CUSTOMER_CREDIT: { ar: "رصيد الزبون", fr: "Crédit client" },
+  };
+  return code && labels[code] ? labels[code][lang] : method || "—";
+}
+
 export function formatDate(
   value: string | null | undefined,
   lang: "ar" | "fr",

@@ -5,4 +5,5 @@ export enum PaymentMethod {
   CHECK = '\u0635\u0643',
   LATER = '\u062f\u0641\u0639 \u0644\u0627\u062d\u0642',
   OTHER = '\u0623\u062e\u0631\u0649',
+  CUSTOMER_CREDIT = '\u0631\u0635\u064a\u062f \u0627\u0644\u0632\u0628\u0648\u0646',
 }
