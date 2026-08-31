@@ -15,6 +15,8 @@ import { RestoreProgressService } from './restore-progress.service';
 import { RestoreSwapService } from './restore-swap.service';
 import { RestoreValidationService } from './restore-validation.service';
 import { RestoreWorkspaceService } from './restore-workspace.service';
+import { BackupCatalogService } from './backup-catalog.service';
+import { BackupSchedulerService } from './backup-scheduler.service';
 
 @Module({
   controllers: [BackupController],
@@ -24,6 +26,8 @@ import { RestoreWorkspaceService } from './restore-workspace.service';
     BackupValidationService,
     BackupWorkspaceService,
     BackupOperationLockService,
+    BackupCatalogService,
+    BackupSchedulerService,
     BackupRestoreService,
     RestoreAssetsService,
     RestoreMigrationService,

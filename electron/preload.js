@@ -52,6 +52,12 @@ contextBridge.exposeInMainWorld("khayatiBackup", {
   getStatus() {
     return ipcRenderer.invoke("backup:get-status");
   },
+  updateAutomaticBackupSettings(options) {
+    return ipcRenderer.invoke("backup:update-auto-settings", options);
+  },
+  retryAutomaticBackup() {
+    return ipcRenderer.invoke("backup:retry-auto");
+  },
   openBackupLocation(locationId) {
     return ipcRenderer.invoke("backup:open-location", locationId);
   },
@@ -64,10 +70,27 @@ contextBridge.exposeInMainWorld("khayatiBackup", {
   acknowledgeRestoreNotice() {
     return ipcRenderer.invoke("backup:acknowledge-restore-notice");
   },
+  acknowledgeExternalBackupReminder() {
+    return ipcRenderer.invoke("backup:acknowledge-external-reminder");
+  },
+  openKnownBackupLocation(locationId) {
+    return ipcRenderer.invoke("backup:open-known-location", locationId);
+  },
+  inspectKnownBackup(options) {
+    return ipcRenderer.invoke("backup:inspect-known", options);
+  },
+  deleteKnownBackup(options) {
+    return ipcRenderer.invoke("backup:delete-known", options);
+  },
   onRestoreProgress(callback) {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("backup:restore-progress", listener);
     return () =>
       ipcRenderer.removeListener("backup:restore-progress", listener);
+  },
+  onAutomaticBackupStatus(callback) {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("backup:auto-status", listener);
+    return () => ipcRenderer.removeListener("backup:auto-status", listener);
   },
 });

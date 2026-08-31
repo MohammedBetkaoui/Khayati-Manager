@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { existsSync } = require("node:fs");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   startBackendProcess,
@@ -9,6 +10,7 @@ const {
   resolveFrontendEntry,
   resolveSplashEntry,
   resolveAppIcon,
+  FRONTEND_DEV_URL,
 } = require("./launcher");
 const { configureUpdater, isUpdaterConfigured } = require("./updater");
 const { registerBackupIpc } = require("./backup/backup-ipc");
@@ -118,22 +120,49 @@ async function bootstrap() {
       splashWindow.close();
     }
     mainWindow.show();
+    const automaticBackupTimer = setTimeout(() => {
+      void backupManager?.initializeAutomaticBackup();
+    }, 1500);
+    automaticBackupTimer.unref?.();
   });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
   mainWindow.on("close", (event) => {
-    if (backupManager?.isRestoreActive()) {
+    if (backupManager?.isOperationActive()) {
       event.preventDefault();
     }
   });
 
+  await loadFrontend(mainWindow);
+}
+
+async function loadFrontend(window) {
+  const builtFrontend = resolveFrontendEntry();
   if (app.isPackaged) {
-    await mainWindow.loadFile(resolveFrontendEntry());
-  } else {
-    await mainWindow.loadURL("http://localhost:5173");
+    await window.loadFile(builtFrontend);
+    return;
   }
+
+  try {
+    const response = await fetch(FRONTEND_DEV_URL, {
+      signal: AbortSignal.timeout(1200),
+    });
+    if (response.ok) {
+      await window.loadURL(FRONTEND_DEV_URL);
+      return;
+    }
+  } catch {
+    // Running `electron .` directly is supported through the latest Vite build.
+  }
+
+  if (!existsSync(builtFrontend)) {
+    throw new Error(
+      "Interface introuvable. Lancez npm run build:frontend ou npm run desktop:dev.",
+    );
+  }
+  await window.loadFile(builtFrontend);
 }
 
 function showFatalStartupError(error) {
@@ -222,6 +251,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("before-quit", () => {
+  backupManager?.prepareForShutdown();
   stopBackendProcess(backendProcess, ownsBackendProcess);
 });
 

@@ -7,6 +7,9 @@ const {
   findAvailablePort,
   waitForKhayatiBackend,
 } = require("./backend-runtime");
+const {
+  resolveDevelopmentBackendCommand,
+} = require("./development-runtime");
 
 const FRONTEND_DEV_URL = "http://localhost:5173";
 const PREFERRED_BACKEND_PORT = 3000;
@@ -52,10 +55,10 @@ async function waitForBackend(timeoutMs = 60_000) {
 async function startDevelopmentBackend() {
   const backendPort = await findAvailablePort(PREFERRED_BACKEND_PORT);
   backendBaseUrl = backendUrl(backendPort);
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const launchCommand = resolveDevelopmentBackendCommand();
   const backendProcess = spawn(
-    npmCommand,
-    ["run", "start:dev", "--prefix", resolveBackendRoot()],
+    launchCommand.command,
+    launchCommand.args,
     {
       env: {
         ...process.env,
@@ -65,7 +68,7 @@ async function startDevelopmentBackend() {
         KHAYATI_APP_VERSION: app.getVersion(),
         KHAYATI_DESKTOP_TOKEN: desktopToken,
       },
-      cwd: resolveWorkspaceRoot(),
+      cwd: resolveBackendRoot(),
       stdio: "inherit",
       windowsHide: true,
     },
@@ -75,6 +78,9 @@ async function startDevelopmentBackend() {
     if (code && code !== 0) {
       console.error(`Backend exited with code ${code}`);
     }
+  });
+  backendProcess.once("error", (error) => {
+    console.error(`Unable to start the development backend: ${error.message}`);
   });
 
   return { process: backendProcess, owned: true, baseUrl: backendBaseUrl };

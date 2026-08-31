@@ -179,6 +179,189 @@ test("uses the same engine for the external USB-oriented action", async () => {
     assert.equal(result.locationType, "EXTERNAL");
     assert.equal(state.fetchCalls.length, 1);
     assert.match(state.fetchCalls[0].url, /desktop-backup\/create$/);
+    const persisted = JSON.parse(
+      await readFile(path.join(state.userData, "backup-state.json"), "utf8"),
+    );
+    assert.equal(persisted.lastExternalBackupAt, "2026-08-30T17:00:00.000Z");
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("automatic backup is enabled by default and failure never rejects startup", async () => {
+  const state = await fixture({
+    fetchImpl: async (url) => {
+      assert.match(url, /desktop-backup\/automatic\/run$/);
+      return jsonResponse({ errorCode: "DESTINATION_UNAVAILABLE" }, false);
+    },
+  });
+  try {
+    const result = await state.manager.initializeAutomaticBackup();
+    assert.equal(result.success, false);
+    assert.equal(result.errorCode, "DESTINATION_UNAVAILABLE");
+    const persisted = JSON.parse(
+      await readFile(path.join(state.userData, "backup-state.json"), "utf8"),
+    );
+    assert.equal(persisted.lastAutoBackupStatus, "FAILED");
+    assert.equal(persisted.autoBackupEnabled, undefined);
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("disabled automatic backup performs no backend request", async () => {
+  const state = await fixture();
+  try {
+    await writeFile(
+      path.join(state.userData, "backup-state.json"),
+      JSON.stringify({ autoBackupEnabled: false, autoBackupRetention: 7 }),
+    );
+    const result = await state.manager.initializeAutomaticBackup();
+    assert.equal(result.success, true);
+    assert.equal(result.skippedReason, "DISABLED");
+    assert.equal(state.fetchCalls.length, 0);
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("automatic preferences accept only supported retention values", async () => {
+  const state = await fixture({
+    fetchImpl: async (url) => {
+      assert.match(url, /desktop-backup\/automatic\/retention$/);
+      return jsonResponse({ success: true, kept: 0, deleted: 0 });
+    },
+  });
+  try {
+    assert.equal(
+      (
+        await state.manager.updateAutomaticBackupSettings({
+          enabled: true,
+          retention: 14,
+        })
+      ).success,
+      true,
+    );
+    assert.equal(
+      (
+        await state.manager.updateAutomaticBackupSettings({
+          enabled: true,
+          retention: 9,
+        })
+      ).success,
+      false,
+    );
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("external reminder is shown at most once during its reminder interval", async () => {
+  const state = await fixture({
+    fetchImpl: async (url) => {
+      assert.match(url, /desktop-backup\/catalog$/);
+      return jsonResponse({
+        success: true,
+        history: [],
+        totalSize: 0,
+        hasImportantData: true,
+      });
+    },
+  });
+  try {
+    await writeFile(
+      path.join(state.userData, "backup-state.json"),
+      JSON.stringify({
+        backupSystemFirstSeenAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+    const first = await state.manager.getStatus();
+    const second = await state.manager.getStatus();
+    assert.equal(first.externalReminderDue, true);
+    assert.equal(second.externalReminderDue, false);
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("external reminder stays hidden for an empty installation", async () => {
+  const state = await fixture({
+    fetchImpl: async () =>
+      jsonResponse({
+        success: true,
+        history: [],
+        totalSize: 0,
+        hasImportantData: false,
+      }),
+  });
+  try {
+    await writeFile(
+      path.join(state.userData, "backup-state.json"),
+      JSON.stringify({
+        backupSystemFirstSeenAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+    assert.equal((await state.manager.getStatus()).externalReminderDue, false);
+  } finally {
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("local history exposes opaque actions and refuses arbitrary deletion tokens", async () => {
+  const state = await fixture();
+  const localBackup = path.join(
+    state.userData,
+    "Backups",
+    "Auto",
+    "KhayatiManager_AutoBackup_test.kmb",
+  );
+  await mkdir(path.dirname(localBackup), { recursive: true });
+  await writeFile(localBackup, "valid-local-backup");
+  const calls = [];
+  state.manager.fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith("/catalog")) {
+      return jsonResponse({
+        success: true,
+        totalSize: 18,
+        hasImportantData: false,
+        history: [
+          {
+            filePath: localBackup,
+            fileName: path.basename(localBackup),
+            type: "AUTOMATIC",
+            size: 18,
+            createdAt: "2026-08-31T08:00:00.000Z",
+            status: "VALID",
+          },
+        ],
+      });
+    }
+    if (url.endsWith("/catalog/delete")) {
+      return jsonResponse({ success: true });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  try {
+    const status = await state.manager.getStatus();
+    const entry = status.history[0];
+    assert.equal(typeof entry.locationId, "string");
+    assert.equal(Object.hasOwn(entry, "filePath"), false);
+    assert.equal(
+      (
+        await state.manager.deleteKnownBackup({
+          locationId: "renderer-arbitrary-path",
+        })
+      ).success,
+      false,
+    );
+    assert.equal(
+      (await state.manager.deleteKnownBackup({ locationId: entry.locationId }))
+        .success,
+      true,
+    );
+    const deleteBody = JSON.parse(calls.at(-1).options.body);
+    assert.equal(deleteBody.filePath, localBackup);
   } finally {
     await rm(state.root, { recursive: true, force: true });
   }

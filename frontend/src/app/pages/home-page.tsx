@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Usb } from "lucide-react";
 import { palette, sections } from "../content";
 import { useLanguage } from "../language-context";
 import { PageBackground } from "../components/page-background";
@@ -22,6 +22,7 @@ export function HomePage() {
   const { lang, t } = useLanguage();
   const navigate = useNavigate();
   const [restoreNotice, setRestoreNotice] = useState(false);
+  const [externalBackupReminder, setExternalBackupReminder] = useState(false);
 
   useEffect(() => {
     const backupApi = window.khayatiBackup;
@@ -30,9 +31,15 @@ export function HomePage() {
     void backupApi
       .getStatus()
       .then((status) => {
-        if (!active || !status.restoreNoticePending) return;
-        setRestoreNotice(true);
-        void backupApi.acknowledgeRestoreNotice();
+        if (!active) return;
+        if (status.restoreNoticePending) {
+          setRestoreNotice(true);
+          void backupApi.acknowledgeRestoreNotice();
+        }
+        if (status.externalReminderDue) {
+          setExternalBackupReminder(true);
+          void backupApi.acknowledgeExternalBackupReminder();
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -65,6 +72,46 @@ export function HomePage() {
           {lang === "ar"
             ? "تمت استعادة النسخة الاحتياطية بنجاح."
             : "La sauvegarde a été restaurée avec succès."}
+        </div>
+      ) : null}
+
+      {externalBackupReminder ? (
+        <div
+          role="status"
+          className="mt-5 flex flex-col gap-4 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{
+            backgroundColor: "var(--app-warning-panel)",
+            borderColor: "var(--app-warning-border)",
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              className="mt-1 shrink-0"
+              size={20}
+              style={{ color: "var(--app-warning)" }}
+            />
+            <div>
+              <div className="font-extrabold" style={{ color: palette.text }}>
+                {lang === "ar"
+                  ? "حان وقت إنشاء نسخة خارجية"
+                  : "Une copie externe est recommandée"}
+              </div>
+              <p className="mt-1 text-sm leading-6" style={{ color: palette.muted }}>
+                {lang === "ar"
+                  ? "يُنصح بحفظ نسخة على مفتاح USB أو قرص خارجي."
+                  : "Conservez une copie sur une clé USB ou un disque externe."}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold text-white"
+            style={{ backgroundColor: palette.primary }}
+          >
+            <Usb size={17} />
+            {lang === "ar" ? "إنشاء نسخة الآن" : "Créer une sauvegarde maintenant"}
+          </button>
         </div>
       ) : null}
 

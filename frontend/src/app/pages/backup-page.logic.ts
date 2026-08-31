@@ -9,6 +9,8 @@ export const backupCopy = {
     noBackup: "لم يتم إنشاء نسخة احتياطية بعد",
     manual: "يدوية",
     external: "خارجية",
+    automatic: "تلقائية",
+    preRestore: "قبل الاستعادة",
     size: "الحجم",
     type: "النوع",
     actions: "حماية بيانات الورشة",
@@ -63,6 +65,32 @@ export const backupCopy = {
       "إنشاء النسخ الاحتياطية متاح من تطبيق Khayati Manager لسطح المكتب.",
     warningAssets:
       "تم إنشاء النسخة، لكن تعذر تضمين بعض صور الشعار أو الختم المخصصة.",
+    autoTitle: "النسخ الاحتياطي التلقائي",
+    autoDescription: "يُنشئ التطبيق نسخة محلية واحدة كحد أقصى كل يوم.",
+    enabled: "مفعّل",
+    disabled: "غير مفعّل",
+    retention: "الاحتفاظ بالنسخ",
+    copies: "نسخة",
+    lastAuto: "آخر نسخة تلقائية",
+    lastAttempt: "آخر محاولة تلقائية",
+    saved: "محفوظة",
+    failed: "فشلت",
+    retry: "إعادة المحاولة",
+    historyTitle: "آخر النسخ الاحتياطية",
+    date: "التاريخ",
+    status: "الحالة",
+    actionsLabel: "الإجراءات",
+    restore: "استعادة",
+    delete: "حذف",
+    deleteTitle: "حذف النسخة الاحتياطية؟",
+    deleteDescription:
+      "سيتم حذف ملف النسخة فقط، ولن يتم حذف أي بيانات مستخدمة حاليًا في التطبيق.",
+    storageUsed: "مساحة النسخ الاحتياطية المحلية",
+    noHistory: "لا توجد نسخ محلية مسجلة بعد.",
+    externalReminderTitle: "حان وقت إنشاء نسخة خارجية",
+    externalReminder:
+      "لم يتم حفظ نسخة خارجية منذ أكثر من 14 يومًا. يُنصح بحفظ نسخة على مفتاح USB أو قرص خارجي.",
+    createNow: "إنشاء نسخة الآن",
   },
   fr: {
     title: "Sauvegarde et restauration",
@@ -72,6 +100,8 @@ export const backupCopy = {
     noBackup: "Aucune sauvegarde n’a encore été créée",
     manual: "Manuelle",
     external: "Externe",
+    automatic: "Automatique",
+    preRestore: "Avant restauration",
     size: "Taille",
     type: "Type",
     actions: "Protéger les données de l’atelier",
@@ -130,6 +160,33 @@ export const backupCopy = {
       "La sauvegarde est disponible depuis l’application desktop Khayati Manager.",
     warningAssets:
       "La sauvegarde a été créée, mais certaines images personnalisées du logo ou du cachet n’ont pas pu être incluses.",
+    autoTitle: "Sauvegarde automatique",
+    autoDescription:
+      "L’application crée au maximum une sauvegarde locale par jour.",
+    enabled: "Activée",
+    disabled: "Désactivée",
+    retention: "Conserver les sauvegardes",
+    copies: "copies",
+    lastAuto: "Dernière sauvegarde automatique",
+    lastAttempt: "Dernière tentative automatique",
+    saved: "Enregistrée",
+    failed: "Échec",
+    retry: "Réessayer",
+    historyTitle: "Dernières sauvegardes",
+    date: "Date",
+    status: "Statut",
+    actionsLabel: "Actions",
+    restore: "Restaurer",
+    delete: "Supprimer",
+    deleteTitle: "Supprimer la sauvegarde ?",
+    deleteDescription:
+      "Seul ce fichier de sauvegarde sera supprimé. Aucune donnée actuellement utilisée ne sera supprimée.",
+    storageUsed: "Espace des sauvegardes locales",
+    noHistory: "Aucune sauvegarde locale enregistrée pour le moment.",
+    externalReminderTitle: "Une copie externe est recommandée",
+    externalReminder:
+      "Aucune sauvegarde externe n’a été créée depuis plus de 14 jours. Conservez une copie sur une clé USB ou un disque externe.",
+    createNow: "Créer une sauvegarde maintenant",
   },
 } as const;
 
@@ -206,6 +263,18 @@ export function backupErrorMessage(code: string | undefined, lang: Lang) {
     BACKEND_UNAVAILABLE: {
       ar: "خدمة النسخ الاحتياطي غير متاحة حاليًا.",
       fr: "Le service de sauvegarde est actuellement indisponible.",
+    },
+    AUTO_BACKUP_DISABLED: {
+      ar: "فعّل النسخ الاحتياطي التلقائي قبل إعادة المحاولة.",
+      fr: "Activez la sauvegarde automatique avant de réessayer.",
+    },
+    BACKUP_SETTINGS_INVALID: {
+      ar: "تعذر حفظ إعدادات النسخ الاحتياطي.",
+      fr: "Impossible d’enregistrer les paramètres de sauvegarde.",
+    },
+    BACKUP_IN_USE: {
+      ar: "هذه النسخة محددة حاليًا للاستعادة ولا يمكن حذفها.",
+      fr: "Cette sauvegarde est actuellement sélectionnée pour une restauration et ne peut pas être supprimée.",
     },
   };
   return (

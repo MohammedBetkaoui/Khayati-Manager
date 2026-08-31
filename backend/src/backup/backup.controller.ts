@@ -15,6 +15,10 @@ import { InspectDesktopBackupDto } from './dto/inspect-desktop-backup.dto';
 import { RestoreDesktopBackupDto } from './dto/restore-desktop-backup.dto';
 import { BackupRestoreService } from './backup-restore.service';
 import { RestoreProgressService } from './restore-progress.service';
+import { BackupSchedulerService } from './backup-scheduler.service';
+import { BackupCatalogService } from './backup-catalog.service';
+import { CreateAutomaticBackupDto } from './dto/create-automatic-backup.dto';
+import { DeleteLocalBackupDto } from './dto/delete-local-backup.dto';
 
 @Controller('desktop-backup')
 @UseGuards(DesktopBackupGuard)
@@ -23,6 +27,8 @@ export class BackupController {
     private readonly backupService: BackupService,
     private readonly restoreService: BackupRestoreService,
     private readonly restoreProgress: RestoreProgressService,
+    private readonly schedulerService: BackupSchedulerService,
+    private readonly catalogService: BackupCatalogService,
   ) {}
 
   @Post('create')
@@ -87,6 +93,59 @@ export class BackupController {
   @Get('restore-status')
   restoreStatus() {
     return { success: true, ...this.restoreProgress.getProgress() };
+  }
+
+  @Post('automatic/run')
+  async runAutomatic(@Body() body: CreateAutomaticBackupDto) {
+    try {
+      const result = await this.schedulerService.runDailyAutomaticBackup({
+        retention: body.retention,
+        appVersion: body.appVersion,
+      });
+      return { success: true, ...result };
+    } catch (error) {
+      this.rethrowSafeError(error);
+    }
+  }
+
+  @Post('automatic/retention')
+  async applyRetention(@Body() body: CreateAutomaticBackupDto) {
+    try {
+      return {
+        success: true,
+        ...(await this.catalogService.applyAutomaticRetention(body.retention)),
+      };
+    } catch (error) {
+      this.rethrowSafeError(error);
+    }
+  }
+
+  @Get('catalog')
+  async catalog() {
+    try {
+      const [history, totalSize] = await Promise.all([
+        this.catalogService.listLocalBackups(5),
+        this.catalogService.totalLocalBackupSize(),
+      ]);
+      return {
+        success: true,
+        history,
+        totalSize,
+        hasImportantData: this.catalogService.hasImportantData(),
+      };
+    } catch (error) {
+      this.rethrowSafeError(error);
+    }
+  }
+
+  @Post('catalog/delete')
+  async deleteLocal(@Body() body: DeleteLocalBackupDto) {
+    try {
+      await this.catalogService.deleteKnownLocalBackup(body.filePath);
+      return { success: true };
+    } catch (error) {
+      this.rethrowSafeError(error);
+    }
   }
 
   private rethrowSafeError(error: unknown): never {

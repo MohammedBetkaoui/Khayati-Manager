@@ -13,6 +13,9 @@ test("provides complete Arabic RTL and French user-facing copy", () => {
   assert.equal(backupCopy.fr.title, "Sauvegarde et restauration");
   assert.match(backupCopy.ar.externalDescription, /USB/);
   assert.match(backupCopy.fr.externalDescription, /USB/);
+  assert.equal(backupCopy.ar.autoTitle, "النسخ الاحتياطي التلقائي");
+  assert.equal(backupCopy.fr.historyTitle, "Dernières sauvegardes");
+  assert.match(backupCopy.ar.externalReminder, /14/);
 });
 
 test("disables backup actions while create or inspection is active", () => {

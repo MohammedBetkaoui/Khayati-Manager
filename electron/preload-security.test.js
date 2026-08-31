@@ -13,4 +13,8 @@ test("preload exposes only controlled business methods", async () => {
   assert.match(source, /backup:select-restore-file/);
   assert.match(source, /backup:restore/);
   assert.match(source, /backup:restore-progress/);
+  assert.match(source, /backup:update-auto-settings/);
+  assert.match(source, /backup:retry-auto/);
+  assert.match(source, /backup:auto-status/);
+  assert.match(source, /backup:delete-known/);
 });
