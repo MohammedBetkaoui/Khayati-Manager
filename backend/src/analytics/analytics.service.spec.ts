@@ -13,8 +13,39 @@ import {
 } from '../common/enums';
 import { AnalyticsService } from './analytics.service';
 
-function repository(rows: unknown[]) {
-  return { find: jest.fn().mockResolvedValue(rows) };
+function repository(
+  rows: unknown[],
+  queryResult: {
+    rawOne?: Record<string, unknown>;
+    rawMany?: Record<string, unknown>[];
+  } = {},
+) {
+  const builder = {
+    innerJoin: jest.fn(),
+    select: jest.fn(),
+    addSelect: jest.fn(),
+    where: jest.fn(),
+    andWhere: jest.fn(),
+    setParameter: jest.fn(),
+    groupBy: jest.fn(),
+    getRawOne: jest.fn().mockResolvedValue(queryResult.rawOne ?? { total: 0 }),
+    getRawMany: jest.fn().mockResolvedValue(queryResult.rawMany ?? []),
+  };
+  for (const method of [
+    'innerJoin',
+    'select',
+    'addSelect',
+    'where',
+    'andWhere',
+    'setParameter',
+    'groupBy',
+  ] as const) {
+    builder[method].mockReturnValue(builder);
+  }
+  return {
+    find: jest.fn().mockResolvedValue(rows),
+    createQueryBuilder: jest.fn().mockReturnValue(builder),
+  };
 }
 
 function dateKey(date = new Date()) {
@@ -116,7 +147,9 @@ describe('AnalyticsService', () => {
     };
 
     const service = new AnalyticsService(
-      repository([invoice]) as never,
+      repository([invoice], {
+        rawMany: [{ productId: product.id, lastSaleDate: today }],
+      }) as never,
       repository([
         { date: today, amount: 600, paymentMethod: PaymentMethod.CASH },
         {
@@ -157,22 +190,25 @@ describe('AnalyticsService', () => {
           legacyDebt: supplierLegacyDebt,
         },
       ]) as never,
-      repository([
-        {
-          transactionDate: today,
-          amount: 50,
-          direction: CustomerCreditDirection.CREDIT,
-          type: CustomerCreditTransactionType.OVERPAYMENT,
-          reversalOf: null,
-        },
-        {
-          transactionDate: today,
-          amount: 20,
-          direction: CustomerCreditDirection.DEBIT,
-          type: CustomerCreditTransactionType.SALE_USAGE,
-          reversalOf: null,
-        },
-      ]) as never,
+      repository(
+        [
+          {
+            transactionDate: today,
+            amount: 50,
+            direction: CustomerCreditDirection.CREDIT,
+            type: CustomerCreditTransactionType.OVERPAYMENT,
+            reversalOf: null,
+          },
+          {
+            transactionDate: today,
+            amount: 20,
+            direction: CustomerCreditDirection.DEBIT,
+            type: CustomerCreditTransactionType.SALE_USAGE,
+            reversalOf: null,
+          },
+        ],
+        { rawOne: { balance: 30 } },
+      ) as never,
     );
 
     const result = await service.getDashboard(12);

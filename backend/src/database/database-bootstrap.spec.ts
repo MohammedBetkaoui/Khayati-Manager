@@ -12,22 +12,24 @@ import {
   TYPEORM_MIGRATIONS_TABLE,
 } from './database-options';
 import { InitialSchemaBaseline1788102000000 } from './migrations/1788102000000-InitialSchemaBaseline';
+import { OptimizeStartupAndQueries1788462000000 } from './migrations/1788462000000-OptimizeStartupAndQueries';
+import { FinalizeQueryIndexes1788465600000 } from './migrations/1788465600000-FinalizeQueryIndexes';
 
 const EXPECTED_BUSINESS_TABLES = 40;
 
-class MigrationProbe1788102000001 implements MigrationInterface {
-  name = 'MigrationProbe1788102000001';
+class MigrationProbe1788465600001 implements MigrationInterface {
+  name = 'MigrationProbe1788465600001';
 
   async up(queryRunner: QueryRunner) {
     await queryRunner.query(
       'CREATE TABLE "migration_probe" ("id" integer PRIMARY KEY NOT NULL)',
     );
-    await queryRunner.query('PRAGMA user_version = 2');
+    await queryRunner.query('PRAGMA user_version = 4');
   }
 
   async down(queryRunner: QueryRunner) {
     await queryRunner.query('DROP TABLE "migration_probe"');
-    await queryRunner.query('PRAGMA user_version = 1');
+    await queryRunner.query('PRAGMA user_version = 3');
   }
 }
 
@@ -123,7 +125,7 @@ describe('database migration bootstrap', () => {
 
     expect(firstRun.safetyBackupPath).not.toBeNull();
     expect(existsSync(firstRun.safetyBackupPath!)).toBe(true);
-    expect(afterFirstRun.userVersion).toBe(1);
+    expect(afterFirstRun.userVersion).toBe(3);
     expect(afterFirstRun.baselineRecorded).toBe(true);
     expect(businessTables(target)).toEqual(tablesBefore);
     expect(rowCounts(target)).toEqual(rowsBefore);
@@ -154,7 +156,7 @@ describe('database migration bootstrap', () => {
     const inspection = inspectDatabase(target);
 
     expect(result.safetyBackupPath).toBeNull();
-    expect(inspection.userVersion).toBe(1);
+    expect(inspection.userVersion).toBe(3);
     expect(inspection.baselineRecorded).toBe(true);
     expect(inspection.businessTableCount).toBe(EXPECTED_BUSINESS_TABLES);
   });
@@ -168,14 +170,16 @@ describe('database migration bootstrap', () => {
       ...createDataSourceOptions(testEnvironment),
       migrations: [
         InitialSchemaBaseline1788102000000,
-        MigrationProbe1788102000001,
+        OptimizeStartupAndQueries1788462000000,
+        FinalizeQueryIndexes1788465600000,
+        MigrationProbe1788465600001,
       ],
     });
     await dataSource.initialize();
     try {
       await dataSource.runMigrations({ transaction: 'all' });
       expect(await dataSource.query('PRAGMA user_version')).toEqual([
-        { user_version: 2 },
+        { user_version: 4 },
       ]);
       expect(
         await dataSource.query(
@@ -185,7 +189,7 @@ describe('database migration bootstrap', () => {
 
       await dataSource.undoLastMigration({ transaction: 'all' });
       expect(await dataSource.query('PRAGMA user_version')).toEqual([
-        { user_version: 1 },
+        { user_version: 3 },
       ]);
       expect(
         await dataSource.query(

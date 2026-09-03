@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Not, Repository } from 'typeorm';
@@ -55,7 +54,7 @@ type PayrollValues = {
 };
 
 @Injectable()
-export class PayrollService implements OnModuleInit {
+export class PayrollService {
   constructor(
     @InjectRepository(Payroll)
     private readonly payrollRepository: Repository<Payroll>,
@@ -71,10 +70,6 @@ export class PayrollService implements OnModuleInit {
     private readonly workerRepository: Repository<Worker>,
     private readonly dataSource: DataSource,
   ) {}
-
-  async onModuleInit() {
-    await this.migrateLegacyFinanceData();
-  }
 
   async create(dto: CreatePayrollDto) {
     const payrollId = await this.dataSource.transaction(async (manager) => {
@@ -1125,104 +1120,4 @@ export class PayrollService implements OnModuleInit {
     return trimmed || null;
   }
 
-  private async migrateLegacyFinanceData() {
-    const tables = (await this.dataSource.query(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('payrolls_legacy', 'advances_legacy')",
-    )) as { name: string }[];
-    const names = new Set(tables.map((row) => row.name));
-
-    if (names.has('payrolls_legacy')) {
-      const rows = (await this.dataSource.query(
-        'SELECT * FROM payrolls_legacy ORDER BY id',
-      )) as Record<string, unknown>[];
-      for (const row of rows) {
-        const workerId = Number(row.workerId ?? 0);
-        const worker = await this.workerRepository.findOne({
-          where: { id: workerId },
-        });
-        if (!worker) continue;
-        const periodStart = String(row.periodStart ?? '').slice(0, 10);
-        const periodEnd = String(row.periodEnd ?? '').slice(0, 10);
-        const duplicate = await this.payrollRepository.findOne({
-          where: { worker: { id: workerId }, periodStart, periodEnd },
-        });
-        if (duplicate) continue;
-        const isPiece = String(row.salaryType ?? '') === SalaryType.PIECE;
-        const gross = this.money(
-          Number(isPiece ? row.productionAmount : row.baseSalary) ||
-            Number(row.netSalary) ||
-            0,
-        );
-        const paid = Math.min(gross, this.money(Number(row.paidAmount ?? 0)));
-        const payroll = await this.payrollRepository.save(
-          this.payrollRepository.create({
-            worker,
-            periodStart,
-            periodEnd,
-            salaryMonth: isPiece ? null : periodStart.slice(0, 7),
-            salaryTypeSnapshot: isPiece ? SalaryType.PIECE : SalaryType.MONTHLY,
-            monthlySalarySnapshot: isPiece ? 0 : Number(row.baseSalary ?? 0),
-            installmentsInMonth: isPiece ? 0 : 4,
-            installmentNumber: isPiece ? 0 : 1,
-            piecesCompleted: Number(row.piecesCompleted ?? 0),
-            piecePrice: Number(row.piecePrice ?? 0),
-            grossAmount: gross,
-            advanceDeduction: Number(row.advances ?? 0),
-            loanDeduction: 0,
-            otherDeductions: Number(row.deductions ?? 0),
-            amountDue: this.money(Number(row.netSalary ?? gross)),
-            paidAmount: paid,
-            remainingAmount: this.money(Number(row.netSalary ?? gross) - paid),
-            status:
-              paid <= 0
-                ? PayrollStatus.CALCULATED
-                : paid >= Number(row.netSalary ?? gross)
-                  ? PayrollStatus.PAID
-                  : PayrollStatus.PARTIALLY_PAID,
-            notes: this.optionalText(String(row.notes ?? '')),
-          }),
-        );
-        if (paid > 0) {
-          await this.paymentRepository.save(
-            this.paymentRepository.create({
-              payroll,
-              worker,
-              amount: paid,
-              date: String(row.paymentDate ?? periodEnd).slice(0, 10),
-              method: PayrollPaymentMethod.CASH,
-              notes: 'Paiement migré depuis l’ancien système',
-            }),
-          );
-        }
-      }
-      await this.dataSource.query('DROP TABLE payrolls_legacy');
-    }
-
-    if (names.has('advances_legacy')) {
-      const rows = (await this.dataSource.query(
-        'SELECT * FROM advances_legacy ORDER BY id',
-      )) as Record<string, unknown>[];
-      for (const row of rows) {
-        const worker = await this.workerRepository.findOne({
-          where: { id: Number(row.workerId ?? 0) },
-        });
-        if (!worker) continue;
-        const amount = this.money(Number(row.amount ?? 0));
-        const settled = Boolean(row.isDeducted);
-        await this.advanceRepository.save(
-          this.advanceRepository.create({
-            worker,
-            amount,
-            deductedAmount: settled ? amount : 0,
-            remainingAmount: settled ? 0 : amount,
-            date: String(row.date ?? '').slice(0, 10),
-            type: AdvanceType.SALARY,
-            status: settled ? BalanceStatus.SETTLED : BalanceStatus.OPEN,
-            notes: this.optionalText(String(row.notes ?? '')),
-          }),
-        );
-      }
-      await this.dataSource.query('DROP TABLE advances_legacy');
-    }
-  }
 }

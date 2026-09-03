@@ -1,5 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-import { CURRENT_SCHEMA_VERSION } from '../schema-version';
+import { INITIAL_SCHEMA_VERSION } from '../schema-version';
 
 const HISTORICAL_SCHEMA_TABLES = [
   'advances',
@@ -67,7 +67,7 @@ export class InitialSchemaBaseline1788102000000 implements MigrationInterface {
       }
 
       await queryRunner.query(
-        `PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`,
+        `PRAGMA user_version = ${INITIAL_SCHEMA_VERSION}`,
       );
       return;
     }
@@ -2711,7 +2711,7 @@ export class InitialSchemaBaseline1788102000000 implements MigrationInterface {
             ALTER TABLE "temporary_advances"
                 RENAME TO "advances"
         `);
-    await queryRunner.query(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+    await queryRunner.query(`PRAGMA user_version = ${INITIAL_SCHEMA_VERSION}`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

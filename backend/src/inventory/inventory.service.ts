@@ -76,8 +76,6 @@ export class InventoryService implements OnModuleInit {
       await this.seedInventoryIfEmpty();
       await this.seedSupplierPurchasesIfEmpty();
     }
-    await this.syncExistingInventoryState();
-    await this.recalculateAllSuppliers();
   }
 
   async create(dto: CreateInventoryItemDto) {
@@ -1066,48 +1064,6 @@ export class InventoryService implements OnModuleInit {
     }
   }
 
-  private async syncExistingInventoryState() {
-    const items = await this.itemsRepository.find({
-      relations: { supplierEntity: true },
-    });
-
-    if (!items.length) {
-      return;
-    }
-
-    let hasChanges = false;
-
-    for (const item of items) {
-      const derivedStatus = this.deriveStatus(
-        item.quantity,
-        item.minStockAlert,
-      );
-      if (item.status !== derivedStatus) {
-        item.status = derivedStatus;
-        hasChanges = true;
-      }
-
-      if (item.supplierEntity) {
-        if (item.supplier !== item.supplierEntity.name) {
-          item.supplier = item.supplierEntity.name;
-          hasChanges = true;
-        }
-        continue;
-      }
-
-      if (item.supplier?.trim()) {
-        item.supplierEntity = await this.upsertSupplierByName({
-          name: item.supplier,
-        });
-        hasChanges = true;
-      }
-    }
-
-    if (hasChanges) {
-      await this.itemsRepository.save(items);
-    }
-  }
-
   private async resolvePurchaseSupplier(
     manager: EntityManager,
     dto: CreateMaterialPurchaseDto,
@@ -1191,15 +1147,6 @@ export class InventoryService implements OnModuleInit {
         description: this.normalizeOptionalText(dto.notes),
       }),
     );
-  }
-
-  private async recalculateAllSuppliers() {
-    const suppliers = await this.suppliersRepository.find({ select: { id: true } });
-    for (const supplier of suppliers) {
-      await this.dataSource.transaction((manager) =>
-        this.recalculateSupplier(manager, supplier.id),
-      );
-    }
   }
 
   private async recalculateSupplier(manager: EntityManager, supplierId: number) {

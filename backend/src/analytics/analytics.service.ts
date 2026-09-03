@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import {
+  Between,
+  IsNull,
+  LessThan,
+  MoreThan,
+  Not,
+  Repository,
+} from 'typeorm';
 import {
   CustomerCreditDirection,
   CustomerCreditTransactionType,
@@ -104,78 +111,117 @@ export class AnalyticsService {
       legacyDebts,
       legacyPayments,
       customerCreditTransactions,
+      overdueInvoices,
+      supplierPaymentsDue,
+      productLastSaleRows,
+      debtOpening,
+      customerCreditBalanceRaw,
     ] = await Promise.all([
       this.invoiceRepository.find({
+        where: {
+          invoiceStatus: InvoiceStatus.ISSUED,
+          date: Between(startDate, endDate),
+        },
         relations: { customer: true, items: { product: true } },
         order: { date: 'ASC', id: 'ASC' },
       }),
       this.paymentRepository.find({
-        where: { cancelledAt: IsNull() },
+        where: { cancelledAt: IsNull(), date: Between(startDate, endDate) },
         order: { date: 'ASC', id: 'ASC' },
       }),
       this.customerRepository.find(),
-      this.expenseRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
+      this.expenseRepository.find({
+        where: {
+          archivedAt: IsNull(),
+          status: Not(ExpenseStatus.CANCELLED),
+          date: Between(startDate, endDate),
+        },
+        order: { date: 'ASC', id: 'ASC' },
+      }),
       this.payrollRepository.find({
+        where: {
+          status: Not(PayrollStatus.CANCELLED),
+          periodEnd: Between(startDate, endDate),
+        },
         relations: { worker: true },
         order: { periodEnd: 'ASC', id: 'ASC' },
       }),
-      this.salaryPaymentRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
-      this.advanceRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
+      this.salaryPaymentRepository.find({
+        where: { date: Between(startDate, endDate) },
+        order: { date: 'ASC', id: 'ASC' },
+      }),
+      this.advanceRepository.find({
+        where: { date: Between(startDate, endDate) },
+        order: { date: 'ASC', id: 'ASC' },
+      }),
       this.supplierRepository.find(),
       this.supplierPurchaseRepository.find({
+        where: { purchaseDate: Between(startDate, endDate) },
         relations: { supplier: true },
         order: { purchaseDate: 'ASC', id: 'ASC' },
       }),
       this.supplierPaymentRepository.find({
+        where: { date: Between(startDate, endDate) },
         order: { date: 'ASC', id: 'ASC' },
       }),
       this.supplierAdvanceRepository.find({
+        where: { date: Between(startDate, endDate) },
         order: { date: 'ASC', id: 'ASC' },
       }),
       this.productRepository.find({
         order: { quantityAvailable: 'DESC', id: 'ASC' },
       }),
-      this.productionRepository.find({ order: { date: 'ASC', id: 'ASC' } }),
+      this.productionRepository.find({
+        where: { date: Between(startDate, endDate) },
+        order: { date: 'ASC', id: 'ASC' },
+      }),
       this.legacyDebtRepository.find({
-        relations: { customer: true, supplier: true, payments: true },
+        where: { status: Not(LegacyDebtStatus.CANCELLED) },
+        relations: { customer: true, supplier: true },
         order: { id: 'ASC' },
       }),
       this.legacyDebtPaymentRepository.find({
-        where: { cancelledAt: IsNull() },
+        where: {
+          cancelledAt: IsNull(),
+          paymentDate: Between(startDate, endDate),
+        },
         relations: { legacyDebt: true },
         order: { paymentDate: 'ASC', id: 'ASC' },
       }),
       this.customerCreditRepository.find({
+        where: { transactionDate: Between(startDate, endDate) },
         relations: { customer: true, reversalOf: true },
         order: { transactionDate: 'ASC', id: 'ASC' },
       }),
+      this.invoiceRepository.find({
+        where: {
+          invoiceStatus: InvoiceStatus.ISSUED,
+          remainingAmount: MoreThan(0),
+          dueDate: LessThan(today),
+        },
+        relations: { customer: true },
+        order: { dueDate: 'ASC', id: 'ASC' },
+        take: 8,
+      }),
+      this.supplierPurchaseRepository.find({
+        where: { remainingAmount: MoreThan(0) },
+        relations: { supplier: true },
+        order: { purchaseDate: 'ASC', id: 'ASC' },
+        take: 8,
+      }),
+      this.loadProductLastSales(),
+      this.loadDebtOpening(startDate),
+      this.loadCustomerCreditBalance(),
     ]);
 
-    const issuedInvoices = invoices.filter(
-      (invoice) => invoice.invoiceStatus === InvoiceStatus.ISSUED,
-    );
-    const activePayrolls = payrolls.filter(
-      (payroll) => payroll.status !== PayrollStatus.CANCELLED,
-    );
-    const activeExpenses = expenses.filter(
-      (expense) =>
-        !expense.archivedAt && expense.status !== ExpenseStatus.CANCELLED,
-    );
-    const periodInvoices = issuedInvoices.filter((invoice) =>
-      this.inRange(invoice.date, startDate, endDate),
-    );
-    const periodPayrolls = activePayrolls.filter((payroll) =>
-      this.inRange(payroll.periodEnd, startDate, endDate),
-    );
-    const periodPurchases = purchases.filter((purchase) =>
-      this.inRange(purchase.purchaseDate, startDate, endDate),
-    );
-    const periodExpenses = activeExpenses.filter((expense) =>
-      this.inRange(expense.date, startDate, endDate),
-    );
-    const activeLegacyDebts = legacyDebts.filter(
-      (debt) => debt.status !== LegacyDebtStatus.CANCELLED,
-    );
+    const issuedInvoices = invoices;
+    const activePayrolls = payrolls;
+    const activeExpenses = expenses;
+    const periodInvoices = invoices;
+    const periodPayrolls = payrolls;
+    const periodPurchases = purchases;
+    const periodExpenses = expenses;
+    const activeLegacyDebts = legacyDebts;
     const customerLegacyPayments = legacyPayments.filter(
       (payment) =>
         payment.legacyDebt.type === LegacyDebtType.CUSTOMER_RECEIVABLE &&
@@ -352,12 +398,13 @@ export class AnalyticsService {
           : this.money(
               Math.max(
                 0,
-                this.sum(
-                  issuedInvoices.filter(
-                    (invoice) => invoice.date <= month.endDate,
-                  ),
-                  (invoice) => invoice.totalAmount,
-                ) -
+                debtOpening.customerDebt +
+                  this.sum(
+                    issuedInvoices.filter(
+                      (invoice) => invoice.date <= month.endDate,
+                    ),
+                    (invoice) => invoice.totalAmount,
+                  ) -
                   this.sum(
                     payments.filter((payment) => payment.date <= month.endDate),
                     (payment) => payment.amount,
@@ -373,12 +420,13 @@ export class AnalyticsService {
           : this.money(
               Math.max(
                 0,
-                this.sum(
-                  purchases.filter(
-                    (purchase) => purchase.purchaseDate <= month.endDate,
-                  ),
-                  (purchase) => purchase.totalAmount,
-                ) -
+                debtOpening.supplierDebt +
+                  this.sum(
+                    purchases.filter(
+                      (purchase) => purchase.purchaseDate <= month.endDate,
+                    ),
+                    (purchase) => purchase.totalAmount,
+                  ) -
                   this.sum(
                     supplierPayments.filter(
                       (payment) => payment.date <= month.endDate,
@@ -411,16 +459,12 @@ export class AnalyticsService {
       customerRevenue.set(invoice.customer.id, current);
     }
 
-    const productLastSale = new Map<number, string>();
-    for (const invoice of issuedInvoices) {
-      for (const item of invoice.items) {
-        if (!item.product?.id) continue;
-        const previous = productLastSale.get(item.product.id);
-        if (!previous || invoice.date > previous) {
-          productLastSale.set(item.product.id, invoice.date);
-        }
-      }
-    }
+    const productLastSale = new Map(
+      productLastSaleRows.map((row) => [
+        Number(row.productId),
+        String(row.lastSaleDate),
+      ]),
+    );
 
     const payrollPaid = this.sum(
       periodPayrolls,
@@ -458,13 +502,7 @@ export class AnalyticsService {
       );
     const periodOutflows = this.sum(financialTrend, (row) => row.outflows);
     const customerCreditBalance = this.money(
-      this.sum(
-        customerCreditTransactions,
-        (transaction) =>
-          transaction.direction === CustomerCreditDirection.CREDIT
-            ? transaction.amount
-            : -transaction.amount,
-      ),
+      Number(customerCreditBalanceRaw?.balance ?? 0),
     );
 
     return {
@@ -543,18 +581,7 @@ export class AnalyticsService {
             currentDebt: this.money(supplier.totalDebt),
             legacyDebt: this.money(supplierLegacyMap.get(supplier.id) ?? 0),
           })),
-        overdueInvoices: issuedInvoices
-          .filter(
-            (invoice) =>
-              invoice.remainingAmount > 0 &&
-              Boolean(invoice.dueDate) &&
-              String(invoice.dueDate) < today,
-          )
-          .sort((left, right) =>
-            String(left.dueDate).localeCompare(String(right.dueDate)),
-          )
-          .slice(0, 8)
-          .map((invoice) => ({
+        overdueInvoices: overdueInvoices.map((invoice) => ({
             id: invoice.id,
             invoiceNumber: invoice.invoiceNumber,
             customerId: invoice.customer.id,
@@ -563,13 +590,7 @@ export class AnalyticsService {
             remainingAmount: this.money(invoice.remainingAmount),
             daysOverdue: this.daysBetween(String(invoice.dueDate), today),
           })),
-        supplierPaymentsDue: purchases
-          .filter((purchase) => purchase.remainingAmount > 0)
-          .sort((left, right) =>
-            left.purchaseDate.localeCompare(right.purchaseDate),
-          )
-          .slice(0, 8)
-          .map((purchase) => {
+        supplierPaymentsDue: supplierPaymentsDue.map((purchase) => {
             const daysOpen = this.daysBetween(purchase.purchaseDate, today);
             return {
               purchaseId: purchase.id,
@@ -625,6 +646,77 @@ export class AnalyticsService {
         ).length,
       },
     };
+  }
+
+  private async loadProductLastSales() {
+    return this.invoiceRepository
+      .createQueryBuilder('invoice')
+      .innerJoin('invoice.items', 'item')
+      .select('item.productId', 'productId')
+      .addSelect('MAX(invoice.date)', 'lastSaleDate')
+      .where('invoice.invoiceStatus = :status', {
+        status: InvoiceStatus.ISSUED,
+      })
+      .andWhere('item.productId IS NOT NULL')
+      .groupBy('item.productId')
+      .getRawMany<{ productId: number | string; lastSaleDate: string }>();
+  }
+
+  private async loadDebtOpening(startDate: string) {
+    const [invoiceRow, paymentRow, purchaseRow, supplierPaymentRow, advanceRow] =
+      await Promise.all([
+        this.invoiceRepository
+          .createQueryBuilder('invoice')
+          .select('COALESCE(SUM(invoice.totalAmount), 0)', 'total')
+          .where('invoice.invoiceStatus = :status', {
+            status: InvoiceStatus.ISSUED,
+          })
+          .andWhere('invoice.date < :startDate', { startDate })
+          .getRawOne<{ total: number | string }>(),
+        this.paymentRepository
+          .createQueryBuilder('payment')
+          .select('COALESCE(SUM(payment.amount), 0)', 'total')
+          .where('payment.cancelledAt IS NULL')
+          .andWhere('payment.date < :startDate', { startDate })
+          .getRawOne<{ total: number | string }>(),
+        this.supplierPurchaseRepository
+          .createQueryBuilder('purchase')
+          .select('COALESCE(SUM(purchase.totalAmount), 0)', 'total')
+          .where('purchase.purchaseDate < :startDate', { startDate })
+          .getRawOne<{ total: number | string }>(),
+        this.supplierPaymentRepository
+          .createQueryBuilder('payment')
+          .select('COALESCE(SUM(payment.amount), 0)', 'total')
+          .where('payment.date < :startDate', { startDate })
+          .getRawOne<{ total: number | string }>(),
+        this.supplierAdvanceRepository
+          .createQueryBuilder('advance')
+          .select('COALESCE(SUM(advance.amount), 0)', 'total')
+          .where('advance.date < :startDate', { startDate })
+          .getRawOne<{ total: number | string }>(),
+      ]);
+
+    return {
+      customerDebt: this.money(
+        Number(invoiceRow?.total ?? 0) - Number(paymentRow?.total ?? 0),
+      ),
+      supplierDebt: this.money(
+        Number(purchaseRow?.total ?? 0) -
+          Number(supplierPaymentRow?.total ?? 0) -
+          Number(advanceRow?.total ?? 0),
+      ),
+    };
+  }
+
+  private loadCustomerCreditBalance() {
+    return this.customerCreditRepository
+      .createQueryBuilder('creditTx')
+      .select(
+        `COALESCE(SUM(CASE WHEN creditTx.direction = :credit THEN creditTx.amount ELSE -creditTx.amount END), 0)`,
+        'balance',
+      )
+      .setParameter('credit', CustomerCreditDirection.CREDIT)
+      .getRawOne<{ balance: number | string }>();
   }
 
   private topProducts(invoices: Invoice[], limit: number) {

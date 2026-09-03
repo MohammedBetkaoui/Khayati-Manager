@@ -4,7 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
+import {
+  Between,
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Repository,
+} from 'typeorm';
 import {
   LegacyDebtStatus,
   LegacyDebtType,
@@ -181,9 +188,16 @@ export class LegacyDebtsService {
     return { customers, suppliers };
   }
 
-  getAllPayments() {
+  getAllPayments(range: { start?: string; end?: string } = {}) {
+    const paymentDate =
+      range.start && range.end
+        ? Between(range.start, range.end)
+        : undefined;
     return this.paymentsRepository.find({
-      where: { cancelledAt: IsNull() },
+      where: {
+        cancelledAt: IsNull(),
+        ...(paymentDate ? { paymentDate } : {}),
+      },
       relations: { legacyDebt: { customer: true, supplier: true } },
       order: { paymentDate: 'DESC', id: 'DESC' },
     });
@@ -191,7 +205,7 @@ export class LegacyDebtsService {
 
   getAllDebts() {
     return this.debtsRepository.find({
-      relations: { customer: true, supplier: true, payments: true },
+      relations: { customer: true, supplier: true },
       order: { createdAt: 'DESC', id: 'DESC' },
     });
   }

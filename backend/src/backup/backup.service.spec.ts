@@ -108,8 +108,8 @@ describe('BackupService', () => {
     expect((await stat(destination)).size).toBeGreaterThan(0);
     expect(result.filePath).toBe(destination);
     expect(result.manifest.format).toBe('khayati-manager-backup');
-    expect(result.manifest.schemaVersion).toBe(1);
-    expect(result.manifest.sqliteUserVersion).toBe(1);
+    expect(result.manifest.schemaVersion).toBe(3);
+    expect(result.manifest.sqliteUserVersion).toBe(3);
     expect(result.manifest.database.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.manifest.files[0].path).toBe('database/khayati.sqlite');
     expect(await readdir(workspaceRoot)).toEqual([]);

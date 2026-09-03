@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
@@ -71,7 +70,7 @@ const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 100;
 
 @Injectable()
-export class SalesService implements OnModuleInit {
+export class SalesService {
   constructor(
     @InjectRepository(Customer)
     private readonly customersRepository: Repository<Customer>,
@@ -93,10 +92,6 @@ export class SalesService implements OnModuleInit {
     private readonly legacyDebtsService: LegacyDebtsService,
     private readonly customerCreditsService: CustomerCreditsService,
   ) {}
-
-  async onModuleInit() {
-    await this.recalculateAllCustomers();
-  }
 
   async createCustomer(dto: CreateCustomerDto) {
     const phone = dto.phone.trim();
@@ -1256,17 +1251,6 @@ export class SalesService implements OnModuleInit {
     if (totals?.firstVisit) customer.firstVisitDate = String(totals.firstVisit);
     if (totals?.lastVisit) customer.lastVisitDate = String(totals.lastVisit);
     await manager.getRepository(Customer).save(customer);
-  }
-
-  private async recalculateAllCustomers() {
-    const ids = (
-      await this.customersRepository.find({ select: { id: true } })
-    ).map((customer) => customer.id);
-    for (const id of ids) {
-      await this.dataSource.transaction((manager) =>
-        this.recalculateCustomer(manager, id),
-      );
-    }
   }
 
   private async getCustomerInvoiceCounts(customerIds: number[]) {

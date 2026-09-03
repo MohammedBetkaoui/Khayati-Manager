@@ -174,7 +174,7 @@ describe('BackupRestoreService end-to-end', () => {
       appVersion: 'restore-test',
     });
 
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(3);
     expect(dataSource.isInitialized).toBe(false);
     const restored = new Database(activeDatabase, { readonly: true });
     let restoredSettings:

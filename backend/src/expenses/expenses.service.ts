@@ -1,6 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import {
+  Between,
+  FindOperator,
+  IsNull,
+  LessThanOrEqual,
+  MoreThan,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import {
   ExpenseCategory,
   ExpenseSourceType,
@@ -9,6 +18,7 @@ import {
   LegacyDebtStatus,
   LegacyDebtType,
   PaymentMethod,
+  PayrollStatus,
 } from '../common/enums';
 import { SupplierAdvance } from '../inventory/entities/supplier-advance.entity';
 import { SupplierPayment } from '../inventory/entities/supplier-payment.entity';
@@ -111,23 +121,95 @@ export class ExpensesService {
 
   async findAll(filters: ExpenseFilterDto = {}) {
     const language = filters.lang ?? ExpenseLanguage.FR;
-    const [manualExpenses, purchases, payrolls, supplierPayments, supplierAdvances, salaryPayments, invoices, legacyPayments, legacyDebts] =
+    const range = this.resolveRange(filters);
+    const sourceRange = this.requiredSourceRange(range);
+    const sourceDate = this.dateOperator(sourceRange);
+    const today = this.todayKey();
+    const alertLimit = 8;
+    const [
+      manualExpenses,
+      purchases,
+      payrolls,
+      supplierPayments,
+      supplierAdvances,
+      salaryPayments,
+      invoices,
+      legacyPayments,
+      legacyDebts,
+      openPurchases,
+      openPayrolls,
+      openManualExpenses,
+      dueRecurringExpenses,
+    ] =
       await Promise.all([
-        this.expenseRepository.find({ where: { archivedAt: IsNull() }, order: { date: 'DESC', id: 'DESC' } }),
+        this.expenseRepository.find({
+          where: {
+            archivedAt: IsNull(),
+            ...(sourceDate ? { date: sourceDate } : {}),
+          },
+          order: { date: 'DESC', id: 'DESC' },
+        }),
         this.purchaseRepository.find({
+          where: sourceDate ? { purchaseDate: sourceDate } : {},
           relations: { supplier: true },
           order: { purchaseDate: 'DESC', id: 'DESC' },
         }),
         this.payrollRepository.find({
+          where: sourceDate ? { periodEnd: sourceDate } : {},
           relations: { worker: true },
           order: { periodEnd: 'DESC', id: 'DESC' },
         }),
-        this.supplierPaymentRepository.find({ relations: { supplier: true, purchase: true } }),
-        this.supplierAdvanceRepository.find({ relations: { supplier: true } }),
-        this.salaryPaymentRepository.find({ relations: { payroll: true, worker: true } }),
-        this.invoiceRepository.find(),
-        this.legacyDebtsService.getAllPayments(),
+        this.supplierPaymentRepository.find({
+          where: sourceDate ? { date: sourceDate } : {},
+          relations: { supplier: true, purchase: true },
+        }),
+        this.supplierAdvanceRepository.find({
+          where: sourceDate ? { date: sourceDate } : {},
+          relations: { supplier: true },
+        }),
+        this.salaryPaymentRepository.find({
+          where: sourceDate ? { date: sourceDate } : {},
+          relations: { payroll: true, worker: true },
+        }),
+        this.invoiceRepository.find({
+          where: sourceDate ? { date: sourceDate } : {},
+        }),
+        this.legacyDebtsService.getAllPayments(sourceRange),
         this.legacyDebtsService.getAllDebts(),
+        this.purchaseRepository.find({
+          where: { remainingAmount: MoreThan(0) },
+          relations: { supplier: true },
+          order: { remainingAmount: 'DESC', id: 'DESC' },
+          take: alertLimit,
+        }),
+        this.payrollRepository.find({
+          where: {
+            remainingAmount: MoreThan(0),
+            status: Not(PayrollStatus.CANCELLED),
+          },
+          relations: { worker: true },
+          order: { remainingAmount: 'DESC', id: 'DESC' },
+          take: alertLimit,
+        }),
+        this.expenseRepository.find({
+          where: {
+            archivedAt: IsNull(),
+            remainingAmount: MoreThan(0),
+            status: Not(ExpenseStatus.CANCELLED),
+          },
+          order: { remainingAmount: 'DESC', id: 'DESC' },
+          take: alertLimit,
+        }),
+        this.expenseRepository.find({
+          where: {
+            archivedAt: IsNull(),
+            isRecurring: true,
+            nextDueDate: LessThanOrEqual(this.addDays(today, 7)),
+            status: Not(ExpenseStatus.PAID),
+          },
+          order: { nextDueDate: 'ASC', id: 'ASC' },
+          take: alertLimit,
+        }),
       ]);
 
     const rows = [
@@ -146,9 +228,23 @@ export class ExpensesService {
         ),
     ].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
-    const range = this.resolveRange(filters);
     const periodRows = rows.filter((row) => this.isInRange(row.date, range));
     const data = this.applyFilters(periodRows, filters);
+    const alertRows = this.uniqueRows([
+      ...rows,
+      ...openPurchases.map((purchase) =>
+        this.serializePurchaseExpense(purchase, language),
+      ),
+      ...openPayrolls.map((payroll) =>
+        this.serializePayrollExpense(payroll, language),
+      ),
+      ...openManualExpenses.map((expense) =>
+        this.serializeManualExpense(expense, language),
+      ),
+      ...dueRecurringExpenses.map((expense) =>
+        this.serializeManualExpense(expense, language),
+      ),
+    ]);
 
     return {
       data,
@@ -161,7 +257,7 @@ export class ExpensesService {
         legacyPayments,
         legacyDebts,
       }),
-      alerts: this.buildAlerts(rows, language, legacyDebts),
+      alerts: this.buildAlerts(alertRows, language, legacyDebts),
       reports: this.buildReports(periodRows, rows),
       filters: {
         period: filters.period ?? ExpensePeriodFilter.MONTH,
@@ -653,6 +749,33 @@ export class ExpensesService {
       return this.monthRange(this.dateKey(date));
     }
     return this.monthRange(today);
+  }
+
+  private requiredSourceRange(selectedRange: DateRange): DateRange {
+    if (!selectedRange.start && !selectedRange.end) return {};
+
+    const today = this.todayKey();
+    const currentMonth = this.monthRange(today);
+    const reportStart = `${this.lastMonths(6)[0]}-01`;
+    const starts = [selectedRange.start, currentMonth.start, reportStart, today]
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const ends = [selectedRange.end, currentMonth.end, today]
+      .filter((value): value is string => Boolean(value))
+      .sort();
+
+    return { start: starts[0], end: ends.at(-1) };
+  }
+
+  private dateOperator(range: DateRange): FindOperator<string> | undefined {
+    if (range.start && range.end) return Between(range.start, range.end);
+    if (range.start) return MoreThanOrEqual(range.start);
+    if (range.end) return LessThanOrEqual(range.end);
+    return undefined;
+  }
+
+  private uniqueRows(rows: UnifiedExpenseRow[]) {
+    return [...new Map(rows.map((row) => [row.id, row])).values()];
   }
 
   private displayDate(value: Date | string, language: ExpenseLanguage) {
