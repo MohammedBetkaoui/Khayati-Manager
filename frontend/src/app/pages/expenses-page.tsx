@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CalendarDays,
@@ -12,6 +13,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  ShieldCheck,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -363,8 +365,11 @@ export function ExpensesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [selected, setSelected] = useState<ExpenseRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ExpenseRow | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [form, setForm] = useState<ExpenseForm>(() => buildInitialForm());
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadExpenses = useCallback(async () => {
     setLoading(true);
@@ -466,14 +471,30 @@ export function ExpensesPage() {
     }
   };
 
-  const archiveExpense = async (row: ExpenseRow) => {
-    const message =
-      lang === "ar"
-        ? "هل تريد أرشفة هذا المصروف؟ سيبقى السجل محفوظاً."
-        : "Archiver cette dépense ? L'historique restera conservé.";
-    if (!window.confirm(message)) return;
-    await fetchJson(`/expenses/${row.sourceId}`, { method: "DELETE" });
-    await loadExpenses();
+  const openDeleteConfirmation = (row: ExpenseRow) => {
+    setDeleteError(null);
+    setDeleteTarget(row);
+  };
+
+  const confirmDeleteExpense = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await fetchJson(`/expenses/${deleteTarget.sourceId}`, { method: "DELETE" });
+      setDeleteTarget(null);
+      await loadExpenses();
+    } catch (err) {
+      setDeleteError(
+        lang === "ar"
+          ? "تعذر حذف المصروف. يرجى المحاولة مجدداً."
+          : err instanceof Error
+            ? err.message
+            : "Impossible de supprimer la dépense.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const title = lang === "ar" ? "تسيير المصاريف" : "Gestion des Dépenses";
@@ -645,7 +666,7 @@ export function ExpensesPage() {
                             {row.canEdit ? (
                               <>
                                 <button type="button" onClick={() => openEdit(row)} title={lang === "ar" ? "تعديل" : "Modifier"} aria-label={lang === "ar" ? "تعديل المصروف" : "Modifier la dépense"} style={{ color: "#a87d3c" }}><Pencil size={17} /></button>
-                                <button type="button" onClick={() => void archiveExpense(row)} title={lang === "ar" ? "أرشفة" : "Archiver"} aria-label={lang === "ar" ? "أرشفة المصروف" : "Archiver la dépense"} style={{ color: "#b46a66" }}><Trash2 size={17} /></button>
+                                <button type="button" onClick={() => openDeleteConfirmation(row)} title={lang === "ar" ? "حذف" : "Supprimer"} aria-label={lang === "ar" ? "حذف المصروف" : "Supprimer la dépense"} style={{ color: "#b46a66" }}><Trash2 size={17} /></button>
                               </>
                             ) : row.route ? (
                               <button type="button" onClick={() => navigate(row.route || "/expenses")} className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ backgroundColor: palette.accentSoft, color: "var(--app-warning)", border: "1px solid color-mix(in srgb, var(--app-warning) 24%, transparent)" }}>
@@ -756,8 +777,223 @@ export function ExpensesPage() {
         </ModalShell>
       ) : null}
 
+      {deleteTarget ? (
+        <DeleteExpenseConfirmationModal
+          expense={deleteTarget}
+          lang={lang}
+          deleting={deleting}
+          error={deleteError}
+          onCancel={() => {
+            if (deleting) return;
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }}
+          onConfirm={() => void confirmDeleteExpense()}
+        />
+      ) : null}
+
       <style>{`.field{height:44px;width:100%;border-radius:14px;border:1px solid ${palette.border};background:${palette.surface};padding:0 12px;font-size:14px;color:${palette.text};text-align:start;outline:none}.field:focus{border-color:${palette.primary}}textarea.field{height:auto;padding-top:10px}.expense-row{background:var(--app-surface);transition:background-color .16s ease}.expense-row:nth-child(even){background:var(--app-table-row-alt)}.expense-row:hover{background:var(--app-table-row-hover)}`}</style>
     </PageBackground>
+  );
+}
+
+function DeleteExpenseConfirmationModal({
+  expense,
+  lang,
+  deleting,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  expense: ExpenseRow;
+  lang: "ar" | "fr";
+  deleting: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const statusInfo = statusLabels[safeStatus(expense.status)];
+  const hasRemaining = expense.remainingAmount > 0;
+  const copy =
+    lang === "ar"
+      ? {
+          title: "تأكيد حذف المصروف",
+          heading: "هل تريد حذف هذا المصروف من القائمة؟",
+          body: hasRemaining
+            ? "هذا المصروف يحتوي على مبلغ باقٍ للدفع. بعد الحذف لن يظهر في قائمة المصاريف، لذلك تأكد من أن العملية صحيحة قبل المتابعة."
+            : "سيتم حذف هذا المصروف من القائمة الرئيسية. يمكنك متابعة المصاريف المرتبطة بالموردين أو الرواتب من مصدرها الأصلي.",
+          protectedTitle: "تنبيه مهم",
+          protectedText:
+            "هذه العملية تخص المصاريف اليدوية فقط. المشتريات والرواتب تبقى محفوظة في صفحاتها الأصلية حتى لا يحدث أي تضارب مالي.",
+          cancel: "إلغاء",
+          confirm: "تأكيد الحذف",
+          deleting: "جارٍ الحذف...",
+          description: "الوصف",
+          category: "الفئة",
+          source: "المصدر",
+          date: "التاريخ",
+          total: "المبلغ",
+          paid: "المدفوع",
+          remaining: "الباقي",
+          status: "الحالة",
+        }
+      : {
+          title: "Confirmer la suppression",
+          heading: "Supprimer cette dépense de la liste ?",
+          body: hasRemaining
+            ? "Cette dépense contient encore un montant restant à régler. Après suppression, elle ne sera plus affichée dans la liste des dépenses."
+            : "Cette dépense sera retirée de la liste principale. Les opérations liées aux fournisseurs ou aux salaires restent suivies dans leurs modules d’origine.",
+          protectedTitle: "Point de contrôle",
+          protectedText:
+            "Cette action concerne uniquement les charges modifiables ici. Les achats fournisseurs et les paies restent protégés par leur source pour garder une comptabilité cohérente.",
+          cancel: "Annuler",
+          confirm: "Supprimer",
+          deleting: "Suppression...",
+          description: "Description",
+          category: "Catégorie",
+          source: "Origine",
+          date: "Date",
+          total: "Montant",
+          paid: "Payé",
+          remaining: "Reste",
+          status: "Statut",
+        };
+
+  return (
+    <ModalShell title={copy.title} onClose={onCancel}>
+      <div className="p-5">
+        <div
+          className="flex gap-4 rounded-[20px] p-4"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--app-negative) 10%, var(--app-surface-elevated))",
+            border: "1px solid color-mix(in srgb, var(--app-negative) 28%, var(--app-border))",
+          }}
+        >
+          <div
+            className="flex size-12 shrink-0 items-center justify-center"
+            style={{
+              borderRadius: 16,
+              backgroundColor: "color-mix(in srgb, var(--app-negative) 15%, transparent)",
+              color: "var(--app-negative)",
+            }}
+          >
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <h3 style={{ color: palette.text, fontSize: 17, fontWeight: 900 }}>{copy.heading}</h3>
+            <p className="mt-2 text-sm leading-7" style={{ color: palette.muted }}>
+              {copy.body}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <DeleteSummaryItem label={copy.description} value={expense.description} wide />
+          <DeleteSummaryItem label={copy.category} value={labelFromCategory(expense.category, lang)} />
+          <DeleteSummaryItem label={copy.source} value={sourceLabels[expense.sourceType]?.[lang] ?? expense.originLabel} />
+          <DeleteSummaryItem label={copy.date} value={formatDate(expense.date, lang)} />
+          <DeleteSummaryItem label={copy.status} value={statusInfo[lang]} />
+          <DeleteSummaryItem label={copy.total} value={formatMoney(expense.totalAmount, lang)} strong />
+          <DeleteSummaryItem label={copy.paid} value={formatMoney(expense.paidAmount, lang)} tone="positive" />
+          <DeleteSummaryItem label={copy.remaining} value={formatMoney(expense.remainingAmount, lang)} tone={hasRemaining ? "negative" : "muted"} />
+        </div>
+
+        <div
+          className="mt-4 flex gap-3 rounded-[18px] p-4"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--app-info) 8%, var(--app-surface-elevated))",
+            border: "1px solid color-mix(in srgb, var(--app-info) 22%, var(--app-border))",
+          }}
+        >
+          <ShieldCheck className="mt-0.5 shrink-0" size={19} style={{ color: "var(--app-info)" }} />
+          <div>
+            <div style={{ color: palette.text, fontWeight: 850 }}>{copy.protectedTitle}</div>
+            <p className="mt-1 text-sm leading-6" style={{ color: palette.muted }}>
+              {copy.protectedText}
+            </p>
+          </div>
+        </div>
+
+        {error ? (
+          <div
+            className="mt-4 rounded-2xl px-4 py-3 text-sm font-bold"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--app-negative) 10%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--app-negative) 24%, transparent)",
+              color: "var(--app-negative)",
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={onCancel}
+            className="rounded-2xl px-4 py-2 text-sm font-bold transition hover:opacity-80 disabled:opacity-55"
+            style={{ border: `1px solid ${palette.border}`, color: palette.muted, backgroundColor: palette.surface }}
+          >
+            {copy.cancel}
+          </button>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={onConfirm}
+            className="inline-flex items-center gap-2 rounded-2xl px-5 py-2 text-sm font-bold transition hover:opacity-90 disabled:opacity-60"
+            style={{
+              backgroundColor: "var(--app-negative)",
+              color: "#fff",
+              boxShadow: "0 16px 28px -22px var(--app-negative)",
+            }}
+          >
+            <Trash2 size={16} />
+            {deleting ? copy.deleting : copy.confirm}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function DeleteSummaryItem({
+  label,
+  value,
+  wide = false,
+  strong = false,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+  strong?: boolean;
+  tone?: "default" | "positive" | "negative" | "muted";
+}) {
+  const color =
+    tone === "positive"
+      ? "var(--app-positive)"
+      : tone === "negative"
+        ? "var(--app-negative)"
+        : tone === "muted"
+          ? palette.muted
+          : palette.text;
+
+  return (
+    <div
+      className={wide ? "sm:col-span-2" : ""}
+      style={{
+        backgroundColor: palette.surfaceElevated,
+        border: `1px solid ${palette.border}`,
+        borderRadius: 16,
+        padding: 13,
+      }}
+    >
+      <div style={{ fontSize: 11.5, color: palette.muted, fontWeight: 750 }}>{label}</div>
+      <div className="mt-1 break-words" style={{ fontSize: 14, color, fontWeight: strong ? 900 : 800 }}>
+        {value}
+      </div>
+    </div>
   );
 }
 
